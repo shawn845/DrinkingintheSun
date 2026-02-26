@@ -1,6 +1,5 @@
 // Drinking in the Sun — starter data + simple filtering
 // IMPORTANT: The sun windows below are DEMO placeholders.
-// Replace with your own observations/estimates later.
 
 const pubs = [
   {
@@ -83,12 +82,12 @@ function render(){
   const q = (searchInput.value || '').trim().toLowerCase();
 
   const results = pubs
-    .map(p => {
+    .map((p) => {
       const win = p.sunWindows?.[month] || [];
       const match = matchesWindow(win, t);
       return { pub:p, match };
     })
-    .filter(x => {
+    .filter((x) => {
       if(!q) return true;
       return (
         x.pub.name.toLowerCase().includes(q) ||
@@ -97,10 +96,11 @@ function render(){
     })
     .sort((a,b) => Number(b.match.ok) - Number(a.match.ok));
 
-  const sunnyCount = results.filter(r => r.match.ok).length;
+  const sunnyCount = results.filter((r) => r.match.ok).length;
+
   summary.innerHTML = `
     <strong>${sunnyCount}</strong> of <strong>${results.length}</strong> pubs match your filters for <strong>${month}</strong> at <strong>${t}</strong>.
-    <div class="small">These are starter demo windows. Edit <code>public/app.js</code> to replace with real observations.</div>
+    <div class="small">Demo windows. Edit <code>public/app.js</code> to replace with real observations.</div>
   `;
 
   pubList.innerHTML = results.map(({pub, match}) => {
