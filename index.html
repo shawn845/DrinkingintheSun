@@ -1,60 +1,99 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Drinking in the Sun</title>
+  <meta name="theme-color" content="#ffffff" />
+  <title>Drinking in the Sun — Nottingham</title>
 
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#ffb703" />
-  <link rel="stylesheet" href="public/styles.css" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./public/styles.css" />
+
+  <!-- Leaflet (no key needed) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <h1>Drinking in the Sun</h1>
-      <p class="tagline">Find pubs that are likely to have sun at the time you want.</p>
-      <p class="disclaimer">Demo data (starter pubs). Times are placeholders you can edit.</p>
-    </div>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="title">Drinking in the Sun</div>
+        <div class="subtitle">Nottingham city pubs — predicted sun windows (demo)</div>
+      </div>
 
-    <div class="controls">
-      <label>
-        Month
-        <select id="monthSelect">
-          <option value="Jan">Jan</option>
-          <option value="Feb">Feb</option>
-          <option value="Mar">Mar</option>
-          <option value="Apr">Apr</option>
-          <option value="May" selected>May</option>
-          <option value="Jun">Jun</option>
-          <option value="Jul">Jul</option>
-          <option value="Aug">Aug</option>
-          <option value="Sep">Sep</option>
-          <option value="Oct">Oct</option>
-          <option value="Nov">Nov</option>
-          <option value="Dec">Dec</option>
-        </select>
-      </label>
+      <div class="topActions">
+        <button id="installBtn" class="btn" hidden>Install App</button>
+      </div>
+    </header>
 
-      <label>
-        Time
-        <input id="timeInput" type="time" value="14:30" />
-      </label>
+    <section class="controls">
+      <div class="controlRow">
+        <div class="field">
+          <label for="dateInput">Date</label>
+          <input id="dateInput" type="date" />
+        </div>
 
-      <label class="search">
-        Search
-        <input id="searchInput" type="search" placeholder="e.g. Angel, Trip, Canalhouse" />
-      </label>
+        <div class="field">
+          <label>Quick months</label>
+          <div class="months" id="monthButtons"></div>
+        </div>
 
-      <button id="installBtn" class="install" hidden>Install App</button>
-    </div>
-  </header>
+        <div class="field">
+          <label for="timeInput">Time (optional)</label>
+          <input id="timeInput" type="time" />
+        </div>
 
-  <main class="wrap">
-    <section class="summary" id="summary"></section>
-    <section class="list" id="pubList"></section>
-  </main>
+        <div class="field">
+          <label for="q">Search</label>
+          <input id="q" type="search" placeholder="Name or area…" />
+        </div>
 
-  <script src="public/app.js"></script>
+        <div class="field viewToggle">
+          <label>View</label>
+          <div class="segmented">
+            <button id="viewListBtn" class="segBtn isOn" type="button">List</button>
+            <button id="viewMapBtn" class="segBtn" type="button">Map</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="metaRow">
+        <div id="sunMeta" class="metaText">—</div>
+        <div class="metaHint">
+          Note: predictions use sun position only (no building/tree shading). Spot bearings are placeholders you’ll calibrate by observation.
+        </div>
+      </div>
+    </section>
+
+    <main class="main">
+      <div class="layout" id="layout">
+        <section class="panel listPanel" id="listPanel">
+          <div id="results" class="results"></div>
+        </section>
+
+        <section class="panel mapPanel" id="mapPanel">
+          <div id="map"></div>
+          <div class="mapFoot">
+            <span>Tip: click a pin or a pub in the list.</span>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <span>Demo build — update pub spots + bearings as you test real sun positions.</span>
+    </footer>
+  </div>
+
+  <!-- SunCalc -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js" crossorigin="anonymous"></script>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <script src="./public/app.js"></script>
 </body>
 </html>
