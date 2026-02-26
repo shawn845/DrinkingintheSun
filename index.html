@@ -6,15 +6,55 @@
   <title>Drinking in the Sun</title>
 
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0d6efd">
+  <meta name="theme-color" content="#ffb703">
   <link rel="stylesheet" href="public/styles.css">
 
 </head>
 <body>
-  <h1>Drinking in the Sun</h1>
-  <p>A social app for drinks, sunshine, and good times.</p>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Drinking in the Sun</h1>
+      <p class="tagline">Find pubs that are likely to have sun at the time you want.</p>
+      <p class="disclaimer">Demo data (starter pubs). Times are placeholders you can edit.</p>
+    </div>
 
-  <button id="installBtn" hidden>Install App</button>
+    <div class="controls">
+      <label>
+        Month
+        <select id="monthSelect">
+          <option value="Jan">Jan</option>
+          <option value="Feb">Feb</option>
+          <option value="Mar">Mar</option>
+          <option value="Apr">Apr</option>
+          <option value="May" selected>May</option>
+          <option value="Jun">Jun</option>
+          <option value="Jul">Jul</option>
+          <option value="Aug">Aug</option>
+          <option value="Sep">Sep</option>
+          <option value="Oct">Oct</option>
+          <option value="Nov">Nov</option>
+          <option value="Dec">Dec</option>
+        </select>
+      </label>
+
+      <label>
+        Time
+        <input id="timeInput" type="time" value="14:30" />
+      </label>
+
+      <label class="search">
+        Search
+        <input id="searchInput" type="search" placeholder="e.g. Angel, Trip, Canalhouse" />
+      </label>
+
+      <button id="installBtn" class="install" hidden>Install App</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="summary" id="summary"></section>
+    <section class="list" id="pubList"></section>
+  </main>
 
   <script src="public/app.js"></script>
 </body>
