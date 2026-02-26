@@ -51,7 +51,7 @@ const pubs = [
       May: [{ spot: 'Courtyard', start: '11:30', end: '14:30' }],
       Jun: [{ spot: 'Courtyard', start: '11:00', end: '16:00' }]
     }
-      }
+      },
   {
   id: 'pitcher',
   name: 'Pitcher & Piano',
