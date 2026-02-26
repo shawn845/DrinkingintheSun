@@ -1,6 +1,6 @@
-// service-worker.js
-const CACHE_VERSION = 'v9'; // <- bump this when you want to force refresh
+const CACHE_VERSION = 'v10'; // bump to force refresh
 const CACHE_NAME = `drinking-in-the-sun-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `drinking-in-the-sun-runtime-${CACHE_VERSION}`;
 
 const CORE_ASSETS = [
   './',
@@ -13,55 +13,60 @@ const CORE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)))
+      Promise.all(keys.map((k) => (k !== CACHE_NAME && k !== RUNTIME_CACHE ? caches.delete(k) : null)))
     )
   );
   self.clients.claim();
 });
 
-// Network-first for HTML/JS/CSS so updates appear quickly.
-// Cache-first for everything else (icons etc).
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only handle same-origin
-  if (url.origin !== location.origin) return;
-
-  const isNav = req.mode === 'navigate';
-  const isCode = url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html');
-
-  if (isNav || isCode) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match(req).then((r) => r || caches.match('./index.html')))
-    );
+  // Network-first for navigations (HTML)
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const cache = await caches.open(RUNTIME_CACHE);
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        const cached = await caches.match(req);
+        return cached || caches.match('./index.html');
+      }
+    })());
     return;
   }
 
-  // Cache-first for other assets
-  event.respondWith(
-    caches.match(req).then((cached) => {
+  // Cache-first for same-origin static files
+  if (url.origin === self.location.origin) {
+    event.respondWith((async () => {
+      const cached = await caches.match(req);
       if (cached) return cached;
-      return fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-        return res;
-      });
-    })
-  );
+      const fresh = await fetch(req);
+      const cache = await caches.open(RUNTIME_CACHE);
+      cache.put(req, fresh.clone());
+      return fresh;
+    })());
+    return;
+  }
+
+  // Stale-while-revalidate for CDN libs + tiles (best-effort)
+  event.respondWith((async () => {
+    const cache = await caches.open(RUNTIME_CACHE);
+    const cached = await cache.match(req);
+    const fetchPromise = fetch(req).then((fresh) => {
+      cache.put(req, fresh.clone());
+      return fresh;
+    }).catch(() => cached);
+    return cached || fetchPromise;
+  })());
 });
