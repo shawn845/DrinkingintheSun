@@ -1,8 +1,9 @@
-# My GitHub Pages PWA
+# Drinking in the Sun (PWA)
 
-This is a basic Progressive Web App hosted on GitHub Pages.
+Installable PWA hosted on GitHub Pages.
 
-Features:
-- Offline support
-- Installable on mobile & desktop
-- Free hosting
+## Features
+- Month + time filter
+- Search pubs
+- “Likely sun” demo windows
+- Offline caching
