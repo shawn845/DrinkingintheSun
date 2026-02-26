@@ -49,19 +49,18 @@ const pubs = [
       Jun: [{ spot: 'Courtyard', start: '11:00', end: '16:00' }]
     }
   },
-
   {
     id: 'pitcher',
     name: 'Pitcher & Piano',
     area: 'Nottingham (Lace Market)',
-    notes: 'Large terrace facing south-west. Good afternoon sun.',
+    notes: 'Large terrace facing south-west.',
     sunWindows: {
       May: [{ spot: 'Front terrace', start: '13:00', end: '18:30' }],
       Jun: [{ spot: 'Front terrace', start: '12:00', end: '20:00' }]
     }
   },
   {
-    id: 'barrel',
+    id: 'barreldrop',
     name: 'Barrel Drop',
     area: 'Nottingham (Hurts Yard)',
     notes: 'Street seating catches late sun.',
@@ -82,7 +81,7 @@ const pubs = [
   },
   {
     id: 'keanshead',
-    name: "Kean's Head",
+    name: 'Kean’s Head',
     area: 'Nottingham (Lace Market)',
     notes: 'Front pavement seating.',
     sunWindows: {
@@ -101,10 +100,10 @@ const pubs = [
     }
   },
   {
-    id: 'vatandfiddle',
+    id: 'vatfiddle',
     name: 'Vat & Fiddle',
     area: 'Nottingham (Canal / Station)',
-    notes: 'Canal-side seating gets good midday sun.',
+    notes: 'Canal-side seating.',
     sunWindows: {
       May: [{ spot: 'Canal seating', start: '12:00', end: '16:00' }],
       Jun: [{ spot: 'Canal seating', start: '11:30', end: '18:00' }]
