@@ -1,3 +1,6 @@
+// Drinking in the Sun — starter data + simple filtering
+// IMPORTANT: The sun windows below are DEMO placeholders.
+
 const pubs = [
   {
     id: 'angel',
@@ -81,7 +84,7 @@ const pubs = [
   },
   {
     id: 'keanshead',
-    name: 'Kean’s Head',
+    name: "Kean's Head",
     area: 'Nottingham (Lace Market)',
     notes: 'Front pavement seating.',
     sunWindows: {
@@ -120,3 +123,99 @@ const pubs = [
     }
   }
 ];
+
+const monthSelect = document.getElementById('monthSelect');
+const timeInput = document.getElementById('timeInput');
+const searchInput = document.getElementById('searchInput');
+const pubList = document.getElementById('pubList');
+const summary = document.getElementById('summary');
+
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function matchesWindow(windows, timeHHMM) {
+  if (!windows || windows.length === 0) return { ok: false };
+  const t = toMinutes(timeHHMM);
+  for (const w of windows) {
+    const s = toMinutes(w.start);
+    const e = toMinutes(w.end);
+    if (t >= s && t <= e) return { ok: true, window: w };
+  }
+  return { ok: false };
+}
+
+function render() {
+  const month = monthSelect.value;
+  const t = timeInput.value || '12:00';
+  const q = (searchInput.value || '').trim().toLowerCase();
+
+  const results = pubs
+    .map((p) => {
+      const win = p.sunWindows?.[month] || [];
+      const match = matchesWindow(win, t);
+      return { pub: p, match };
+    })
+    .filter((x) => {
+      if (!q) return true;
+      return (
+        x.pub.name.toLowerCase().includes(q) ||
+        x.pub.area.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => Number(b.match.ok) - Number(a.match.ok));
+
+  const sunnyCount = results.filter((r) => r.match.ok).length;
+
+  summary.innerHTML = `
+    <strong>${sunnyCount}</strong> of <strong>${results.length}</strong> pubs match your filters for <strong>${month}</strong> at <strong>${t}</strong>.
+    <div class="small">Demo windows. Edit <code>public/app.js</code> to replace with real observations.</div>
+  `;
+
+  pubList.innerHTML = results
+    .map(({ pub, match }) => {
+      const badge = match.ok
+        ? `<span class="badge yes">☀️ Likely sun — ${match.window.spot} (${match.window.start}–${match.window.end})</span>`
+        : `<span class="badge no">⛅ No sun window set at this time</span>`;
+
+      return `
+        <article class="card">
+          <h3>${pub.name}</h3>
+          <div class="meta">${pub.area}</div>
+          ${badge}
+          <div class="small">${pub.notes || ''}</div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+monthSelect.addEventListener('change', render);
+timeInput.addEventListener('input', render);
+searchInput.addEventListener('input', render);
+
+// PWA install button
+let deferredPrompt;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.hidden = false;
+});
+
+installBtn?.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installBtn.hidden = true;
+});
+
+// Service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+
+render();
