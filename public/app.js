@@ -1,463 +1,642 @@
-/* Drinking in the Sun — demo app
-   - Sunrise/sunset + sun position: SunCalc-style math (no external libs)
-   - Sun windows: checks when sun azimuth is within each spot’s azimuth range + altitude threshold
-   - Map: Leaflet + OSM tiles; “Directions” link uses Google Maps (no API key)
+/* Drinking in the Sun
+   - Next 24 hours only (slider 0..24h)
+   - Near-me sorting (haversine) + simple “walk minutes”
+   - Shows: Sunny now / Next sun + “what to do when current spot goes shade”
+   - Weather: Open-Meteo hourly per pub lat/lng (cached, best-effort)
 */
 
-const DEFAULT_MAP_CENTER = { lat: 52.9536, lng: -1.15047 }; // Nottingham
+const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
 
-// New pubs + Bread & Bitter use verified lat/lng.
-// If you add more pubs: easiest is Doogal “ShowMap?postcode=...” or Mapcarta (OSM).
-const pubs = [
-  // Existing demo pubs can stay here even without pins (lat/lng null).
-  // Add lat/lng when you have them.
-  { id: 'angel', name: 'The Angel Microbrewery', area: 'Nottingham (Hockley / City)', lat: null, lng: null,
-    spots: [{ name: 'Front window', azFrom: 120, azTo: 230, altMin: 5 }]
-  },
-  { id: 'canalhouse', name: 'The Canalhouse', area: 'Nottingham (Canal)', lat: null, lng: null,
-    spots: [{ name: 'Outside by canal', azFrom: 100, azTo: 260, altMin: 5 }]
-  },
-  { id: 'trip', name: 'Ye Olde Trip to Jerusalem', area: 'Castle / Standard Hill', lat: null, lng: null,
-    spots: [{ name: 'Front benches', azFrom: 140, azTo: 260, altMin: 7 }]
-  },
-  { id: 'maltcross', name: 'Malt Cross', area: "St James' Street", lat: null, lng: null,
-    spots: [{ name: 'Front (street) side', azFrom: 120, azTo: 220, altMin: 7 }]
-  },
-  { id: 'bell', name: 'The Bell Inn', area: 'Old Market Square', lat: null, lng: null,
-    spots: [{ name: 'Angel Row frontage', azFrom: 110, azTo: 230, altMin: 6 }]
-  },
-
-  // Added pubs (verified lat/lng)
-  { id: 'bread', name: 'The Bread & Bitter', area: 'Mapperley (Woodthorpe Drive)', lat: 52.98389, lng: -1.12296,
+// Demo pubs. Replace/extend freely.
+// IMPORTANT: lat/lng and spot bearings are inputs you should verify/tune.
+const PUBS = [
+  {
+    id: 'trip',
+    name: 'Ye Olde Trip to Jerusalem',
+    area: 'Castle / Standard Hill',
+    lat: 52.948661, lng: -1.151981,
     spots: [
-      { name: 'Front / patio', azFrom: 110, azTo: 250, altMin: 6 },
-      { name: 'Beer garden', azFrom: 140, azTo: 280, altMin: 6 }
+      { name: 'Front benches', bearingMin: 150, bearingMax: 240, minElevation: 10 },
+      { name: 'Cave entrance area', bearingMin: 180, bearingMax: 260, minElevation: 15 }
     ]
   },
-  { id: 'bunkers', name: 'Bunkers Hill', area: 'Hockley', lat: 52.953558, lng: -1.140387,
-    spots: [{ name: 'Outside tables', azFrom: 120, azTo: 240, altMin: 6 }]
+  {
+    id: 'canalhouse',
+    name: 'The Canalhouse',
+    area: 'Canal Street / Station',
+    lat: 52.948170, lng: -1.148400,
+    spots: [
+      { name: 'Waterside seating', bearingMin: 170, bearingMax: 280, minElevation: 8 },
+      { name: 'Courtyard tables', bearingMin: 130, bearingMax: 220, minElevation: 12 }
+    ]
   },
-  { id: 'barreldrop', name: 'The Barrel Drop', area: "Hurts Yard (City Centre)", lat: 52.954355, lng: -1.152503,
-    spots: [{ name: 'Doorway / alley sun', azFrom: 150, azTo: 230, altMin: 12 }]
+  {
+    id: 'maltcross',
+    name: 'Malt Cross',
+    area: 'St James’ Street',
+    lat: 52.952950, lng: -1.152410,
+    spots: [
+      { name: 'Front (street) side', bearingMin: 120, bearingMax: 200, minElevation: 12 }
+    ]
   },
-  { id: 'organ', name: 'The Organ Grinder', area: 'Canning Circus', lat: 52.956499, lng: -1.163208,
-    spots: [{ name: 'Roof terrace', azFrom: 130, azTo: 290, altMin: 6 }]
+  {
+    id: 'bell',
+    name: 'The Bell Inn',
+    area: 'Old Market Square',
+    lat: 52.953442, lng: -1.1520048,
+    spots: [
+      { name: 'Angel Row frontage', bearingMin: 110, bearingMax: 200, minElevation: 10 }
+    ]
   },
-  { id: 'sirjohn', name: 'The Sir John Borlase Warren', area: 'Canning Circus', lat: 52.95584, lng: -1.162804,
-    spots: [{ name: 'Beer garden', azFrom: 120, azTo: 280, altMin: 6 }]
-  },
-  { id: 'handheart', name: 'The Hand & Heart', area: 'Derby Road', lat: 52.955444, lng: -1.160222,
-    spots: [{ name: 'Outside steps', azFrom: 120, azTo: 240, altMin: 8 }]
-  },
-  { id: 'keans', name: "Kean's Head", area: 'Lace Market', lat: 52.951346, lng: -1.144033,
-    spots: [{ name: 'Front pavement', azFrom: 110, azTo: 230, altMin: 7 }]
-  },
-  { id: 'poacher', name: 'The Lincolnshire Poacher', area: 'Mansfield Road', lat: 52.962096, lng: -1.15128,
-    spots: [{ name: 'Outside (street side)', azFrom: 100, azTo: 230, altMin: 7 }]
-  },
-  { id: 'nedludd', name: 'The Ned Ludd', area: 'Friar Lane', lat: 52.952316, lng: -1.151471,
-    spots: [{ name: 'Front windows', azFrom: 110, azTo: 230, altMin: 7 }]
-  },
-  { id: 'josephelse', name: 'The Joseph Else', area: 'Market Square', lat: 52.952901, lng: -1.150254,
-    spots: [{ name: 'Upstairs windows', azFrom: 120, azTo: 240, altMin: 6 }]
-  },
-  { id: 'salutation', name: 'Ye Olde Salutation Inn', area: 'Maid Marian Way', lat: 52.95112, lng: -1.15167,
-    spots: [{ name: 'Front benches', azFrom: 120, azTo: 240, altMin: 6 }]
-  },
-  { id: 'pit', name: 'The Pit & Pendulum', area: 'Lace Market', lat: 52.9534279, lng: -1.14597,
-    spots: [{ name: 'Street-side front', azFrom: 120, azTo: 230, altMin: 7 }]
-  },
-  { id: 'bathinn', name: 'Bath Inn', area: 'Lace Market', lat: 52.95539, lng: -1.13773,
-    spots: [{ name: 'Outside tables', azFrom: 110, azTo: 250, altMin: 6 }]
-  },
-  { id: 'embankment', name: 'The Embankment', area: 'Arkwright Street', lat: 52.9393944, lng: -1.1388205,
-    spots: [{ name: 'Beer garden', azFrom: 120, azTo: 280, altMin: 6 }]
-  },
-  { id: 'trentnav', name: 'Trent Navigation', area: 'Meadow Lane', lat: 52.9412, lng: -1.13824,
-    spots: [{ name: 'Riverside seating', azFrom: 110, azTo: 260, altMin: 6 }]
+  {
+    id: 'angel',
+    name: 'The Angel Microbrewery',
+    area: 'Lace Market (Stoney Street)',
+    lat: 52.953373, lng: -1.143441,
+    spots: [
+      { name: 'Rooftop / terrace (if open)', bearingMin: 140, bearingMax: 260, minElevation: 8 },
+      { name: 'Front windows', bearingMin: 120, bearingMax: 200, minElevation: 12 }
+    ]
   }
 ];
 
-// ---------- PWA install prompt handling (fixes the DevTools warning) ----------
-let deferredInstallPrompt = null;
-const installBtn = document.getElementById('installBtn');
-
+// ---------- Install prompt ----------
+let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredInstallPrompt = e;
-  installBtn.disabled = false;
+  deferredPrompt = e;
+  const b = document.getElementById('installBtn');
+  b.hidden = false;
+});
+document.getElementById('installBtn').addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  try { await deferredPrompt.userChoice; } catch {}
+  deferredPrompt = null;
+  document.getElementById('installBtn').hidden = true;
 });
 
-installBtn.addEventListener('click', async () => {
-  if (!deferredInstallPrompt) return;
-  installBtn.disabled = true;
-  deferredInstallPrompt.prompt();
-  try { await deferredInstallPrompt.userChoice; } catch {}
-  deferredInstallPrompt = null;
-});
+// ---------- DOM ----------
+const el = {
+  locBtn: document.getElementById('locBtn'),
+  installBtn: document.getElementById('installBtn'),
+  search: document.getElementById('search'),
+  whenRange: document.getElementById('whenRange'),
+  whenMeta: document.getElementById('whenMeta'),
+  metaLine: document.getElementById('metaLine'),
+  plan: document.getElementById('plan'),
+  results: document.getElementById('results'),
+  viewList: document.getElementById('viewList'),
+  viewMap: document.getElementById('viewMap'),
+  modeNear: document.getElementById('modeNear'),
+  modeAll: document.getElementById('modeAll'),
+  listPanel: document.getElementById('listPanel'),
+  mapPanel: document.getElementById('mapPanel'),
+};
 
-// ---------- Sun math (SunCalc-style) ----------
-const rad = Math.PI / 180;
-const dayMs = 1000 * 60 * 60 * 24;
-const J1970 = 2440588;
-const J2000 = 2451545;
-const e = rad * 23.4397;
-const J0 = 0.0009;
+// ---------- State ----------
+let userLoc = loadUserLoc() || null;
+let viewMode = 'list';
+let nearMode = true;
 
-function toJulian(date) { return date.valueOf() / dayMs - 0.5 + J1970; }
-function fromJulian(j) { return new Date((j + 0.5 - J1970) * dayMs); }
-function toDays(date) { return toJulian(date) - J2000; }
-
-function rightAscension(l, b) {
-  return Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+// ---------- Location ----------
+function loadUserLoc(){
+  try { return JSON.parse(localStorage.getItem('ditS_userLoc') || 'null'); } catch { return null; }
 }
-function declination(l, b) {
-  return Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+function saveUserLoc(loc){
+  localStorage.setItem('ditS_userLoc', JSON.stringify(loc));
 }
-function azimuth(H, phi, dec) {
-  return Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
-}
-function altitude(H, phi, dec) {
-  return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
-}
-function siderealTime(d, lw) {
-  return rad * (280.16 + 360.9856235 * d) - lw;
-}
-function solarMeanAnomaly(d) {
-  return rad * (357.5291 + 0.98560028 * d);
-}
-function eclipticLongitude(M) {
-  const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
-  const P = rad * 102.9372;
-  return M + C + P + Math.PI;
-}
-function sunCoords(d) {
-  const M = solarMeanAnomaly(d);
-  const L = eclipticLongitude(M);
-  return { dec: declination(L, 0), ra: rightAscension(L, 0), M, L };
-}
-function getSunPosition(date, lat, lng) {
-  const lw = rad * -lng;
-  const phi = rad * lat;
-  const d = toDays(date);
-  const c = sunCoords(d);
-  const H = siderealTime(d, lw) - c.ra;
-  const az = azimuth(H, phi, c.dec);
-  const alt = altitude(H, phi, c.dec);
-  // Convert: SunCalc azimuth is from south (0) west-positive -> degrees from north:
-  const azDeg = (az / rad + 180 + 360) % 360;
-  return { azimuthDeg: azDeg, altitudeDeg: alt / rad };
+function requestLocation(){
+  if (!navigator.geolocation) return;
+  el.locBtn.textContent = 'Locating…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      saveUserLoc(userLoc);
+      el.locBtn.textContent = 'Location set';
+      render();
+    },
+    () => {
+      el.locBtn.textContent = 'Use my location';
+      render();
+    },
+    { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 }
+  );
 }
 
-function julianCycle(d, lw) { return Math.round(d - J0 - lw / (2 * Math.PI)); }
-function approxTransit(Ht, lw, n) { return J0 + (Ht + lw) / (2 * Math.PI) + n; }
-function solarTransitJ(ds, M, L) { return J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L); }
-function hourAngle(h, phi, dec) {
-  return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+el.locBtn.addEventListener('click', requestLocation);
+
+// ---------- Sun helpers ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fmtHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+
+function azimuthToBearingDeg(azRad){
+  // SunCalc azimuth radians: 0=south, -east, +west.
+  const azDeg = azRad * 180 / Math.PI;
+  return (azDeg + 180 + 360) % 360; // bearing from north 0..360
 }
-function getSetJ(h, lw, phi, dec, n, M, L) {
-  const w = hourAngle(h, phi, dec);
-  const a = approxTransit(w, lw, n);
-  return solarTransitJ(a, M, L);
+function radToDeg(r){ return r * 180 / Math.PI; }
+function withinBearing(bearing, min, max){
+  if (min <= max) return bearing >= min && bearing <= max;
+  return bearing >= min || bearing <= max; // wrap
 }
-function getSunTimes(dateAtMidnight, lat, lng) {
-  const lw = rad * -lng;
-  const phi = rad * lat;
-  const d = toDays(dateAtMidnight);
-  const n = julianCycle(d, lw);
-  const ds = approxTransit(0, lw, n);
-  const M = solarMeanAnomaly(ds);
-  const L = eclipticLongitude(M);
-  const dec = declination(L, 0);
-  const Jnoon = solarTransitJ(ds, M, L);
-  const h0 = rad * -0.833; // standard sunrise/sunset
-  const Jset = getSetJ(h0, lw, phi, dec, n, M, L);
-  const Jrise = Jnoon - (Jset - Jnoon);
-  return { sunrise: fromJulian(Jrise), sunset: fromJulian(Jset) };
+function spotInSun(pub, spot, dateTime){
+  const pos = SunCalc.getPosition(dateTime, pub.lat, pub.lng);
+  const bearing = azimuthToBearingDeg(pos.azimuth);
+  const elev = radToDeg(pos.altitude);
+  return withinBearing(bearing, spot.bearingMin, spot.bearingMax) && elev >= (spot.minElevation ?? 0);
 }
 
-// ---------- Sun windows ----------
-function pad2(n) { return String(n).padStart(2, '0'); }
-function fmtTime(d) { return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
-
-function inAzRange(azDeg, fromDeg, toDeg) {
-  const a = (azDeg + 360) % 360;
-  const f = (fromDeg + 360) % 360;
-  const t = (toDeg + 360) % 360;
-  if (f <= t) return a >= f && a <= t;
-  // wrap-around (e.g. 300..40)
-  return a >= f || a <= t;
-}
-
-function computeWindowsForSpot(dateMidnight, pubLat, pubLng, spot) {
-  const times = getSunTimes(dateMidnight, pubLat, pubLng);
-  const start = new Date(times.sunrise);
-  const end = new Date(times.sunset);
+function computeWindowsNext24h(pub, spot, fromTime, toTime){
   const stepMin = 5;
-
   const windows = [];
-  let current = null;
+  let currentStart = null;
 
-  for (let t = new Date(start); t <= end; t = new Date(t.getTime() + stepMin * 60000)) {
-    const sp = getSunPosition(t, pubLat, pubLng);
-    const ok = sp.altitudeDeg >= (spot.altMin ?? 5) && inAzRange(sp.azimuthDeg, spot.azFrom, spot.azTo);
-
-    if (ok && !current) current = { start: new Date(t), end: new Date(t) };
-    if (ok && current) current.end = new Date(t);
-    if (!ok && current) { windows.push(current); current = null; }
+  for (let t = new Date(fromTime); t <= toTime; t = new Date(t.getTime() + stepMin*60*1000)) {
+    const hit = spotInSun(pub, spot, t);
+    if (hit && !currentStart) currentStart = new Date(t);
+    if (!hit && currentStart) {
+      windows.push({ start: currentStart, end: new Date(t) });
+      currentStart = null;
+    }
   }
-  if (current) windows.push(current);
+  if (currentStart) windows.push({ start: currentStart, end: new Date(toTime) });
 
-  // Format + compress tiny windows
-  return windows
-    .filter(w => (w.end - w.start) >= 10 * 60000)
-    .map(w => ({ start: fmtTime(w.start), end: fmtTime(w.end) }));
+  // remove tiny windows (<10 min)
+  return windows.filter(w => (w.end - w.start) >= 10*60*1000);
 }
 
-function computePubSun(dateMidnight, timeOpt, pub) {
-  if (pub.lat == null || pub.lng == null) {
-    return { sunrise: null, sunset: null, nowStatus: 'No pin yet', spots: pub.spots.map(s => ({ name: s.name, windows: [] })) };
+function bestStatusForPub(pub, atTime, horizonEnd){
+  if (!Number.isFinite(pub.lat) || !Number.isFinite(pub.lng)) {
+    return { kind:'no-coords' };
   }
 
-  const times = getSunTimes(dateMidnight, pub.lat, pub.lng);
-  const sunrise = fmtTime(times.sunrise);
-  const sunset = fmtTime(times.sunset);
-
-  const spots = pub.spots.map(spot => ({
-    name: spot.name,
-    windows: computeWindowsForSpot(dateMidnight, pub.lat, pub.lng, spot)
-  }));
-
-  let nowStatus = 'Time not set';
-  if (timeOpt) {
-    const now = new Date(dateMidnight);
-    now.setHours(timeOpt.hh, timeOpt.mm, 0, 0);
-    const sp = getSunPosition(now, pub.lat, pub.lng);
-    const inAny = pub.spots.some(spot =>
-      sp.altitudeDeg >= (spot.altMin ?? 5) && inAzRange(sp.azimuthDeg, spot.azFrom, spot.azTo)
-    );
-    nowStatus = inAny ? 'In sun (likely)' : 'Shade now';
-  }
-
-  return { sunrise, sunset, nowStatus, spots };
-}
-
-// ---------- UI ----------
-const controlsEl = document.getElementById('controls');
-const metaEl = document.getElementById('meta');
-const listEl = document.getElementById('list');
-const mainEl = document.querySelector('.main');
-
-let map = null;
-let markers = new Map();
-
-function buildControls() {
-  const storedDate = localStorage.getItem('ditS_date');
-  const storedTime = localStorage.getItem('ditS_time');
-  const today = new Date();
-  const defaultDate = storedDate || today.toISOString().slice(0, 10);
-  const defaultTime = storedTime || `${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
-
-  controlsEl.innerHTML = `
-    <div class="controlsRow">
-      <div class="field">
-        <label>Date</label>
-        <input id="dateInput" type="date" value="${defaultDate}">
-      </div>
-
-      <div class="field">
-        <label>Quick months</label>
-        <div class="quickMonths" id="quickMonths">
-          ${['Apr','May','Jun','Jul','Aug','Sep'].map(m => `<button class="chip" type="button" data-month="${m}">${m}</button>`).join('')}
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Time (optional)</label>
-        <input id="timeInput" type="time" value="${defaultTime}">
-      </div>
-
-      <div class="field">
-        <label>Search</label>
-        <input id="searchInput" type="text" placeholder="Name or area...">
-      </div>
-
-      <div class="field">
-        <label>View</label>
-        <div class="toggle" role="tablist" aria-label="View toggle">
-          <button id="viewList" class="active" type="button">List</button>
-          <button id="viewMap" type="button">Map</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('quickMonths').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-month]');
-    if (!btn) return;
-    const month = btn.dataset.month;
-    const year = new Date(document.getElementById('dateInput').value + 'T00:00:00').getFullYear();
-    const monthIndex = { Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8 }[month];
-    const d = new Date(Date.UTC(year, monthIndex, 15));
-    // keep local date formatting
-    const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    document.getElementById('dateInput').value = local.toISOString().slice(0,10);
-    render();
+  // Build windows per spot, but only within next 24h
+  const spotInfos = pub.spots.map(spot => {
+    const windows = computeWindowsNext24h(pub, spot, atTime, horizonEnd);
+    return { spot, windows };
   });
 
-  document.getElementById('dateInput').addEventListener('change', render);
-  document.getElementById('timeInput').addEventListener('change', render);
-  document.getElementById('searchInput').addEventListener('input', render);
-
-  document.getElementById('viewList').addEventListener('click', () => setMobileView('list'));
-  document.getElementById('viewMap').addEventListener('click', () => setMobileView('map'));
-
-  // default on load: show both on desktop; on mobile, show list.
-  setMobileView('list', true);
-}
-
-function setMobileView(which, init=false) {
-  const isMobile = window.matchMedia('(max-width: 980px)').matches;
-  const bList = document.getElementById('viewList');
-  const bMap = document.getElementById('viewMap');
-  bList.classList.toggle('active', which === 'list');
-  bMap.classList.toggle('active', which === 'map');
-
-  if (isMobile) {
-    mainEl.classList.toggle('hideMap', which === 'list');
-    mainEl.classList.toggle('hideList', which === 'map');
-  } else {
-    mainEl.classList.remove('hideMap', 'hideList');
+  // Is any spot sunny at atTime?
+  const sunnyNow = [];
+  for (const si of spotInfos) {
+    const w = si.windows.find(w => atTime >= w.start && atTime <= w.end);
+    if (w) sunnyNow.push({ spot: si.spot, window: w });
   }
-  if (!init && which === 'map' && map) setTimeout(() => map.invalidateSize(), 150);
+
+  if (sunnyNow.length) {
+    // choose spot with latest end (best remaining)
+    sunnyNow.sort((a,b) => b.window.end - a.window.end);
+    const chosen = sunnyNow[0];
+    return {
+      kind:'sunny-now',
+      spot: chosen.spot,
+      start: chosen.window.start,
+      end: chosen.window.end
+    };
+  }
+
+  // else find next window across spots
+  const nexts = [];
+  for (const si of spotInfos) {
+    const w = si.windows.find(w => w.start > atTime);
+    if (w) nexts.push({ spot: si.spot, window: w });
+  }
+  if (!nexts.length) return { kind:'no-sun-24h' };
+
+  nexts.sort((a,b) => a.window.start - b.window.start);
+  const chosen = nexts[0];
+  return {
+    kind:'next-sun',
+    spot: chosen.spot,
+    start: chosen.window.start,
+    end: chosen.window.end
+  };
 }
 
-function initMap() {
-  if (!window.L) return; // leaflet not loaded yet
+// ---------- Distance ----------
+function haversineKm(a, b){
+  const R = 6371;
+  const toRad = (x) => x * Math.PI/180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s1 = Math.sin(dLat/2);
+  const s2 = Math.sin(dLng/2);
+  const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(q)));
+}
+function walkMinutesFromKm(km){
+  // ~4.8 km/h walking
+  return Math.max(1, Math.round(km / 4.8 * 60));
+}
+
+// ---------- Weather (Open-Meteo) ----------
+const WEATHER_TTL_MS = 30 * 60 * 1000;
+const weatherCache = new Map(); // key -> { t, data }
+function weatherKey(lat,lng){ return `${lat.toFixed(3)},${lng.toFixed(3)}`; }
+
+async function fetchWeather(lat, lng){
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${lat}&longitude=${lng}` +
+    `&hourly=temperature_2m,cloud_cover,precipitation_probability,wind_speed_10m` +
+    `&forecast_days=2&timezone=auto`;
+  const res = await fetch(url, { cache:'no-store' });
+  if (!res.ok) throw new Error('weather fetch failed');
+  return res.json();
+}
+
+async function getWeather(lat,lng){
+  const key = weatherKey(lat,lng);
+  const now = Date.now();
+  const c = weatherCache.get(key);
+  if (c && (now - c.t) < WEATHER_TTL_MS) return c.data;
+  const data = await fetchWeather(lat,lng);
+  weatherCache.set(key, { t: now, data });
+  return data;
+}
+
+function nearestHourlyIndex(times, targetDate){
+  const target = targetDate.getTime();
+  let bestI = 0, bestD = Infinity;
+  for (let i=0;i<times.length;i++){
+    const t = new Date(times[i]).getTime();
+    const d = Math.abs(t - target);
+    if (d < bestD){ bestD=d; bestI=i; }
+  }
+  return bestI;
+}
+
+function weatherBadgeFrom(cloud, rainProb){
+  if (rainProb >= 50 || cloud >= 80) return { icon:'☁️', label:'Sun unlikely' };
+  if (cloud >= 50) return { icon:'⛅', label:'Mixed' };
+  return { icon:'☀️', label:'Likely sun' };
+}
+
+function formatWeatherShort(w, i){
+  const temp = w.hourly.temperature_2m[i];
+  const cloud = w.hourly.cloud_cover[i];
+  const rain = w.hourly.precipitation_probability[i];
+  const wind = w.hourly.wind_speed_10m[i];
+  const b = weatherBadgeFrom(cloud, rain);
+  return `${b.icon} ${b.label} • ${Math.round(temp)}°C • Cloud ${Math.round(cloud)}% • Rain ${Math.round(rain)}% • Wind ${Math.round(wind)} mph`;
+}
+
+// limit concurrent weather fetches
+async function runWithConcurrency(items, limit, fn){
+  const out = [];
+  let i = 0;
+  const workers = Array.from({ length: limit }, async () => {
+    while (i < items.length){
+      const idx = i++;
+      out[idx] = await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+// ---------- UI render ----------
+function setView(mode){
+  viewMode = mode;
+  el.viewList.classList.toggle('isOn', mode==='list');
+  el.viewMap.classList.toggle('isOn', mode==='map');
+
+  if (window.matchMedia('(max-width: 980px)').matches){
+    el.listPanel.style.display = mode==='list' ? '' : 'none';
+    el.mapPanel.style.display  = mode==='map'  ? '' : 'none';
+  } else {
+    el.listPanel.style.display = '';
+    el.mapPanel.style.display  = '';
+  }
+
+  if (mode==='map') setTimeout(() => map?.invalidateSize(), 150);
+}
+
+el.viewList.addEventListener('click', () => setView('list'));
+el.viewMap.addEventListener('click', () => setView('map'));
+
+el.modeNear.addEventListener('click', () => {
+  nearMode = true;
+  el.modeNear.classList.add('isOn');
+  el.modeAll.classList.remove('isOn');
+  render();
+});
+el.modeAll.addEventListener('click', () => {
+  nearMode = false;
+  el.modeAll.classList.add('isOn');
+  el.modeNear.classList.remove('isOn');
+  render();
+});
+
+function whenLabel(now, offsetMin){
+  if (offsetMin === 0) return 'Now';
+  const t = new Date(now.getTime() + offsetMin*60*1000);
+  const day = t.toDateString() === now.toDateString() ? 'Today' : 'Tomorrow';
+  return `${day} ${fmtHM(t)} (+${offsetMin}m)`;
+}
+
+el.whenRange.addEventListener('input', () => {
+  const now = new Date();
+  const offsetMin = Number(el.whenRange.value);
+  el.whenMeta.textContent = whenLabel(now, offsetMin);
+  render();
+});
+
+el.search.addEventListener('input', render);
+window.addEventListener('resize', () => setView(viewMode));
+
+// ---------- Map ----------
+let map = null;
+const markers = new Map(); // pubId -> marker
+
+function initMapOnce(){
   if (map) return;
-
-  map = L.map('map', { zoomControl: true }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], 14);
-
+  map = L.map('map', { zoomControl:true }).setView([NOTTINGHAM_CENTER.lat, NOTTINGHAM_CENTER.lng], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
+
+  PUBS.forEach(pub => {
+    if (!Number.isFinite(pub.lat) || !Number.isFinite(pub.lng)) return;
+    const m = L.marker([pub.lat, pub.lng]).addTo(map);
+    m.bindPopup(`<strong>${escapeHtml(pub.name)}</strong><br>${escapeHtml(pub.area || '')}`);
+    markers.set(pub.id, m);
+  });
 }
 
-function syncMarkers(filteredPubs) {
-  if (!map) return;
+function setSpecialMarkers(bestNowId, bestNextId){
+  // swap icons for “1 / 2” pins (only for those two)
+  PUBS.forEach(pub => {
+    const m = markers.get(pub.id);
+    if (!m) return;
+    m.setIcon(new L.Icon.Default());
+  });
 
-  const want = new Set(filteredPubs.filter(p => p.lat != null && p.lng != null).map(p => p.id));
+  const makeDivIcon = (cls, txt) => L.divIcon({
+    className: '',
+    html: `<div class="pin ${cls}">${txt}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -24]
+  });
 
-  // remove old
-  for (const [id, m] of markers.entries()) {
-    if (!want.has(id)) {
-      map.removeLayer(m);
-      markers.delete(id);
-    }
-  }
-
-  // add new
-  for (const p of filteredPubs) {
-    if (p.lat == null || p.lng == null) continue;
-    if (markers.has(p.id)) continue;
-
-    const m = L.marker([p.lat, p.lng]).addTo(map);
-    const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.lat + ',' + p.lng)}`;
-    m.bindPopup(`
-      <div style="font-weight:700;margin-bottom:2px;">${escapeHtml(p.name)}</div>
-      <div style="color:#777;margin-bottom:6px;">${escapeHtml(p.area || '')}</div>
-      <a href="${gmaps}" target="_blank" rel="noopener">Directions</a>
-    `);
-    markers.set(p.id, m);
-  }
+  if (bestNowId && markers.get(bestNowId)) markers.get(bestNowId).setIcon(makeDivIcon('one', '1'));
+  if (bestNextId && markers.get(bestNextId)) markers.get(bestNextId).setIcon(makeDivIcon('two', '2'));
 }
 
-function focusPubOnMap(pubId) {
-  if (!map) return;
-  const p = pubs.find(x => x.id === pubId);
-  if (!p || p.lat == null || p.lng == null) return;
-  map.setView([p.lat, p.lng], 16, { animate: true });
+function focusPub(pubId){
+  initMapOnce();
+  const pub = PUBS.find(p => p.id === pubId);
   const m = markers.get(pubId);
-  if (m) m.openPopup();
+  if (!pub || !m) return;
+  map.setView([pub.lat, pub.lng], 16, { animate:true });
+  m.openPopup();
+  if (window.matchMedia('(max-width: 980px)').matches) setView('map');
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
 }
 
-function render() {
-  const dateStr = document.getElementById('dateInput').value;
-  const timeStr = document.getElementById('timeInput').value;
-  const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+// ---------- Recommendation (“when current goes shade”) ----------
+function buildPlanCard(bestNow, bestNext, atTime){
+  if (!bestNow) {
+    el.plan.innerHTML = '';
+    return;
+  }
 
-  if (dateStr) localStorage.setItem('ditS_date', dateStr);
-  if (timeStr) localStorage.setItem('ditS_time', timeStr);
+  const nowLine = bestNow.kind === 'sunny-now'
+    ? `1) ${escapeHtml(bestNow.pub.name)} — sunny now (${fmtHM(atTime)}–${fmtHM(bestNow.end)}) • ${bestNow.walkMin} min walk`
+    : `1) ${escapeHtml(bestNow.pub.name)} — next sun ${fmtHM(bestNow.start)}–${fmtHM(bestNow.end)} • ${bestNow.walkMin} min walk`;
 
-  const dateMidnight = new Date(dateStr + 'T00:00:00');
-  const timeOpt = (timeStr && /^\d\d:\d\d$/.test(timeStr))
-    ? { hh: Number(timeStr.slice(0,2)), mm: Number(timeStr.slice(3,5)) }
-    : null;
+  let nextLine = '2) —';
+  let subLine = '';
+  if (bestNext) {
+    nextLine = `2) ${escapeHtml(bestNext.pub.name)} — ${fmtHM(bestNext.start)}–${fmtHM(bestNext.end)} • ${bestNext.walkMin} min walk`;
+    const leave = new Date(bestNext.start.getTime() - (bestNext.walkMin + 2) * 60 * 1000);
+    subLine = `Leave ~ ${fmtHM(leave)} to arrive for the next sun.`;
+  }
 
-  const filtered = pubs
+  el.plan.innerHTML = `
+    <div class="planCard">
+      <div class="planTitle">Suggested plan</div>
+      <div class="planLine">${nowLine}</div>
+      <div class="planLine">${nextLine}</div>
+      <div class="planSub">${subLine}</div>
+    </div>
+  `;
+}
+
+function pickNextAfter(results, endTime, excludeId){
+  // Find a pub that is sunny at (endTime + 5 min) or starts soon after.
+  const t = new Date(endTime.getTime() + 5*60*1000);
+  const candidates = results
+    .filter(r => r.pub.id !== excludeId)
+    .map(r => {
+      // recompute status at t
+      const horizon = new Date(t.getTime() + 24*60*60*1000);
+      const s = bestStatusForPub(r.pub, t, horizon);
+      if (s.kind === 'sunny-now' || s.kind === 'next-sun') {
+        const start = s.kind === 'sunny-now' ? t : s.start;
+        return { pub:r.pub, kind:s.kind, start, end:s.end, spot:s.spot, walkMin:r.walkMin, distKm:r.distKm };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  // rank: earliest start then distance
+  candidates.sort((a,b) => (a.start - b.start) || (a.walkMin - b.walkMin));
+  return candidates[0] || null;
+}
+
+// ---------- Render ----------
+let lastWeatherRunToken = 0;
+
+async function render(){
+  initMapOnce();
+
+  const now = new Date();
+  const offsetMin = Number(el.whenRange.value || 0);
+  const atTime = new Date(now.getTime() + offsetMin*60*1000);
+  const horizonEnd = new Date(atTime.getTime() + 24*60*60*1000);
+
+  el.whenMeta.textContent = whenLabel(now, offsetMin);
+
+  const baseLoc = (nearMode && userLoc) ? userLoc : NOTTINGHAM_CENTER;
+  const locLabel = (nearMode && userLoc) ? 'your location' : 'Nottingham centre';
+
+  // meta line (sunrise/sunset for centre)
+  const t = SunCalc.getTimes(atTime, NOTTINGHAM_CENTER.lat, NOTTINGHAM_CENTER.lng);
+  el.metaLine.textContent = `Using ${locLabel} • Sunrise ~ ${fmtHM(t.sunrise)} • Sunset ~ ${fmtHM(t.sunset)} • Window: next 24h`;
+
+  const q = (el.search.value || '').trim().toLowerCase();
+
+  // Build results
+  const computed = PUBS
     .filter(p => !q || (p.name + ' ' + (p.area||'')).toLowerCase().includes(q))
-    .map(p => ({ pub: p, sun: computePubSun(dateMidnight, timeOpt, p) }));
+    .map(pub => {
+      const distKm = (nearMode && baseLoc && Number.isFinite(pub.lat) && Number.isFinite(pub.lng))
+        ? haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng })
+        : null;
+      const walkMin = (distKm != null) ? walkMinutesFromKm(distKm) : null;
 
-  // meta line: use city centre sunrise/sunset for the selected day
-  const cityTimes = getSunTimes(dateMidnight, DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng);
-  metaEl.textContent = `Date: ${dateStr} • Sunrise ~ ${fmtTime(cityTimes.sunrise)} • Sunset ~ ${fmtTime(cityTimes.sunset)}`;
+      const status = bestStatusForPub(pub, atTime, horizonEnd);
+      return { pub, status, distKm, walkMin };
+    });
 
-  // sort: in-sun first (if time set), then name
-  filtered.sort((a, b) => {
-    if (timeOpt) {
-      const as = a.sun.nowStatus === 'In sun (likely)' ? 0 : 1;
-      const bs = b.sun.nowStatus === 'In sun (likely)' ? 0 : 1;
-      if (as !== bs) return as - bs;
-    }
+  // Sort
+  computed.sort((a,b) => {
+    const rank = (x) => (x.status.kind === 'sunny-now' ? 0 : x.status.kind === 'next-sun' ? 1 : 2);
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+
+    // tie-break: time until sun (if next-sun)
+    const ta = a.status.kind === 'next-sun' ? (a.status.start - atTime) : 0;
+    const tb = b.status.kind === 'next-sun' ? (b.status.start - atTime) : 0;
+    if (ta !== tb) return ta - tb;
+
+    // then distance if available
+    if (a.walkMin != null && b.walkMin != null) return a.walkMin - b.walkMin;
     return a.pub.name.localeCompare(b.pub.name);
   });
 
-  // list
-  listEl.innerHTML = filtered.map(({ pub, sun }) => {
-    const spotsHtml = sun.spots.map(s => {
-      const wins = (s.windows && s.windows.length)
-        ? s.windows.map(w => `${w.start}–${w.end}`).join(' • ')
-        : '—';
-      return `<div class="spotRow">
-        <div class="spotName">${escapeHtml(s.name)}</div>
-        <div class="spotWin">${wins}</div>
-      </div>`;
-    }).join('');
+  // Pick “best now” and “next after”
+  const top = computed.find(r => r.status.kind === 'sunny-now' || r.status.kind === 'next-sun') || null;
 
-    const badge = escapeHtml(sun.nowStatus);
-    const pinNote = (pub.lat == null || pub.lng == null)
-      ? `<div class="small" style="margin-top:8px;">No map pin yet (add lat/lng).</div>`
-      : '';
+  let bestNow = null;
+  if (top) {
+    bestNow = {
+      pub: top.pub,
+      kind: top.status.kind,
+      spot: top.status.spot,
+      start: top.status.start,
+      end: top.status.end,
+      distKm: top.distKm,
+      walkMin: top.walkMin ?? 0
+    };
+  }
 
-    return `
-      <div class="card" data-pub="${escapeHtml(pub.id)}">
-        <div class="cardHead">
-          <div>
-            <div class="cardTitle">${escapeHtml(pub.name)}</div>
-            <div class="cardSub">${escapeHtml(pub.area || '')}</div>
-          </div>
-          <div class="badge">${badge}</div>
+  let bestNext = null;
+  if (bestNow) {
+    const endTimeForPlan = (bestNow.kind === 'sunny-now') ? bestNow.end : bestNow.start;
+    bestNext = pickNextAfter(computed, endTimeForPlan, bestNow.pub.id);
+  }
+
+  buildPlanCard(bestNow, bestNext, atTime);
+  setSpecialMarkers(bestNow?.pub?.id, bestNext?.pub?.id);
+
+  // Render list
+  el.results.innerHTML = '';
+  computed.forEach(r => {
+    const { pub, status, walkMin } = r;
+
+    if (status.kind === 'no-coords') return; // hide pubs without coords in this build
+
+    let badgeClass = 'shade', badgeText = '—';
+    let primary = '—', secondary = '—';
+    let weatherTime = null;
+
+    if (status.kind === 'sunny-now') {
+      badgeClass = 'sun';
+      badgeText = 'Sunny now';
+      const mins = Math.max(0, Math.round((status.end - atTime)/60000));
+      primary = `Now: ${fmtHM(atTime)}–${fmtHM(status.end)} (+${mins} min)`;
+      secondary = status.spot?.name ? `Spot: ${status.spot.name}` : '';
+      weatherTime = atTime;
+    } else if (status.kind === 'next-sun') {
+      badgeClass = 'shade';
+      badgeText = 'Shade now';
+      const mins = Math.max(0, Math.round((status.start - atTime)/60000));
+      primary = `Next sun: ${fmtHM(status.start)}–${fmtHM(status.end)} (in ${mins} min)`;
+      secondary = status.spot?.name ? `Spot: ${status.spot.name}` : '';
+      weatherTime = status.start;
+    } else {
+      badgeClass = 'shade';
+      badgeText = 'No sun';
+      primary = 'No predicted direct sun in next 24h';
+      secondary = '';
+      weatherTime = atTime;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.addEventListener('click', () => focusPub(pub.id));
+
+    const distLine = (walkMin != null) ? `${walkMin} min walk` : '';
+    const weatherId = `w_${pub.id}_${Math.random().toString(16).slice(2)}`;
+
+    card.innerHTML = `
+      <div class="cardHead">
+        <div>
+          <div class="cardTitle">${escapeHtml(pub.name)}</div>
+          <div class="cardSub">${escapeHtml(pub.area || '')}${distLine ? ` • ${distLine}` : ''}</div>
         </div>
-        <div class="spots">${spotsHtml}</div>
-        ${pinNote}
+        <div class="badge ${badgeClass}">${badgeText}</div>
+      </div>
+
+      <div class="band">
+        <div class="bandRow">
+          <div>${escapeHtml(primary)}</div>
+        </div>
+        ${secondary ? `<div class="smallRow">${escapeHtml(secondary)}</div>` : ''}
+        <div class="smallRow" id="${weatherId}" data-weather="1" data-lat="${pub.lat}" data-lng="${pub.lng}" data-time="${weatherTime ? weatherTime.toISOString() : ''}">
+          Weather: loading…
+        </div>
       </div>
     `;
-  }).join('');
 
-  listEl.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('click', () => focusPubOnMap(card.dataset.pub));
+    el.results.appendChild(card);
   });
 
-  // map markers
-  initMap();
-  syncMarkers(filtered.map(x => x.pub));
+  // Weather fill (best-effort, cached)
+  const token = ++lastWeatherRunToken;
+  await fillWeatherForVisible(token);
 }
 
-buildControls();
-window.addEventListener('resize', () => setMobileView(document.getElementById('viewMap').classList.contains('active') ? 'map' : 'list', true));
-setTimeout(render, 50); // allow Leaflet to load
+async function fillWeatherForVisible(token){
+  const nodes = [...document.querySelectorAll('[data-weather="1"]')];
+  const tasks = nodes
+    .map(n => {
+      const lat = Number(n.dataset.lat);
+      const lng = Number(n.dataset.lng);
+      const timeIso = n.dataset.time;
+      const time = timeIso ? new Date(timeIso) : new Date();
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { node: n, lat, lng, time };
+    })
+    .filter(Boolean)
+    .slice(0, 18); // limit to keep it snappy
+
+  await runWithConcurrency(tasks, 4, async (t) => {
+    try {
+      const w = await getWeather(t.lat, t.lng);
+      const i = nearestHourlyIndex(w.hourly.time, t.time);
+      if (token !== lastWeatherRunToken) return; // stale render
+      t.node.textContent = `Weather: ${formatWeatherShort(w, i)}`;
+    } catch {
+      if (token !== lastWeatherRunToken) return;
+      t.node.textContent = 'Weather: unavailable';
+    }
+  });
+}
+
+// ---------- Boot ----------
+(function init(){
+  setView('list');
+
+  // attempt location silently once (no prompt on some browsers unless via click)
+  if (!userLoc) {
+    el.locBtn.textContent = 'Use my location';
+  } else {
+    el.locBtn.textContent = 'Location set';
+  }
+
+  // If you want auto-request (some browsers will block), uncomment:
+  // requestLocation();
+
+  render();
+})();
