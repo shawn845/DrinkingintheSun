@@ -1,7 +1,8 @@
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v12';
 const CACHE_NAME = `drinking-in-the-sun-${CACHE_VERSION}`;
+const RUNTIME = `drinking-in-the-sun-runtime-${CACHE_VERSION}`;
 
-const CORE_ASSETS = [
+const CORE = [
   './',
   './index.html',
   './manifest.json',
@@ -12,14 +13,14 @@ const CORE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
+  event.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(CORE)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)))
+      Promise.all(keys.map((k) => (k !== CACHE_NAME && k !== RUNTIME ? caches.delete(k) : null)))
     )
   );
   self.clients.claim();
@@ -29,35 +30,34 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Network-first for HTML
-  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          return res;
-        })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
-    );
+  // Network-first for navigations
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const c = await caches.open(RUNTIME);
+        c.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        return (await caches.match(req)) || (await caches.match('./index.html'));
+      }
+    })());
     return;
   }
 
-  // Cache-first for same-origin assets (JS/CSS/icons)
-  if (url.origin === location.origin) {
-    event.respondWith(
-      caches.match(req).then((hit) => {
-        if (hit) return hit;
-        return fetch(req).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          return res;
-        });
-      })
-    );
+  // Cache-first for same-origin assets
+  if (url.origin === self.location.origin) {
+    event.respondWith((async () => {
+      const hit = await caches.match(req);
+      if (hit) return hit;
+      const fresh = await fetch(req);
+      const c = await caches.open(RUNTIME);
+      c.put(req, fresh.clone());
+      return fresh;
+    })());
     return;
   }
 
-  // For cross-origin (Leaflet CDN / tiles): just go network.
+  // Cross-origin (Leaflet CDN, OSM tiles, Open-Meteo): network (best effort)
   event.respondWith(fetch(req));
 });
