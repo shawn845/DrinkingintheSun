@@ -2,12 +2,12 @@
   --bg:#fbf7ef;          /* warm off-white */
   --panel:#ffffff;
   --line:#eadfcd;
-  --text:#3a3a3a;
+  --text:#2f2f2f;
   --muted:#7a7a7a;
 
   --sun:#27ae60;         /* green */
   --next:#f2c94c;        /* amber */
-  --shade:#bdbdbd;
+  --bad:#bdbdbd;         /* grey */
 
   --btn:#fff7e6;
   --btnHover:#fff0cf;
@@ -72,42 +72,16 @@ body{
 .btn:hover{background:var(--btnHover)}
 .btnIcon{font-size:14px}
 
-.bar{
+.status{
   margin:0 14px 12px;
   border:1px solid var(--line);
   border-radius: var(--r20);
   background: var(--panel);
   box-shadow: var(--shadowSoft);
-  padding:10px 10px;
-  display:flex;
-  gap:10px;
-  justify-content:space-between;
-  align-items:center;
-}
-
-.barLine{font-size:13px;font-weight:700}
-.barHint{font-size:12px;color:var(--muted);margin-top:2px}
-
-.barNav{
-  display:flex;
-  border:1px solid var(--line);
-  border-radius:14px;
-  overflow:hidden;
-  background:#fff;
-}
-.navBtn{
-  border:0;
   padding:10px 12px;
-  background:transparent;
-  cursor:pointer;
-  color:var(--text);
-  font-size:13px;
-  min-width:92px;
 }
-.navBtn.isOn{
-  background:#fff3d2;
-  font-weight:800;
-}
+.statusLine{font-size:13px;font-weight:800}
+.statusHint{margin-top:2px;font-size:12px;color:var(--muted)}
 
 .main{
   padding:0 14px 14px;
@@ -116,7 +90,6 @@ body{
   gap:12px;
 }
 
-/* Mobile-first: list only by default; map is toggled */
 .panel{
   border:1px solid var(--line);
   border-radius: var(--r24);
@@ -125,13 +98,8 @@ body{
   overflow:hidden;
 }
 
-.listPanel{
-  padding:12px;
-}
-
-.mapPanel{
-  display:none;
-}
+.listPanel{padding:12px}
+.mapPanel{display:none}
 
 #map{
   height:70vh;
@@ -148,17 +116,8 @@ body{
 }
 
 /* Plan cards */
-.plan{
-  display:grid;
-  gap:10px;
-  margin-bottom:12px;
-}
-
-.planHeader{
-  font-size:12px;
-  color:var(--muted);
-  margin:2px 2px 6px 2px;
-}
+.plan{display:grid;gap:10px;margin-bottom:12px}
+.planHeader{font-size:12px;color:var(--muted);margin:2px 2px 6px}
 
 .bigCard{
   border:1px solid var(--line);
@@ -168,17 +127,16 @@ body{
   position:relative;
   overflow:hidden;
 }
-
 .bigCard::before{
   content:"";
   position:absolute;
   left:0; top:0; bottom:0;
   width:8px;
-  background: var(--shade);
+  background: var(--bad);
 }
-
 .bigCard.sun::before{ background: var(--sun); }
 .bigCard.next::before{ background: var(--next); }
+.bigCard.bad::before{ background: var(--bad); }
 
 .bigTop{
   display:flex;
@@ -186,7 +144,6 @@ body{
   gap:10px;
   align-items:flex-start;
 }
-
 .bigTitle{
   font-size:16px;
   font-weight:900;
@@ -204,40 +161,26 @@ body{
   border-radius:999px;
   padding:7px 10px;
   font-size:12px;
-  font-weight:800;
+  font-weight:900;
   white-space:nowrap;
 }
 .pill.sun{ background: rgba(39,174,96,.10); border-color: rgba(39,174,96,.25); }
 .pill.next{ background: rgba(242,201,76,.14); border-color: rgba(242,201,76,.28); }
-.pill.shade{ background: rgba(189,189,189,.12); border-color: rgba(189,189,189,.22); color:#555; }
+.pill.bad{ background: rgba(189,189,189,.12); border-color: rgba(189,189,189,.22); color:#555; }
 
-.bigBody{
-  margin-top:10px;
-  display:grid;
-  gap:6px;
-}
-
+.bigBody{margin-top:10px;display:grid;gap:8px}
 .rowLine{
   display:flex;
   justify-content:space-between;
   gap:10px;
   align-items:center;
   font-size:14px;
-  color:var(--text);
 }
 .rowLine strong{font-weight:900}
 
-.mini{
-  font-size:12px;
-  color:var(--muted);
-  line-height:1.35;
-}
+.mini{font-size:12px;color:var(--muted);line-height:1.35}
 
-.actions{
-  margin-top:10px;
-  display:flex;
-  gap:8px;
-}
+.actions{display:flex;gap:8px}
 .actionBtn{
   flex:1;
   border:1px solid var(--line);
@@ -245,14 +188,13 @@ body{
   padding:10px 12px;
   background:#fff;
   cursor:pointer;
-  font-weight:800;
+  font-weight:900;
 }
 .actionBtn:hover{background:#fffaf0}
-.actionBtn.primary{
-  background:#fff3d2;
-}
+.actionBtn.primary{background:#fff3d2}
 .actionBtn.primary:hover{background:#ffedbf}
 
+/* Section + list */
 .section{margin-top:8px}
 .sectionTitle{
   font-size:12px;
@@ -261,7 +203,6 @@ body{
   margin:8px 2px 8px;
   letter-spacing:.2px;
 }
-
 .results{display:grid;gap:10px}
 
 .card{
@@ -269,7 +210,6 @@ body{
   border-radius: var(--r20);
   padding:12px;
   background:#fff;
-  cursor:pointer;
 }
 
 .cardTop{
@@ -279,23 +219,8 @@ body{
   align-items:flex-start;
 }
 
-.cardTitle{
-  font-weight:900;
-  letter-spacing:-0.2px;
-}
-.cardSub{
-  margin-top:2px;
-  font-size:12px;
-  color:var(--muted);
-}
-
-.cardBody{
-  margin-top:10px;
-  border-top:1px dashed var(--line);
-  padding-top:10px;
-  display:grid;
-  gap:6px;
-}
+.cardTitle{font-weight:900;letter-spacing:-0.2px}
+.cardSub{margin-top:2px;font-size:12px;color:var(--muted)}
 
 .badge{
   border:1px solid var(--line);
@@ -307,7 +232,45 @@ body{
 }
 .badge.sun{ background: rgba(39,174,96,.10); border-color: rgba(39,174,96,.25); }
 .badge.next{ background: rgba(242,201,76,.14); border-color: rgba(242,201,76,.28); }
-.badge.none{ background: rgba(189,189,189,.12); border-color: rgba(189,189,189,.22); color:#555; }
+.badge.bad{ background: rgba(189,189,189,.12); border-color: rgba(189,189,189,.22); color:#555; }
+
+.cardBody{
+  margin-top:10px;
+  border-top:1px dashed var(--line);
+  padding-top:10px;
+  display:grid;
+  gap:8px;
+}
+
+.thumb{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  background:#f8f5ee;
+}
+.thumb img{
+  width:100%;
+  height:140px;
+  object-fit:cover;
+  display:block;
+}
+
+.cardActions{
+  display:flex;
+  gap:8px;
+}
+
+.smallBtn{
+  flex:1;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px 12px;
+  background:#fff;
+  cursor:pointer;
+  font-weight:900;
+}
+.smallBtn:hover{background:#fffaf0}
 
 .foot{
   margin-top:12px;
@@ -328,5 +291,4 @@ body{
 .pin.one{background: var(--sun); color:#fff;}
 .pin.two{background: var(--next); color:#2f2f2f;}
 
-/* Simple “tap targets” */
 button, .card { -webkit-tap-highlight-color: transparent; }
