@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v14';
+const CACHE_VERSION = 'v15';
 const CACHE_NAME = `drinking-in-the-sun-${CACHE_VERSION}`;
 const RUNTIME = `drinking-in-the-sun-runtime-${CACHE_VERSION}`;
 
@@ -58,6 +58,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cross-origin (Leaflet CDN, OSM tiles, Open-Meteo): network best-effort
+  // Cross-origin: network best-effort
   event.respondWith(fetch(req));
 });
