@@ -21,44 +21,37 @@
       </div>
 
       <div class="topActions">
-        <button id="locBtn" class="btn" type="button" aria-label="Use my location">
-          <span class="btnIcon">📍</span><span id="locBtnText">Near me</span>
+        <button id="nearBtn" class="btn" type="button" aria-label="Near me">
+          <span class="btnIcon">📍</span><span id="nearBtnText">Near me</span>
         </button>
-        <button id="installBtn" class="btn" type="button" hidden>
-          <span class="btnIcon">⬇️</span>Install
+        <button id="viewToggleBtn" class="btn" type="button" aria-label="Toggle map">
+          <span class="btnIcon">🗺️</span><span id="viewToggleText">Map</span>
         </button>
       </div>
     </header>
 
-    <section class="bar">
-      <div class="barLeft">
-        <div id="whereLine" class="barLine">Using Nottingham centre</div>
-        <div id="timeLine" class="barHint">—</div>
-      </div>
-
-      <nav class="barNav" aria-label="View">
-        <button id="viewList" class="navBtn isOn" type="button">Near me</button>
-        <button id="viewMap" class="navBtn" type="button">Map</button>
-      </nav>
-    </section>
+    <div class="status">
+      <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
+      <div id="statusHint" class="statusHint">Updated — • Horizon: next 120 min</div>
+    </div>
 
     <main class="main">
       <section id="listPanel" class="panel listPanel">
         <section id="plan" class="plan"></section>
 
         <section class="section">
-          <div class="sectionTitle">More nearby</div>
+          <div class="sectionTitle">Next sunny nearby</div>
           <div id="results" class="results"></div>
         </section>
 
         <footer class="foot">
-          Forecast: Open-Meteo (hourly). Sun: position-only estimate (buildings/trees not modelled).
+          Weather: Open-Meteo hourly (city-scale). Sun: position-only estimate (buildings/trees not modelled).
         </footer>
       </section>
 
-      <section id="mapPanel" class="panel mapPanel">
+      <section id="mapPanel" class="panel mapPanel" aria-label="Map panel">
         <div id="map"></div>
-        <div class="mapFoot">Tap a pin for details. Pins 1 & 2 match the plan.</div>
+        <div class="mapFoot">Pins 1 and 2 match the plan.</div>
       </section>
     </main>
   </div>
