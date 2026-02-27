@@ -5,55 +5,88 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Drinking in the Sun — Nottingham</title>
 
-  <link rel="manifest" href="./manifest.json" />
   <meta name="theme-color" content="#ffffff" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./public/styles.css" />
 
-  <!-- Leaflet (OSM map, no API key) -->
+  <!-- Leaflet (no API key) -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-    defer
-  ></script>
-
-  <link rel="stylesheet" href="./public/styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="top">
       <div class="brand">
         <div class="title">Drinking in the Sun</div>
-        <div class="subtitle">Nottingham city pubs — predicted sun windows (demo)</div>
+        <div class="subtitle">Find nearby pubs with sun — next 24 hours</div>
       </div>
-      <button id="installBtn" class="btn" type="button" disabled>Install App</button>
+      <div class="topActions">
+        <button id="locBtn" class="btn" type="button">Use my location</button>
+        <button id="installBtn" class="btn" type="button" hidden>Install</button>
+      </div>
     </header>
 
-    <section class="controls" id="controls"></section>
+    <section class="controls">
+      <div class="row">
+        <div class="field grow">
+          <label for="search">Search</label>
+          <input id="search" type="search" placeholder="Pub name or area…" />
+        </div>
 
-    <section class="meta" id="meta"></section>
+        <div class="field">
+          <label>View</label>
+          <div class="segmented">
+            <button id="viewList" class="seg isOn" type="button">List</button>
+            <button id="viewMap" class="seg" type="button">Map</button>
+          </div>
+        </div>
+      </div>
 
-    <main class="main">
-      <section class="list" id="list"></section>
-      <section class="mapWrap">
-        <div id="map" class="map"></div>
-        <div class="mapHint">Tip: click a pin or a pub in the list.</div>
+      <div class="row">
+        <div class="field grow">
+          <label for="whenRange">When</label>
+          <input id="whenRange" type="range" min="0" max="1440" step="15" value="0" />
+          <div class="whenMeta" id="whenMeta">Now</div>
+        </div>
+
+        <div class="field">
+          <label>Mode</label>
+          <div class="segmented">
+            <button id="modeNear" class="seg isOn" type="button">Near me</button>
+            <button id="modeAll" class="seg" type="button">All</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="meta" id="metaLine">—</div>
+    </section>
+
+    <main class="main" id="main">
+      <section class="panel listPanel" id="listPanel">
+        <div id="plan" class="plan"></div>
+        <div id="results" class="results"></div>
+      </section>
+
+      <section class="panel mapPanel" id="mapPanel">
+        <div id="map"></div>
+        <div class="mapFoot">Tip: tap a pub in the list to focus it on the map.</div>
       </section>
     </main>
 
-    <footer class="footer">
-      <div class="small">
-        Note: predictions use sun position only (no building/tree shading). Spot azimuth ranges are placeholders you’ll calibrate by observation.
-      </div>
+    <footer class="foot">
+      Forecast: Open-Meteo (hourly). Sun: position-only estimate (buildings/trees not modelled).
     </footer>
   </div>
 
-  <script src="./public/app.js" defer></script>
+  <!-- SunCalc -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js" crossorigin="anonymous"></script>
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+
+  <script src="./public/app.js"></script>
 
   <script>
     if ('serviceWorker' in navigator) {
