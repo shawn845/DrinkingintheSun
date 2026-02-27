@@ -1,429 +1,463 @@
-/* Drinking in the Sun — Map + SunCalc demo (Nottingham) */
+/* Drinking in the Sun — demo app
+   - Sunrise/sunset + sun position: SunCalc-style math (no external libs)
+   - Sun windows: checks when sun azimuth is within each spot’s azimuth range + altitude threshold
+   - Map: Leaflet + OSM tiles; “Directions” link uses Google Maps (no API key)
+*/
 
-const MONTHS = [
-  { key: 'Apr', monthIndex: 3 },
-  { key: 'May', monthIndex: 4 },
-  { key: 'Jun', monthIndex: 5 },
-  { key: 'Jul', monthIndex: 6 },
-  { key: 'Aug', monthIndex: 7 },
-  { key: 'Sep', monthIndex: 8 },
+const DEFAULT_MAP_CENTER = { lat: 52.9536, lng: -1.15047 }; // Nottingham
+
+// New pubs + Bread & Bitter use verified lat/lng.
+// If you add more pubs: easiest is Doogal “ShowMap?postcode=...” or Mapcarta (OSM).
+const pubs = [
+  // Existing demo pubs can stay here even without pins (lat/lng null).
+  // Add lat/lng when you have them.
+  { id: 'angel', name: 'The Angel Microbrewery', area: 'Nottingham (Hockley / City)', lat: null, lng: null,
+    spots: [{ name: 'Front window', azFrom: 120, azTo: 230, altMin: 5 }]
+  },
+  { id: 'canalhouse', name: 'The Canalhouse', area: 'Nottingham (Canal)', lat: null, lng: null,
+    spots: [{ name: 'Outside by canal', azFrom: 100, azTo: 260, altMin: 5 }]
+  },
+  { id: 'trip', name: 'Ye Olde Trip to Jerusalem', area: 'Castle / Standard Hill', lat: null, lng: null,
+    spots: [{ name: 'Front benches', azFrom: 140, azTo: 260, altMin: 7 }]
+  },
+  { id: 'maltcross', name: 'Malt Cross', area: "St James' Street", lat: null, lng: null,
+    spots: [{ name: 'Front (street) side', azFrom: 120, azTo: 220, altMin: 7 }]
+  },
+  { id: 'bell', name: 'The Bell Inn', area: 'Old Market Square', lat: null, lng: null,
+    spots: [{ name: 'Angel Row frontage', azFrom: 110, azTo: 230, altMin: 6 }]
+  },
+
+  // Added pubs (verified lat/lng)
+  { id: 'bread', name: 'The Bread & Bitter', area: 'Mapperley (Woodthorpe Drive)', lat: 52.98389, lng: -1.12296,
+    spots: [
+      { name: 'Front / patio', azFrom: 110, azTo: 250, altMin: 6 },
+      { name: 'Beer garden', azFrom: 140, azTo: 280, altMin: 6 }
+    ]
+  },
+  { id: 'bunkers', name: 'Bunkers Hill', area: 'Hockley', lat: 52.953558, lng: -1.140387,
+    spots: [{ name: 'Outside tables', azFrom: 120, azTo: 240, altMin: 6 }]
+  },
+  { id: 'barreldrop', name: 'The Barrel Drop', area: "Hurts Yard (City Centre)", lat: 52.954355, lng: -1.152503,
+    spots: [{ name: 'Doorway / alley sun', azFrom: 150, azTo: 230, altMin: 12 }]
+  },
+  { id: 'organ', name: 'The Organ Grinder', area: 'Canning Circus', lat: 52.956499, lng: -1.163208,
+    spots: [{ name: 'Roof terrace', azFrom: 130, azTo: 290, altMin: 6 }]
+  },
+  { id: 'sirjohn', name: 'The Sir John Borlase Warren', area: 'Canning Circus', lat: 52.95584, lng: -1.162804,
+    spots: [{ name: 'Beer garden', azFrom: 120, azTo: 280, altMin: 6 }]
+  },
+  { id: 'handheart', name: 'The Hand & Heart', area: 'Derby Road', lat: 52.955444, lng: -1.160222,
+    spots: [{ name: 'Outside steps', azFrom: 120, azTo: 240, altMin: 8 }]
+  },
+  { id: 'keans', name: "Kean's Head", area: 'Lace Market', lat: 52.951346, lng: -1.144033,
+    spots: [{ name: 'Front pavement', azFrom: 110, azTo: 230, altMin: 7 }]
+  },
+  { id: 'poacher', name: 'The Lincolnshire Poacher', area: 'Mansfield Road', lat: 52.962096, lng: -1.15128,
+    spots: [{ name: 'Outside (street side)', azFrom: 100, azTo: 230, altMin: 7 }]
+  },
+  { id: 'nedludd', name: 'The Ned Ludd', area: 'Friar Lane', lat: 52.952316, lng: -1.151471,
+    spots: [{ name: 'Front windows', azFrom: 110, azTo: 230, altMin: 7 }]
+  },
+  { id: 'josephelse', name: 'The Joseph Else', area: 'Market Square', lat: 52.952901, lng: -1.150254,
+    spots: [{ name: 'Upstairs windows', azFrom: 120, azTo: 240, altMin: 6 }]
+  },
+  { id: 'salutation', name: 'Ye Olde Salutation Inn', area: 'Maid Marian Way', lat: 52.95112, lng: -1.15167,
+    spots: [{ name: 'Front benches', azFrom: 120, azTo: 240, altMin: 6 }]
+  },
+  { id: 'pit', name: 'The Pit & Pendulum', area: 'Lace Market', lat: 52.9534279, lng: -1.14597,
+    spots: [{ name: 'Street-side front', azFrom: 120, azTo: 230, altMin: 7 }]
+  },
+  { id: 'bathinn', name: 'Bath Inn', area: 'Lace Market', lat: 52.95539, lng: -1.13773,
+    spots: [{ name: 'Outside tables', azFrom: 110, azTo: 250, altMin: 6 }]
+  },
+  { id: 'embankment', name: 'The Embankment', area: 'Arkwright Street', lat: 52.9393944, lng: -1.1388205,
+    spots: [{ name: 'Beer garden', azFrom: 120, azTo: 280, altMin: 6 }]
+  },
+  { id: 'trentnav', name: 'Trent Navigation', area: 'Meadow Lane', lat: 52.9412, lng: -1.13824,
+    spots: [{ name: 'Riverside seating', azFrom: 110, azTo: 260, altMin: 6 }]
+  }
 ];
 
-const PUBS = [
-  {
-    id: 'trip',
-    name: 'Ye Olde Trip to Jerusalem',
-    area: 'Castle / Standard Hill',
-    lat: 52.948661,
-    lng: -1.151981,
-    notes: 'Coords source: Atlas Obscura.',
-    spots: [
-      // PLACEHOLDERS — calibrate by observation
-      { name: 'Front benches', bearingMin: 150, bearingMax: 240, minElevation: 10 },
-      { name: 'Cave entrance area', bearingMin: 180, bearingMax: 260, minElevation: 15 },
-    ]
-  },
-  {
-    id: 'canalhouse',
-    name: 'The Canalhouse',
-    area: 'Canal Street / Station',
-    lat: 52.948170,
-    lng: -1.148400,
-    notes: 'Coords source: Wikimedia Commons (OSM-based).',
-    spots: [
-      { name: 'Waterside seating', bearingMin: 170, bearingMax: 280, minElevation: 8 },
-      { name: 'Courtyard tables', bearingMin: 130, bearingMax: 220, minElevation: 12 },
-    ]
-  },
-  {
-    id: 'maltcross',
-    name: 'Malt Cross',
-    area: 'St James’ Street',
-    lat: 52.952950,
-    lng: -1.152410,
-    notes: 'Coords source: Wikimedia Commons (OSM-based).',
-    spots: [
-      { name: 'Front (street) side', bearingMin: 120, bearingMax: 200, minElevation: 12 },
-    ]
-  },
-  {
-    id: 'bell',
-    name: 'The Bell Inn',
-    area: 'Old Market Square',
-    lat: 52.953442,
-    lng: -1.1520048,
-    notes: 'Coords source: Hirespace.',
-    spots: [
-      { name: 'Angel Row frontage', bearingMin: 110, bearingMax: 200, minElevation: 10 },
-    ]
-  },
-  {
-    id: 'angel',
-    name: 'The Angel Microbrewery',
-    area: 'Lace Market (Stoney Street)',
-    lat: 52.953373,
-    lng: -1.143441,
-    notes: 'Coords source: Hirespace.',
-    spots: [
-      { name: 'Rooftop / terrace (if open)', bearingMin: 140, bearingMax: 260, minElevation: 8 },
-      { name: 'Front windows', bearingMin: 120, bearingMax: 200, minElevation: 12 },
-    ]
-  },
-];
+// ---------- PWA install prompt handling (fixes the DevTools warning) ----------
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById('installBtn');
 
-// ---------- Install prompt (fixes your warning) ----------
-let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredPrompt = e;
-  const btn = document.getElementById('installBtn');
-  if (btn) btn.hidden = false;
-});
-document.getElementById('installBtn')?.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  const btn = document.getElementById('installBtn');
-  if (btn) btn.hidden = true;
-});
-window.addEventListener('appinstalled', () => {
-  deferredPrompt = null;
-  const btn = document.getElementById('installBtn');
-  if (btn) btn.hidden = true;
+  deferredInstallPrompt = e;
+  installBtn.disabled = false;
 });
 
-// ---------- Helpers ----------
-function pad2(n){ return String(n).padStart(2,'0'); }
+installBtn.addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  installBtn.disabled = true;
+  deferredInstallPrompt.prompt();
+  try { await deferredInstallPrompt.userChoice; } catch {}
+  deferredInstallPrompt = null;
+});
 
-function fmtTime(d){
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+// ---------- Sun math (SunCalc-style) ----------
+const rad = Math.PI / 180;
+const dayMs = 1000 * 60 * 60 * 24;
+const J1970 = 2440588;
+const J2000 = 2451545;
+const e = rad * 23.4397;
+const J0 = 0.0009;
+
+function toJulian(date) { return date.valueOf() / dayMs - 0.5 + J1970; }
+function fromJulian(j) { return new Date((j + 0.5 - J1970) * dayMs); }
+function toDays(date) { return toJulian(date) - J2000; }
+
+function rightAscension(l, b) {
+  return Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+}
+function declination(l, b) {
+  return Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+}
+function azimuth(H, phi, dec) {
+  return Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
+}
+function altitude(H, phi, dec) {
+  return Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
+}
+function siderealTime(d, lw) {
+  return rad * (280.16 + 360.9856235 * d) - lw;
+}
+function solarMeanAnomaly(d) {
+  return rad * (357.5291 + 0.98560028 * d);
+}
+function eclipticLongitude(M) {
+  const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const P = rad * 102.9372;
+  return M + C + P + Math.PI;
+}
+function sunCoords(d) {
+  const M = solarMeanAnomaly(d);
+  const L = eclipticLongitude(M);
+  return { dec: declination(L, 0), ra: rightAscension(L, 0), M, L };
+}
+function getSunPosition(date, lat, lng) {
+  const lw = rad * -lng;
+  const phi = rad * lat;
+  const d = toDays(date);
+  const c = sunCoords(d);
+  const H = siderealTime(d, lw) - c.ra;
+  const az = azimuth(H, phi, c.dec);
+  const alt = altitude(H, phi, c.dec);
+  // Convert: SunCalc azimuth is from south (0) west-positive -> degrees from north:
+  const azDeg = (az / rad + 180 + 360) % 360;
+  return { azimuthDeg: azDeg, altitudeDeg: alt / rad };
 }
 
-function parseTimeToDate(baseDate, hhmm){
-  if (!hhmm) return null;
-  const [h,m] = hhmm.split(':').map(Number);
-  const d = new Date(baseDate);
-  d.setHours(h, m, 0, 0);
-  return d;
+function julianCycle(d, lw) { return Math.round(d - J0 - lw / (2 * Math.PI)); }
+function approxTransit(Ht, lw, n) { return J0 + (Ht + lw) / (2 * Math.PI) + n; }
+function solarTransitJ(ds, M, L) { return J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L); }
+function hourAngle(h, phi, dec) {
+  return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+}
+function getSetJ(h, lw, phi, dec, n, M, L) {
+  const w = hourAngle(h, phi, dec);
+  const a = approxTransit(w, lw, n);
+  return solarTransitJ(a, M, L);
+}
+function getSunTimes(dateAtMidnight, lat, lng) {
+  const lw = rad * -lng;
+  const phi = rad * lat;
+  const d = toDays(dateAtMidnight);
+  const n = julianCycle(d, lw);
+  const ds = approxTransit(0, lw, n);
+  const M = solarMeanAnomaly(ds);
+  const L = eclipticLongitude(M);
+  const dec = declination(L, 0);
+  const Jnoon = solarTransitJ(ds, M, L);
+  const h0 = rad * -0.833; // standard sunrise/sunset
+  const Jset = getSetJ(h0, lw, phi, dec, n, M, L);
+  const Jrise = Jnoon - (Jset - Jnoon);
+  return { sunrise: fromJulian(Jrise), sunset: fromJulian(Jset) };
 }
 
-// SunCalc azimuth: radians, 0 = south, negative east, positive west
-// Convert to bearing degrees (0..360, where 0 = north, 90 = east)
-function azimuthToBearingDeg(azRad){
-  const azDeg = azRad * 180 / Math.PI;
-  return (azDeg + 180 + 360) % 360;
-}
-function radToDeg(r){ return r * 180 / Math.PI; }
+// ---------- Sun windows ----------
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtTime(d) { return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 
-function withinBearing(bearing, min, max){
-  if (min <= max) return bearing >= min && bearing <= max;
-  // wrap-around case (e.g. 300..60)
-  return bearing >= min || bearing <= max;
-}
-
-function spotInSun(pub, spot, dateTime){
-  const pos = SunCalc.getPosition(dateTime, pub.lat, pub.lng);
-  const bearing = azimuthToBearingDeg(pos.azimuth);
-  const elev = radToDeg(pos.altitude);
-  const okBearing = withinBearing(bearing, spot.bearingMin, spot.bearingMax);
-  const okElev = elev >= (spot.minElevation ?? 0);
-  return okBearing && okElev;
+function inAzRange(azDeg, fromDeg, toDeg) {
+  const a = (azDeg + 360) % 360;
+  const f = (fromDeg + 360) % 360;
+  const t = (toDeg + 360) % 360;
+  if (f <= t) return a >= f && a <= t;
+  // wrap-around (e.g. 300..40)
+  return a >= f || a <= t;
 }
 
-function computeSunWindows(pub, spot, date){
-  const t = SunCalc.getTimes(date, pub.lat, pub.lng);
-  const sunrise = t.sunrise;
-  const sunset = t.sunset;
-
-  // If polar day/night edge cases (not relevant for Nottingham), guard anyway:
-  if (!(sunrise instanceof Date) || !(sunset instanceof Date)) return [];
-
-  // step in minutes
+function computeWindowsForSpot(dateMidnight, pubLat, pubLng, spot) {
+  const times = getSunTimes(dateMidnight, pubLat, pubLng);
+  const start = new Date(times.sunrise);
+  const end = new Date(times.sunset);
   const stepMin = 5;
+
   const windows = [];
+  let current = null;
 
-  let currentStart = null;
-  for (let d = new Date(sunrise); d <= sunset; d = new Date(d.getTime() + stepMin*60*1000)) {
-    const hit = spotInSun(pub, spot, d);
-    if (hit && !currentStart) currentStart = new Date(d);
-    if (!hit && currentStart) {
-      windows.push({ start: currentStart, end: new Date(d) });
-      currentStart = null;
-    }
+  for (let t = new Date(start); t <= end; t = new Date(t.getTime() + stepMin * 60000)) {
+    const sp = getSunPosition(t, pubLat, pubLng);
+    const ok = sp.altitudeDeg >= (spot.altMin ?? 5) && inAzRange(sp.azimuthDeg, spot.azFrom, spot.azTo);
+
+    if (ok && !current) current = { start: new Date(t), end: new Date(t) };
+    if (ok && current) current.end = new Date(t);
+    if (!ok && current) { windows.push(current); current = null; }
   }
-  if (currentStart) windows.push({ start: currentStart, end: new Date(sunset) });
+  if (current) windows.push(current);
 
-  // Merge tiny gaps (optional)
-  return windows;
+  // Format + compress tiny windows
+  return windows
+    .filter(w => (w.end - w.start) >= 10 * 60000)
+    .map(w => ({ start: fmtTime(w.start), end: fmtTime(w.end) }));
 }
 
-function windowsToText(windows){
-  if (!windows.length) return 'No predicted direct sun on this date.';
-  return windows.map(w => `${fmtTime(w.start)}–${fmtTime(w.end)}`).join(' • ');
-}
-
-// ---------- UI + State ----------
-const els = {
-  dateInput: document.getElementById('dateInput'),
-  timeInput: document.getElementById('timeInput'),
-  q: document.getElementById('q'),
-  results: document.getElementById('results'),
-  monthButtons: document.getElementById('monthButtons'),
-  sunMeta: document.getElementById('sunMeta'),
-  viewListBtn: document.getElementById('viewListBtn'),
-  viewMapBtn: document.getElementById('viewMapBtn'),
-  listPanel: document.getElementById('listPanel'),
-  mapPanel: document.getElementById('mapPanel'),
-};
-
-let selectedMonthIndex = null; // 0-11
-let viewMode = 'list'; // 'list' | 'map'
-
-// Cache windows per pub per day
-const dayCache = new Map(); // key: `${pubId}|YYYY-MM-DD` -> { times, spotWindows }
-
-function ymd(d){
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-}
-
-function getActiveDate(){
-  // If explicit date chosen, use it (local)
-  const v = els.dateInput.value;
-  if (v) {
-    const [Y,M,D] = v.split('-').map(Number);
-    return new Date(Y, M-1, D, 12, 0, 0, 0); // midday avoids DST edge weirdness
+function computePubSun(dateMidnight, timeOpt, pub) {
+  if (pub.lat == null || pub.lng == null) {
+    return { sunrise: null, sunset: null, nowStatus: 'No pin yet', spots: pub.spots.map(s => ({ name: s.name, windows: [] })) };
   }
 
-  // Else if month button chosen, use 15th of that month in current year
-  if (typeof selectedMonthIndex === 'number') {
-    const now = new Date();
-    return new Date(now.getFullYear(), selectedMonthIndex, 15, 12, 0, 0, 0);
-  }
+  const times = getSunTimes(dateMidnight, pub.lat, pub.lng);
+  const sunrise = fmtTime(times.sunrise);
+  const sunset = fmtTime(times.sunset);
 
-  // Else today
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
-}
-
-function updateSunMeta(date){
-  // Use city-centre-ish average (first pub) for sunrise/sunset meta
-  const ref = PUBS[0];
-  const t = SunCalc.getTimes(date, ref.lat, ref.lng);
-  els.sunMeta.textContent = `Date: ${ymd(date)} • Sunrise ~ ${fmtTime(t.sunrise)} • Sunset ~ ${fmtTime(t.sunset)}`;
-}
-
-function getDayData(pub, date){
-  const key = `${pub.id}|${ymd(date)}`;
-  if (dayCache.has(key)) return dayCache.get(key);
-
-  const times = SunCalc.getTimes(date, pub.lat, pub.lng);
-  const spotWindows = pub.spots.map(spot => ({
-    spot,
-    windows: computeSunWindows(pub, spot, date),
+  const spots = pub.spots.map(spot => ({
+    name: spot.name,
+    windows: computeWindowsForSpot(dateMidnight, pub.lat, pub.lng, spot)
   }));
 
-  const data = { times, spotWindows };
-  dayCache.set(key, data);
-  return data;
-}
-
-function buildMonths(){
-  els.monthButtons.innerHTML = '';
-  MONTHS.forEach(m => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chip';
-    b.textContent = m.key;
-    b.addEventListener('click', () => {
-      selectedMonthIndex = m.monthIndex;
-      // Clear explicit date if using month shortcuts
-      els.dateInput.value = '';
-      render();
-      highlightMonths();
-    });
-    b.dataset.monthIndex = String(m.monthIndex);
-    els.monthButtons.appendChild(b);
-  });
-  highlightMonths();
-}
-
-function highlightMonths(){
-  [...els.monthButtons.querySelectorAll('.chip')].forEach(btn => {
-    const mi = Number(btn.dataset.monthIndex);
-    btn.classList.toggle('isOn', mi === selectedMonthIndex && !els.dateInput.value);
-  });
-}
-
-function setView(mode){
-  viewMode = mode;
-  els.viewListBtn.classList.toggle('isOn', mode === 'list');
-  els.viewMapBtn.classList.toggle('isOn', mode === 'map');
-
-  // On mobile, hide the other panel for clarity
-  if (window.matchMedia('(max-width: 980px)').matches){
-    els.listPanel.style.display = (mode === 'list') ? '' : 'none';
-    els.mapPanel.style.display  = (mode === 'map')  ? '' : 'none';
-  } else {
-    els.listPanel.style.display = '';
-    els.mapPanel.style.display  = '';
+  let nowStatus = 'Time not set';
+  if (timeOpt) {
+    const now = new Date(dateMidnight);
+    now.setHours(timeOpt.hh, timeOpt.mm, 0, 0);
+    const sp = getSunPosition(now, pub.lat, pub.lng);
+    const inAny = pub.spots.some(spot =>
+      sp.altitudeDeg >= (spot.altMin ?? 5) && inAzRange(sp.azimuthDeg, spot.azFrom, spot.azTo)
+    );
+    nowStatus = inAny ? 'In sun (likely)' : 'Shade now';
   }
-  if (mode === 'map') setTimeout(() => map?.invalidateSize(), 150);
+
+  return { sunrise, sunset, nowStatus, spots };
 }
 
-// ---------- Map ----------
-let map = null;
-const markers = new Map(); // pubId -> marker
+// ---------- UI ----------
+const controlsEl = document.getElementById('controls');
+const metaEl = document.getElementById('meta');
+const listEl = document.getElementById('list');
+const mainEl = document.querySelector('.main');
 
-function initMapOnce(){
+let map = null;
+let markers = new Map();
+
+function buildControls() {
+  const storedDate = localStorage.getItem('ditS_date');
+  const storedTime = localStorage.getItem('ditS_time');
+  const today = new Date();
+  const defaultDate = storedDate || today.toISOString().slice(0, 10);
+  const defaultTime = storedTime || `${pad2(today.getHours())}:${pad2(today.getMinutes())}`;
+
+  controlsEl.innerHTML = `
+    <div class="controlsRow">
+      <div class="field">
+        <label>Date</label>
+        <input id="dateInput" type="date" value="${defaultDate}">
+      </div>
+
+      <div class="field">
+        <label>Quick months</label>
+        <div class="quickMonths" id="quickMonths">
+          ${['Apr','May','Jun','Jul','Aug','Sep'].map(m => `<button class="chip" type="button" data-month="${m}">${m}</button>`).join('')}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Time (optional)</label>
+        <input id="timeInput" type="time" value="${defaultTime}">
+      </div>
+
+      <div class="field">
+        <label>Search</label>
+        <input id="searchInput" type="text" placeholder="Name or area...">
+      </div>
+
+      <div class="field">
+        <label>View</label>
+        <div class="toggle" role="tablist" aria-label="View toggle">
+          <button id="viewList" class="active" type="button">List</button>
+          <button id="viewMap" type="button">Map</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('quickMonths').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-month]');
+    if (!btn) return;
+    const month = btn.dataset.month;
+    const year = new Date(document.getElementById('dateInput').value + 'T00:00:00').getFullYear();
+    const monthIndex = { Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8 }[month];
+    const d = new Date(Date.UTC(year, monthIndex, 15));
+    // keep local date formatting
+    const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    document.getElementById('dateInput').value = local.toISOString().slice(0,10);
+    render();
+  });
+
+  document.getElementById('dateInput').addEventListener('change', render);
+  document.getElementById('timeInput').addEventListener('change', render);
+  document.getElementById('searchInput').addEventListener('input', render);
+
+  document.getElementById('viewList').addEventListener('click', () => setMobileView('list'));
+  document.getElementById('viewMap').addEventListener('click', () => setMobileView('map'));
+
+  // default on load: show both on desktop; on mobile, show list.
+  setMobileView('list', true);
+}
+
+function setMobileView(which, init=false) {
+  const isMobile = window.matchMedia('(max-width: 980px)').matches;
+  const bList = document.getElementById('viewList');
+  const bMap = document.getElementById('viewMap');
+  bList.classList.toggle('active', which === 'list');
+  bMap.classList.toggle('active', which === 'map');
+
+  if (isMobile) {
+    mainEl.classList.toggle('hideMap', which === 'list');
+    mainEl.classList.toggle('hideList', which === 'map');
+  } else {
+    mainEl.classList.remove('hideMap', 'hideList');
+  }
+  if (!init && which === 'map' && map) setTimeout(() => map.invalidateSize(), 150);
+}
+
+function initMap() {
+  if (!window.L) return; // leaflet not loaded yet
   if (map) return;
 
-  map = L.map('map', { zoomControl: true }).setView([52.9525, -1.1500], 14);
+  map = L.map('map', { zoomControl: true }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], 14);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
-
-  PUBS.forEach(pub => {
-    const marker = L.marker([pub.lat, pub.lng]).addTo(map);
-    marker.bindPopup(
-      `<strong>${escapeHtml(pub.name)}</strong><br>${escapeHtml(pub.area)}<br><a href="https://www.google.com/maps/search/?api=1&query=${pub.lat},${pub.lng}" target="_blank" rel="noopener">Directions</a>`
-    );
-    markers.set(pub.id, marker);
-  });
 }
 
-function focusPubOnMap(pubId){
-  initMapOnce();
-  const pub = PUBS.find(p => p.id === pubId);
-  const marker = markers.get(pubId);
-  if (!pub || !marker) return;
-  map.setView([pub.lat, pub.lng], 16, { animate: true });
-  marker.openPopup();
-}
+function syncMarkers(filteredPubs) {
+  if (!map) return;
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
-}
+  const want = new Set(filteredPubs.filter(p => p.lat != null && p.lng != null).map(p => p.id));
 
-// ---------- Render ----------
-function render(){
-  initMapOnce();
-
-  const date = getActiveDate();
-  updateSunMeta(date);
-
-  const query = (els.q.value || '').trim().toLowerCase();
-  const timeStr = els.timeInput.value;
-  const atTime = parseTimeToDate(date, timeStr);
-
-  const filtered = PUBS.filter(p => {
-    if (!query) return true;
-    return (
-      p.name.toLowerCase().includes(query) ||
-      p.area.toLowerCase().includes(query)
-    );
-  });
-
-  els.results.innerHTML = '';
-
-  filtered.forEach(pub => {
-    const day = getDayData(pub, date);
-
-    // Determine if ANY spot is in sun at chosen time
-    let anySunNow = false;
-    if (atTime){
-      anySunNow = pub.spots.some(spot => spotInSun(pub, spot, atTime));
+  // remove old
+  for (const [id, m] of markers.entries()) {
+    if (!want.has(id)) {
+      map.removeLayer(m);
+      markers.delete(id);
     }
+  }
 
-    // If time is set, hide pubs with no sun at that time
-    if (atTime && !anySunNow) return;
+  // add new
+  for (const p of filteredPubs) {
+    if (p.lat == null || p.lng == null) continue;
+    if (markers.has(p.id)) continue;
 
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.addEventListener('click', () => {
-      focusPubOnMap(pub.id);
-      if (window.matchMedia('(max-width: 980px)').matches) setView('map');
-    });
-
-    const head = document.createElement('div');
-    head.className = 'cardHead';
-
-    const left = document.createElement('div');
-    left.innerHTML = `
-      <div class="cardTitle">${escapeHtml(pub.name)}</div>
-      <div class="cardArea">${escapeHtml(pub.area)}</div>
-    `;
-
-    const right = document.createElement('div');
-    if (atTime){
-      right.innerHTML = anySunNow ? `<span class="badge sunNow">In sun (likely)</span>` : `<span class="badge">No sun</span>`;
-    } else {
-      right.innerHTML = `<span class="badge">Tap to view on map</span>`;
-    }
-
-    head.appendChild(left);
-    head.appendChild(right);
-    card.appendChild(head);
-
-    const spotsWrap = document.createElement('div');
-    spotsWrap.className = 'spots';
-
-    day.spotWindows.forEach(({ spot, windows }) => {
-      if (atTime && !spotInSun(pub, spot, atTime)) return;
-
-      const s = document.createElement('div');
-      s.className = 'spot';
-
-      const label = document.createElement('div');
-      label.className = 'spotName';
-      label.textContent = spot.name;
-
-      const wins = document.createElement('div');
-      wins.className = 'spotWindows';
-      wins.textContent = windowsToText(windows);
-
-      s.appendChild(label);
-      s.appendChild(wins);
-      spotsWrap.appendChild(s);
-    });
-
-    card.appendChild(spotsWrap);
-    els.results.appendChild(card);
-  });
-
-  // If list is empty, show hint
-  if (!els.results.children.length){
-    const empty = document.createElement('div');
-    empty.style.padding = '12px';
-    empty.style.color = '#8a8a8a';
-    empty.textContent = atTime
-      ? 'No matches at that time. Clear the time field to see all predicted windows.'
-      : 'No matches. Try a different search.';
-    els.results.appendChild(empty);
+    const m = L.marker([p.lat, p.lng]).addTo(map);
+    const gmaps = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.lat + ',' + p.lng)}`;
+    m.bindPopup(`
+      <div style="font-weight:700;margin-bottom:2px;">${escapeHtml(p.name)}</div>
+      <div style="color:#777;margin-bottom:6px;">${escapeHtml(p.area || '')}</div>
+      <a href="${gmaps}" target="_blank" rel="noopener">Directions</a>
+    `);
+    markers.set(p.id, m);
   }
 }
 
-// ---------- Events ----------
-buildMonths();
-initMapOnce();
-setView('list');
-render();
+function focusPubOnMap(pubId) {
+  if (!map) return;
+  const p = pubs.find(x => x.id === pubId);
+  if (!p || p.lat == null || p.lng == null) return;
+  map.setView([p.lat, p.lng], 16, { animate: true });
+  const m = markers.get(pubId);
+  if (m) m.openPopup();
+}
 
-els.dateInput.addEventListener('change', () => {
-  // if user picked a date, turn off month shortcut highlight
-  highlightMonths();
-  // clear cache only if you want; not required
-  render();
-});
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-els.timeInput.addEventListener('change', render);
-els.q.addEventListener('input', render);
+function render() {
+  const dateStr = document.getElementById('dateInput').value;
+  const timeStr = document.getElementById('timeInput').value;
+  const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
 
-els.viewListBtn.addEventListener('click', () => setView('list'));
-els.viewMapBtn.addEventListener('click', () => setView('map'));
+  if (dateStr) localStorage.setItem('ditS_date', dateStr);
+  if (timeStr) localStorage.setItem('ditS_time', timeStr);
 
-window.addEventListener('resize', () => setView(viewMode));
+  const dateMidnight = new Date(dateStr + 'T00:00:00');
+  const timeOpt = (timeStr && /^\d\d:\d\d$/.test(timeStr))
+    ? { hh: Number(timeStr.slice(0,2)), mm: Number(timeStr.slice(3,5)) }
+    : null;
+
+  const filtered = pubs
+    .filter(p => !q || (p.name + ' ' + (p.area||'')).toLowerCase().includes(q))
+    .map(p => ({ pub: p, sun: computePubSun(dateMidnight, timeOpt, p) }));
+
+  // meta line: use city centre sunrise/sunset for the selected day
+  const cityTimes = getSunTimes(dateMidnight, DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng);
+  metaEl.textContent = `Date: ${dateStr} • Sunrise ~ ${fmtTime(cityTimes.sunrise)} • Sunset ~ ${fmtTime(cityTimes.sunset)}`;
+
+  // sort: in-sun first (if time set), then name
+  filtered.sort((a, b) => {
+    if (timeOpt) {
+      const as = a.sun.nowStatus === 'In sun (likely)' ? 0 : 1;
+      const bs = b.sun.nowStatus === 'In sun (likely)' ? 0 : 1;
+      if (as !== bs) return as - bs;
+    }
+    return a.pub.name.localeCompare(b.pub.name);
+  });
+
+  // list
+  listEl.innerHTML = filtered.map(({ pub, sun }) => {
+    const spotsHtml = sun.spots.map(s => {
+      const wins = (s.windows && s.windows.length)
+        ? s.windows.map(w => `${w.start}–${w.end}`).join(' • ')
+        : '—';
+      return `<div class="spotRow">
+        <div class="spotName">${escapeHtml(s.name)}</div>
+        <div class="spotWin">${wins}</div>
+      </div>`;
+    }).join('');
+
+    const badge = escapeHtml(sun.nowStatus);
+    const pinNote = (pub.lat == null || pub.lng == null)
+      ? `<div class="small" style="margin-top:8px;">No map pin yet (add lat/lng).</div>`
+      : '';
+
+    return `
+      <div class="card" data-pub="${escapeHtml(pub.id)}">
+        <div class="cardHead">
+          <div>
+            <div class="cardTitle">${escapeHtml(pub.name)}</div>
+            <div class="cardSub">${escapeHtml(pub.area || '')}</div>
+          </div>
+          <div class="badge">${badge}</div>
+        </div>
+        <div class="spots">${spotsHtml}</div>
+        ${pinNote}
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('click', () => focusPubOnMap(card.dataset.pub));
+  });
+
+  // map markers
+  initMap();
+  syncMarkers(filtered.map(x => x.pub));
+}
+
+buildControls();
+window.addEventListener('resize', () => setMobileView(document.getElementById('viewMap').classList.contains('active') ? 'map' : 'list', true));
+setTimeout(render, 50); // allow Leaflet to load
