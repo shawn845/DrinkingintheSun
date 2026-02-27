@@ -3,18 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#ffffff" />
   <title>Drinking in the Sun — Nottingham</title>
 
   <link rel="manifest" href="./manifest.json" />
-  <link rel="stylesheet" href="./public/styles.css" />
+  <meta name="theme-color" content="#ffffff" />
 
-  <!-- Leaflet (no key needed) -->
+  <!-- Leaflet (OSM map, no API key) -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+    defer
+  ></script>
+
+  <link rel="stylesheet" href="./public/styles.css" />
 </head>
 <body>
   <div class="app">
@@ -23,77 +31,34 @@
         <div class="title">Drinking in the Sun</div>
         <div class="subtitle">Nottingham city pubs — predicted sun windows (demo)</div>
       </div>
-
-      <div class="topActions">
-        <button id="installBtn" class="btn" hidden>Install App</button>
-      </div>
+      <button id="installBtn" class="btn" type="button" disabled>Install App</button>
     </header>
 
-    <section class="controls">
-      <div class="controlRow">
-        <div class="field">
-          <label for="dateInput">Date</label>
-          <input id="dateInput" type="date" />
-        </div>
+    <section class="controls" id="controls"></section>
 
-        <div class="field">
-          <label>Quick months</label>
-          <div class="months" id="monthButtons"></div>
-        </div>
-
-        <div class="field">
-          <label for="timeInput">Time (optional)</label>
-          <input id="timeInput" type="time" />
-        </div>
-
-        <div class="field">
-          <label for="q">Search</label>
-          <input id="q" type="search" placeholder="Name or area…" />
-        </div>
-
-        <div class="field viewToggle">
-          <label>View</label>
-          <div class="segmented">
-            <button id="viewListBtn" class="segBtn isOn" type="button">List</button>
-            <button id="viewMapBtn" class="segBtn" type="button">Map</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="metaRow">
-        <div id="sunMeta" class="metaText">—</div>
-        <div class="metaHint">
-          Note: predictions use sun position only (no building/tree shading). Spot bearings are placeholders you’ll calibrate by observation.
-        </div>
-      </div>
-    </section>
+    <section class="meta" id="meta"></section>
 
     <main class="main">
-      <div class="layout" id="layout">
-        <section class="panel listPanel" id="listPanel">
-          <div id="results" class="results"></div>
-        </section>
-
-        <section class="panel mapPanel" id="mapPanel">
-          <div id="map"></div>
-          <div class="mapFoot">
-            <span>Tip: click a pin or a pub in the list.</span>
-          </div>
-        </section>
-      </div>
+      <section class="list" id="list"></section>
+      <section class="mapWrap">
+        <div id="map" class="map"></div>
+        <div class="mapHint">Tip: click a pin or a pub in the list.</div>
+      </section>
     </main>
 
-    <footer class="foot">
-      <span>Demo build — update pub spots + bearings as you test real sun positions.</span>
+    <footer class="footer">
+      <div class="small">
+        Note: predictions use sun position only (no building/tree shading). Spot azimuth ranges are placeholders you’ll calibrate by observation.
+      </div>
     </footer>
   </div>
 
-  <!-- SunCalc -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js" crossorigin="anonymous"></script>
+  <script src="./public/app.js" defer></script>
 
-  <!-- Leaflet -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-
-  <script src="./public/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+  </script>
 </body>
 </html>
