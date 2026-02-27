@@ -5,80 +5,62 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Drinking in the Sun — Nottingham</title>
 
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#fbf7ef" />
   <link rel="manifest" href="./manifest.json" />
   <link rel="stylesheet" href="./public/styles.css" />
 
   <!-- Leaflet (no API key) -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    crossorigin=""
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 <body>
   <div class="app">
     <header class="top">
       <div class="brand">
         <div class="title">Drinking in the Sun</div>
-        <div class="subtitle">Nearby pubs with sun — next 2 hours</div>
+        <div class="subtitle">Find a pint in the sun (next 2 hours)</div>
       </div>
+
       <div class="topActions">
-        <button id="locBtn" class="btn" type="button">Use my location</button>
-        <button id="installBtn" class="btn" type="button" hidden>Install</button>
+        <button id="locBtn" class="btn" type="button" aria-label="Use my location">
+          <span class="btnIcon">📍</span><span id="locBtnText">Near me</span>
+        </button>
+        <button id="installBtn" class="btn" type="button" hidden>
+          <span class="btnIcon">⬇️</span>Install
+        </button>
       </div>
     </header>
 
-    <section class="controls">
-      <div class="row">
-        <div class="field grow">
-          <label for="search">Search</label>
-          <input id="search" type="search" placeholder="Pub name or area…" />
-        </div>
-
-        <div class="field">
-          <label>View</label>
-          <div class="segmented">
-            <button id="viewList" class="seg isOn" type="button">List</button>
-            <button id="viewMap" class="seg" type="button">Map</button>
-          </div>
-        </div>
+    <section class="bar">
+      <div class="barLeft">
+        <div id="whereLine" class="barLine">Using Nottingham centre</div>
+        <div id="timeLine" class="barHint">—</div>
       </div>
 
-      <div class="row">
-        <div class="field grow">
-          <label for="whenRange">When (next 2 hours)</label>
-          <input id="whenRange" type="range" min="0" max="120" step="5" value="0" />
-          <div class="whenMeta" id="whenMeta">Now</div>
-        </div>
-
-        <div class="field">
-          <label>Mode</label>
-          <div class="segmented">
-            <button id="modeNear" class="seg isOn" type="button">Near me</button>
-            <button id="modeAll" class="seg" type="button">All</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="meta" id="metaLine">—</div>
+      <nav class="barNav" aria-label="View">
+        <button id="viewList" class="navBtn isOn" type="button">Near me</button>
+        <button id="viewMap" class="navBtn" type="button">Map</button>
+      </nav>
     </section>
 
-    <main class="main" id="main">
-      <section class="panel listPanel" id="listPanel">
-        <div id="plan" class="plan"></div>
-        <div id="results" class="results"></div>
+    <main class="main">
+      <section id="listPanel" class="panel listPanel">
+        <section id="plan" class="plan"></section>
+
+        <section class="section">
+          <div class="sectionTitle">More nearby</div>
+          <div id="results" class="results"></div>
+        </section>
+
+        <footer class="foot">
+          Forecast: Open-Meteo (hourly). Sun: position-only estimate (buildings/trees not modelled).
+        </footer>
       </section>
 
-      <section class="panel mapPanel" id="mapPanel">
+      <section id="mapPanel" class="panel mapPanel">
         <div id="map"></div>
-        <div class="mapFoot">Tip: tap a pub in the list to focus it on the map.</div>
+        <div class="mapFoot">Tap a pin for details. Pins 1 & 2 match the plan.</div>
       </section>
     </main>
-
-    <footer class="foot">
-      Forecast: Open-Meteo (hourly). Sun: position-only estimate (buildings/trees not modelled).
-    </footer>
   </div>
 
   <!-- SunCalc -->
