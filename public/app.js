@@ -10,6 +10,7 @@ const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
 // Demo pubs. Replace/extend freely.
 // IMPORTANT: lat/lng and spot bearings are inputs you should verify/tune.
 const PUBS = [
+  // Existing demo pubs
   {
     id: 'trip',
     name: 'Ye Olde Trip to Jerusalem',
@@ -56,6 +57,154 @@ const PUBS = [
     spots: [
       { name: 'Rooftop / terrace (if open)', bearingMin: 140, bearingMax: 260, minElevation: 8 },
       { name: 'Front windows', bearingMin: 120, bearingMax: 200, minElevation: 12 }
+    ]
+  },
+
+  // Added pubs (your lat/lng)
+  {
+    id: 'bread-and-bitter',
+    name: 'Bread & Bitter',
+    area: 'Mapperley (NG3 5JL)',
+    lat: 52.98389, lng: -1.12296,
+    spots: [
+      { name: 'Front / pavement tables', bearingMin: 110, bearingMax: 220, minElevation: 12 },
+      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 }
+    ]
+  },
+  {
+    id: 'bunkers-hill',
+    name: 'Bunkers Hill',
+    area: 'Hockley (NG1 1FP)',
+    lat: 52.953558, lng: -1.140387,
+    spots: [
+      { name: 'Corner / outside benches', bearingMin: 120, bearingMax: 260, minElevation: 10 }
+    ]
+  },
+  {
+    id: 'barrel-drop',
+    name: 'The Barrel Drop',
+    area: 'City Centre (NG1 6JD)',
+    lat: 52.954355, lng: -1.152503,
+    spots: [
+      { name: 'Front / pavement tables', bearingMin: 120, bearingMax: 230, minElevation: 12 }
+    ]
+  },
+  {
+    id: 'organ-grinder',
+    name: 'The Organ Grinder',
+    area: 'Canning Circus (NG7 3JE)',
+    lat: 52.956499, lng: -1.163208,
+    spots: [
+      { name: 'Front terrace', bearingMin: 120, bearingMax: 260, minElevation: 10 },
+      { name: 'Outside tables', bearingMin: 140, bearingMax: 290, minElevation: 8 }
+    ]
+  },
+  {
+    id: 'sir-john-borlase-warren',
+    name: 'The Sir John Borlase Warren',
+    area: 'Canning Circus (NG7 3GD)',
+    lat: 52.95584, lng: -1.162804,
+    spots: [
+      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 },
+      { name: 'Front benches', bearingMin: 120, bearingMax: 230, minElevation: 12 }
+    ]
+  },
+  {
+    id: 'hand-and-heart',
+    name: 'The Hand & Heart',
+    area: 'Canning Circus / Park (NG1 5BA)',
+    lat: 52.955444, lng: -1.160222,
+    spots: [
+      { name: 'Front terrace', bearingMin: 120, bearingMax: 260, minElevation: 10 },
+      { name: 'Side / courtyard', bearingMin: 150, bearingMax: 290, minElevation: 12 }
+    ]
+  },
+  {
+    id: 'keans-head',
+    name: "Kean’s Head",
+    area: 'Lace Market (NG1 1QA)',
+    lat: 52.951346, lng: -1.144033,
+    spots: [
+      { name: 'Front tables', bearingMin: 110, bearingMax: 210, minElevation: 12 },
+      { name: 'Side seating', bearingMin: 150, bearingMax: 290, minElevation: 10 }
+    ]
+  },
+  {
+    id: 'lincolnshire-poacher',
+    name: 'The Lincolnshire Poacher',
+    area: 'City Centre (NG1 3FR)',
+    lat: 52.962096, lng: -1.15128,
+    spots: [
+      { name: 'Front windows', bearingMin: 110, bearingMax: 210, minElevation: 12 },
+      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
+    ]
+  },
+  {
+    id: 'ned-ludd',
+    name: 'The Ned Ludd',
+    area: 'City Centre (NG1 6DA)',
+    lat: 52.952316, lng: -1.151471,
+    spots: [
+      { name: 'Front windows', bearingMin: 110, bearingMax: 210, minElevation: 12 },
+      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
+    ]
+  },
+  {
+    id: 'joseph-else',
+    name: 'The Joseph Else',
+    area: 'Old Market Square (NG1 2JS)',
+    lat: 52.952901, lng: -1.150254,
+    spots: [
+      { name: 'Angel Row frontage', bearingMin: 110, bearingMax: 210, minElevation: 12 }
+    ]
+  },
+  {
+    id: 'embankment',
+    name: 'The Embankment',
+    area: 'The Embankment',
+    lat: 52.9393944, lng: -1.1388205,
+    spots: [
+      { name: 'Riverside terrace', bearingMin: 120, bearingMax: 300, minElevation: 6 },
+      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 }
+    ]
+  },
+  {
+    id: 'trent-navigation',
+    name: 'Trent Navigation',
+    area: 'Trent / Meadow Lane',
+    lat: 52.9412, lng: -1.13824,
+    spots: [
+      { name: 'Riverside seating', bearingMin: 120, bearingMax: 300, minElevation: 6 }
+    ]
+  },
+  {
+    id: 'bath-inn',
+    name: 'Bath Inn',
+    area: 'Sneinton / Lace Market',
+    lat: 52.95539, lng: -1.13773,
+    spots: [
+      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 },
+      { name: 'Front tables', bearingMin: 110, bearingMax: 210, minElevation: 12 }
+    ]
+  },
+  {
+    id: 'olde-salutation-inn',
+    name: 'Ye Olde Salutation Inn',
+    area: 'City Centre',
+    lat: 52.95112, lng: -1.15167,
+    spots: [
+      { name: 'Front benches', bearingMin: 120, bearingMax: 220, minElevation: 12 },
+      { name: 'Side / courtyard', bearingMin: 150, bearingMax: 290, minElevation: 10 }
+    ]
+  },
+  {
+    id: 'pit-and-pendulum',
+    name: 'The Pit & Pendulum',
+    area: 'Lace Market',
+    lat: 52.9534279, lng: -1.14597,
+    spots: [
+      { name: 'Front / street side', bearingMin: 110, bearingMax: 210, minElevation: 12 },
+      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
     ]
   }
 ];
