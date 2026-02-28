@@ -1,8 +1,7 @@
 /* Drinking in the Sun — LIVE (next 2 hours) — Model A (calibrated 8 Aug)
-   Uses PhotoPills Sun In/Out as obstruction edges.
-
-   Setup:
-   - Put CSV at: ./public/data/DrinkingintheSunData.csv
+   - Loads CSV: ./public/data/DrinkingintheSunData.csv
+   - Uses Sun In/Out on 8 Aug to define obstruction edge in sun-angle space
+   - Predicts sun for TODAY, but only displays within next 2 hours
 */
 
 const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
@@ -117,7 +116,6 @@ function walkMinutesFromKm(km){
 // ---------- Sun position helpers ----------
 function radToDeg(r){ return r * 180 / Math.PI; }
 function azimuthToBearingDeg(azRad){
-  // SunCalc azimuth is radians from south; convert to bearing degrees (0=N,90=E,180=S,270=W)
   const azDeg = azRad * 180 / Math.PI;
   return (azDeg + 180 + 360) % 360;
 }
@@ -126,31 +124,26 @@ function sunBearingAltitude(dateTime, lat, lng){
   return { bearing: azimuthToBearingDeg(pos.azimuth), alt: radToDeg(pos.altitude) };
 }
 
-// Wrap-safe interpolation axis.
-// Returns an "unwrapped" representation so azOut >= azIn and span is the shorter arc.
+// Wrap-safe interpolation axis
 function unwrapAzRange(azIn, azOut){
   let a = azIn;
   let b = azOut;
 
-  // Make b close to a by allowing b+360
   let d = b - a;
   if (d > 180) b -= 360;
   if (d < -180) b += 360;
 
-  // Ensure b >= a (for interpolation direction)
   if (b < a) [a, b] = [b, a];
-
   return { a, b };
 }
 function unwrapAz(az, a){
-  // make az close to interval anchored at a (allow +/-360)
   let z = az;
   while (z < a - 180) z += 360;
   while (z > a + 180) z -= 360;
   return z;
 }
 
-// ---------- Model A (core) ----------
+// ---------- Model A ----------
 function spotInSun_ModelA(pub, spot, dateTime){
   if (!spot?.cal || !spot.cal.valid) return false;
 
@@ -175,11 +168,20 @@ function spotInSun_ModelA(pub, spot, dateTime){
   return alt >= requiredAlt;
 }
 
-function computeWindows(pub, spot, fromTime, toTime){
+function computeWindowsForDate(pub, spot, dayDate){
+  const times = SunCalc.getTimes(dayDate, pub.lat, pub.lng);
+  let startDay = times.sunrise;
+  let endDay   = times.sunset;
+
+  if (!(startDay instanceof Date) || isNaN(startDay) || !(endDay instanceof Date) || isNaN(endDay) || endDay <= startDay){
+    startDay = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 4, 0, 0, 0);
+    endDay   = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 22, 0, 0, 0);
+  }
+
   const windows = [];
   let currentStart = null;
 
-  for (let t = new Date(fromTime); t <= toTime; t = new Date(t.getTime() + STEP_MIN*60*1000)) {
+  for (let t = new Date(startDay); t <= endDay; t = new Date(t.getTime() + STEP_MIN*60*1000)) {
     const hit = spotInSun_ModelA(pub, spot, t);
     if (hit && !currentStart) currentStart = new Date(t);
     if (!hit && currentStart) {
@@ -187,13 +189,27 @@ function computeWindows(pub, spot, fromTime, toTime){
       currentStart = null;
     }
   }
-  if (currentStart) windows.push({ start: currentStart, end: new Date(toTime) });
+  if (currentStart) windows.push({ start: currentStart, end: new Date(endDay) });
 
   return windows.filter(w => (w.end - w.start) >= 10*60*1000);
 }
 
 function sunStatusForPub(pub, now, horizonStart, horizonEnd){
-  const spotInfos = pub.spots.map(spot => ({ spot, windows: computeWindows(pub, spot, horizonStart, horizonEnd) }));
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+
+  const spotInfos = pub.spots.map(spot => {
+    const dayWindows = computeWindowsForDate(pub, spot, day);
+
+    // Clip to next 2 hours only
+    const windows = dayWindows
+      .map(w => ({
+        start: w.start < horizonStart ? horizonStart : w.start,
+        end:   w.end   > horizonEnd   ? horizonEnd   : w.end
+      }))
+      .filter(w => w.end > w.start);
+
+    return { spot, windows };
+  });
 
   const sunnyNow = [];
   for (const si of spotInfos) {
@@ -299,21 +315,6 @@ function initMapOnce(){
     markers.set(pub.id, m);
   });
 }
-function makeDivIcon(cls, txt){
-  return L.divIcon({
-    className: '',
-    html: `<div class="pin ${cls}">${txt}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -26]
-  });
-}
-function setMapHighlights(best1Id, best2Id){
-  if (!map) return;
-  for (const m of markers.values()) m.setIcon(new L.Icon.Default());
-  if (best1Id && markers.get(best1Id)) markers.get(best1Id).setIcon(makeDivIcon('one','1'));
-  if (best2Id && markers.get(best2Id)) markers.get(best2Id).setIcon(makeDivIcon('two','2'));
-}
 function openPubOnMap(pub){
   initMapOnce();
   const m = markers.get(pub.id);
@@ -323,8 +324,6 @@ function openPubOnMap(pub){
   map.setView([pub.lat, pub.lng], 16, { animate:true });
   m.openPopup();
 }
-
-// ---------- Static map thumbnail ----------
 function staticMapUrl(lat,lng){
   const center = `${lat},${lng}`;
   return `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(center)}&zoom=16&size=640x280&markers=${encodeURIComponent(center)},red-pushpin`;
@@ -396,7 +395,7 @@ async function render(){
   const baseLoc = userLoc || NOTTINGHAM_CENTER;
 
   el.statusLine.textContent = userLoc ? 'Using your location' : 'Tap Near me for walking times.';
-  el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min • Cal: ${CALIBRATION_DATE.y}-${pad2(CALIBRATION_DATE.m)}-${pad2(CALIBRATION_DATE.d)}`;
+  el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min`;
 
   let rows = PUBS.map(pub => {
     const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
@@ -499,11 +498,8 @@ async function render(){
     best2 = { ...best2Raw, effective: eff2, sun: sun2 };
   }
 
-  if (map) setMapHighlights(best1?.pub?.id || null, best2?.pub?.id || null);
-
   // --- Plan ---
   el.plan.innerHTML = `<div class="sectionTitle">Suggested plan</div>`;
-
   if (!best1) {
     el.plan.insertAdjacentHTML('beforeend', `
       <div class="bigCard bad">
@@ -696,13 +692,12 @@ function buildListCard(row, now){
   return card;
 }
 
-// ---------- CSV loading + conversion to pubs/spots ----------
+// ---------- CSV loading ----------
 async function loadCsvText(){
   const res = await fetch('./public/data/DrinkingintheSunData.csv', { cache:'no-store' });
   if (!res.ok) throw new Error('Could not load CSV');
   return res.text();
 }
-
 function parseCSVLine(line){
   const out = [];
   let cur = '';
@@ -723,35 +718,28 @@ function parseCSVLine(line){
   out.push(cur);
   return out.map(s => s.trim());
 }
-
 function toTimeHHMM(s){
   const t = String(s ?? '').trim();
   if (!t) return null;
 
-  // Accept "11.50" => "11:50"
   if (/^\d{1,2}\.\d{2}$/.test(t)){
     const [h,m] = t.split('.');
     return `${pad2(+h)}:${m}`;
   }
-  // Accept "7:5" -> "07:05"
   if (/^\d{1,2}:\d{1,2}$/.test(t)){
     const [h,m] = t.split(':');
     return `${pad2(+h)}:${pad2(+m)}`;
   }
-  // Accept "0755"
   if (/^\d{3,4}$/.test(t)){
     const tt = t.padStart(4,'0');
     return `${tt.slice(0,2)}:${tt.slice(2)}`;
   }
-  return t; // assume already HH:MM
+  return t;
 }
-
 function makeLocalDateTimeOnCalibration(hhmm){
   const [hh, mm] = hhmm.split(':').map(n => +n);
-  // local time (Europe/London on user device)
   return new Date(CALIBRATION_DATE.y, CALIBRATION_DATE.m - 1, CALIBRATION_DATE.d, hh, mm, 0, 0);
 }
-
 function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
   const inT = toTimeHHMM(sunIn);
   const outT = toTimeHHMM(sunOut);
@@ -773,11 +761,9 @@ function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
     outTime: outT
   };
 }
-
 function csvToPubs(csvText){
   const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
 
-  // Find header line that starts with Pub ID,Pub Name,...
   const headerIdx = lines.findIndex(l => l.toLowerCase().startsWith('pub id,'));
   if (headerIdx < 0) return [];
 
@@ -788,6 +774,7 @@ function csvToPubs(csvText){
     const line = lines[i];
     if (/^lists:/i.test(line)) break;
     if (/^pubs:/i.test(line)) continue;
+
     const cols = parseCSVLine(line);
     if (cols.length < 6) continue;
 
@@ -799,15 +786,12 @@ function csvToPubs(csvText){
     rows.push(rec);
   }
 
-  // Group into pubs
-  const pubs = rows.map(r => {
+  return rows.map(r => {
     const lat = parseFloat(r['Latitude']);
     const lng = parseFloat(r['Longitude']);
     const id = String(r['Pub ID']).trim() || (String(r['Pub Name']).trim().toLowerCase().replace(/\W+/g,'-'));
 
-    // Build up to 3 spots
     const spots = [];
-
     function addSpot(letter){
       const type = String(r[`Spot ${letter} Type`] || '').trim();
       const detail = String(r[`Spot ${letter} Detail`] || '').trim();
@@ -818,33 +802,24 @@ function csvToPubs(csvText){
       if (!sunIn || !sunOut) return;
 
       const name = detail ? `${type} — ${detail}` : type;
-
       const cal = buildCalForSpot(lat, lng, sunIn, sunOut);
-      spots.push({
-        name,
-        type,
-        detail,
-        cal
-      });
-    }
 
-    addSpot('A');
-    addSpot('B');
-    addSpot('C');
+      if (cal && cal.valid){
+        spots.push({ name, type, detail, cal });
+      }
+    }
+    addSpot('A'); addSpot('B'); addSpot('C');
 
     return {
       id,
       name: String(r['Pub Name']||'').trim(),
       area: String(r['Address']||'').trim(),
       lat, lng,
-      spots: spots.filter(s => s.cal && s.cal.valid)
+      spots
     };
-  });
-
-  // Filter out pubs with no usable spots/coords
-  return pubs
-    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-    .filter(p => p.spots.length > 0);
+  })
+  .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+  .filter(p => p.spots.length > 0);
 }
 
 // ---------- Boot ----------
@@ -856,9 +831,7 @@ async function boot(){
     const csvText = await loadCsvText();
     PUBS = csvToPubs(csvText);
 
-    // Build map markers if map already open
     if (viewMode === 'map') initMapOnce();
-
     render();
     setInterval(() => render(), 60 * 1000);
   } catch (e){
@@ -870,5 +843,4 @@ async function boot(){
     `;
   }
 }
-
 boot();
