@@ -1,11 +1,8 @@
-/* Drinking in the Sun — LIVE (next 2 hours)
-   Changes implemented:
-   1) Install button removed (not present)
-   2) One Near me button (requests location)
-   3) Only show FIVE “next sunny” pubs (near current location), plus Plan (1 + 2)
-   4) Each pub card includes a small map (static OSM image) + Directions/Map buttons
-   5) Weather gates “Sunny now”: if weather is bad, it will NOT show Sunny now
-   6) Keeps Next Sun location + Next best option (Plan cards #1 and #2)
+/* Drinking in the Sun — LIVE (next 2 hours) — Model A (calibrated 8 Aug)
+   Uses PhotoPills Sun In/Out as obstruction edges.
+
+   Setup:
+   - Put CSV at: ./public/data/DrinkingintheSunData.csv
 */
 
 const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
@@ -13,203 +10,7 @@ const HORIZON_MIN = 120;
 const STEP_MIN = 5;
 const SWITCH_GAP_MIN = 5;
 
-// Pub list (combined)
-const PUBS = [
-  {
-    id: 'trip',
-    name: 'Ye Olde Trip to Jerusalem',
-    area: 'Castle / Standard Hill',
-    lat: 52.948661, lng: -1.151981,
-    spots: [
-      { name: 'Front benches', bearingMin: 150, bearingMax: 240, minElevation: 10 },
-      { name: 'Cave entrance area', bearingMin: 180, bearingMax: 260, minElevation: 15 }
-    ]
-  },
-  {
-    id: 'canalhouse',
-    name: 'The Canalhouse',
-    area: 'Canal Street / Station',
-    lat: 52.948170, lng: -1.148400,
-    spots: [
-      { name: 'Waterside seating', bearingMin: 170, bearingMax: 280, minElevation: 8 },
-      { name: 'Courtyard tables', bearingMin: 130, bearingMax: 220, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'maltcross',
-    name: 'Malt Cross',
-    area: 'St James’ Street',
-    lat: 52.952950, lng: -1.152410,
-    spots: [
-      { name: 'Front (street) side', bearingMin: 120, bearingMax: 200, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'bell',
-    name: 'The Bell Inn',
-    area: 'Old Market Square',
-    lat: 52.953442, lng: -1.1520048,
-    spots: [
-      { name: 'Angel Row frontage', bearingMin: 110, bearingMax: 200, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'angel',
-    name: 'The Angel Microbrewery',
-    area: 'Lace Market (Stoney Street)',
-    lat: 52.953373, lng: -1.143441,
-    spots: [
-      { name: 'Rooftop / terrace (if open)', bearingMin: 140, bearingMax: 260, minElevation: 8 },
-      { name: 'Front windows', bearingMin: 120, bearingMax: 200, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'bread-and-bitter',
-    name: 'Bread & Bitter',
-    area: 'Mapperley (NG3 5JL)',
-    lat: 52.98389, lng: -1.12296,
-    spots: [
-      { name: 'Front / pavement tables', bearingMin: 110, bearingMax: 220, minElevation: 12 },
-      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 }
-    ]
-  },
-  {
-    id: 'bunkers-hill',
-    name: 'Bunkers Hill',
-    area: 'Hockley (NG1 1FP)',
-    lat: 52.953558, lng: -1.140387,
-    spots: [
-      { name: 'Corner / outside benches', bearingMin: 120, bearingMax: 260, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'barrel-drop',
-    name: 'The Barrel Drop',
-    area: 'City Centre (NG1 6JD)',
-    lat: 52.954355, lng: -1.152503,
-    spots: [
-      { name: 'Front / pavement tables', bearingMin: 120, bearingMax: 230, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'organ-grinder',
-    name: 'The Organ Grinder',
-    area: 'Canning Circus (NG7 3JE)',
-    lat: 52.956499, lng: -1.163208,
-    spots: [
-      { name: 'Front terrace', bearingMin: 120, bearingMax: 260, minElevation: 10 },
-      { name: 'Outside tables', bearingMin: 140, bearingMax: 290, minElevation: 8 }
-    ]
-  },
-  {
-    id: 'sir-john-borlase-warren',
-    name: 'The Sir John Borlase Warren',
-    area: 'Canning Circus (NG7 3GD)',
-    lat: 52.95584, lng: -1.162804,
-    spots: [
-      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 },
-      { name: 'Front benches', bearingMin: 120, bearingMax: 230, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'hand-and-heart',
-    name: 'The Hand & Heart',
-    area: 'Canning Circus / Park (NG1 5BA)',
-    lat: 52.955444, lng: -1.160222,
-    spots: [
-      { name: 'Front terrace', bearingMin: 120, bearingMax: 260, minElevation: 10 },
-      { name: 'Side / courtyard', bearingMin: 150, bearingMax: 290, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'keans-head',
-    name: "Kean’s Head",
-    area: 'Lace Market (NG1 1QA)',
-    lat: 52.951346, lng: -1.144033,
-    spots: [
-      { name: 'Front tables', bearingMin: 110, bearingMax: 210, minElevation: 12 },
-      { name: 'Side seating', bearingMin: 150, bearingMax: 290, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'lincolnshire-poacher',
-    name: 'The Lincolnshire Poacher',
-    area: 'City Centre (NG1 3FR)',
-    lat: 52.962096, lng: -1.15128,
-    spots: [
-      { name: 'Front windows', bearingMin: 110, bearingMax: 210, minElevation: 12 },
-      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'ned-ludd',
-    name: 'The Ned Ludd',
-    area: 'City Centre (NG1 6DA)',
-    lat: 52.952316, lng: -1.151471,
-    spots: [
-      { name: 'Front windows', bearingMin: 110, bearingMax: 210, minElevation: 12 },
-      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'joseph-else',
-    name: 'The Joseph Else',
-    area: 'Old Market Square (NG1 2JS)',
-    lat: 52.952901, lng: -1.150254,
-    spots: [
-      { name: 'Angel Row frontage', bearingMin: 110, bearingMax: 210, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'embankment',
-    name: 'The Embankment',
-    area: 'The Embankment',
-    lat: 52.9393944, lng: -1.1388205,
-    spots: [
-      { name: 'Riverside terrace', bearingMin: 120, bearingMax: 300, minElevation: 6 },
-      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 }
-    ]
-  },
-  {
-    id: 'trent-navigation',
-    name: 'Trent Navigation',
-    area: 'Trent / Meadow Lane',
-    lat: 52.9412, lng: -1.13824,
-    spots: [
-      { name: 'Riverside seating', bearingMin: 120, bearingMax: 300, minElevation: 6 }
-    ]
-  },
-  {
-    id: 'bath-inn',
-    name: 'Bath Inn',
-    area: 'Sneinton / Lace Market',
-    lat: 52.95539, lng: -1.13773,
-    spots: [
-      { name: 'Beer garden', bearingMin: 140, bearingMax: 290, minElevation: 8 },
-      { name: 'Front tables', bearingMin: 110, bearingMax: 210, minElevation: 12 }
-    ]
-  },
-  {
-    id: 'olde-salutation-inn',
-    name: 'Ye Olde Salutation Inn',
-    area: 'City Centre',
-    lat: 52.95112, lng: -1.15167,
-    spots: [
-      { name: 'Front benches', bearingMin: 120, bearingMax: 220, minElevation: 12 },
-      { name: 'Side / courtyard', bearingMin: 150, bearingMax: 290, minElevation: 10 }
-    ]
-  },
-  {
-    id: 'pit-and-pendulum',
-    name: 'The Pit & Pendulum',
-    area: 'Lace Market',
-    lat: 52.9534279, lng: -1.14597,
-    spots: [
-      { name: 'Front / street side', bearingMin: 110, bearingMax: 210, minElevation: 12 },
-      { name: 'Outside tables', bearingMin: 140, bearingMax: 280, minElevation: 10 }
-    ]
-  }
-];
+const CALIBRATION_DATE = { y: 2026, m: 8, d: 8 }; // 8 Aug 2026
 
 // ---------- DOM ----------
 const el = {
@@ -231,6 +32,9 @@ let viewMode = loadViewMode() || 'list';   // list | map
 let map = null;
 const markers = new Map();                // pubId -> marker
 let lastRenderToken = 0;
+
+// Data-loaded pubs (from CSV)
+let PUBS = [];
 
 // ---------- Storage ----------
 function loadUserLoc(){
@@ -291,8 +95,9 @@ function pad2(n){ return String(n).padStart(2,'0'); }
 function fmtHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 function minsBetween(a,b){ return Math.max(0, Math.round((b - a) / 60000)); }
 function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
 
 // ---------- Distance ----------
 function haversineKm(a, b){
@@ -309,28 +114,73 @@ function walkMinutesFromKm(km){
   return Math.max(1, Math.round(km / 4.8 * 60)); // ~4.8 km/h
 }
 
-// ---------- Sun position ----------
+// ---------- Sun position helpers ----------
+function radToDeg(r){ return r * 180 / Math.PI; }
 function azimuthToBearingDeg(azRad){
+  // SunCalc azimuth is radians from south; convert to bearing degrees (0=N,90=E,180=S,270=W)
   const azDeg = azRad * 180 / Math.PI;
   return (azDeg + 180 + 360) % 360;
 }
-function radToDeg(r){ return r * 180 / Math.PI; }
-function withinBearing(bearing, min, max){
-  if (min <= max) return bearing >= min && bearing <= max;
-  return bearing >= min || bearing <= max;
+function sunBearingAltitude(dateTime, lat, lng){
+  const pos = SunCalc.getPosition(dateTime, lat, lng);
+  return { bearing: azimuthToBearingDeg(pos.azimuth), alt: radToDeg(pos.altitude) };
 }
-function spotInSun(pub, spot, dateTime){
-  const pos = SunCalc.getPosition(dateTime, pub.lat, pub.lng);
-  const bearing = azimuthToBearingDeg(pos.azimuth);
-  const elev = radToDeg(pos.altitude);
-  return withinBearing(bearing, spot.bearingMin, spot.bearingMax) && elev >= (spot.minElevation ?? 0);
+
+// Wrap-safe interpolation axis.
+// Returns an "unwrapped" representation so azOut >= azIn and span is the shorter arc.
+function unwrapAzRange(azIn, azOut){
+  let a = azIn;
+  let b = azOut;
+
+  // Make b close to a by allowing b+360
+  let d = b - a;
+  if (d > 180) b -= 360;
+  if (d < -180) b += 360;
+
+  // Ensure b >= a (for interpolation direction)
+  if (b < a) [a, b] = [b, a];
+
+  return { a, b };
 }
+function unwrapAz(az, a){
+  // make az close to interval anchored at a (allow +/-360)
+  let z = az;
+  while (z < a - 180) z += 360;
+  while (z > a + 180) z -= 360;
+  return z;
+}
+
+// ---------- Model A (core) ----------
+function spotInSun_ModelA(pub, spot, dateTime){
+  if (!spot?.cal || !spot.cal.valid) return false;
+
+  const { bearing, alt } = sunBearingAltitude(dateTime, pub.lat, pub.lng);
+
+  const azIn = spot.cal.azIn;
+  const altIn = spot.cal.altIn;
+  const azOut = spot.cal.azOut;
+  const altOut = spot.cal.altOut;
+
+  const { a, b } = unwrapAzRange(azIn, azOut);
+  const z = unwrapAz(bearing, a);
+
+  if (z < a || z > b) return false;
+
+  const span = (b - a);
+  if (span <= 0.0001) return false;
+
+  const u = clamp((z - a) / span, 0, 1);
+  const requiredAlt = altIn + u * (altOut - altIn);
+
+  return alt >= requiredAlt;
+}
+
 function computeWindows(pub, spot, fromTime, toTime){
   const windows = [];
   let currentStart = null;
 
   for (let t = new Date(fromTime); t <= toTime; t = new Date(t.getTime() + STEP_MIN*60*1000)) {
-    const hit = spotInSun(pub, spot, t);
+    const hit = spotInSun_ModelA(pub, spot, t);
     if (hit && !currentStart) currentStart = new Date(t);
     if (!hit && currentStart) {
       windows.push({ start: currentStart, end: new Date(t) });
@@ -341,6 +191,7 @@ function computeWindows(pub, spot, fromTime, toTime){
 
   return windows.filter(w => (w.end - w.start) >= 10*60*1000);
 }
+
 function sunStatusForPub(pub, now, horizonStart, horizonEnd){
   const spotInfos = pub.spots.map(spot => ({ spot, windows: computeWindows(pub, spot, horizonStart, horizonEnd) }));
 
@@ -368,12 +219,11 @@ function sunStatusForPub(pub, now, horizonStart, horizonEnd){
 }
 
 // ---------- Weather (Open-Meteo) ----------
-// Bucket cache by ~1km to reduce calls while still using pub locations
 const WEATHER_TTL_MS = 30 * 60 * 1000;
 const weatherCache = new Map(); // key -> { t, data }
 
 function weatherKey(lat,lng){
-  return `${lat.toFixed(2)},${lng.toFixed(2)}`; // ~1km bucket
+  return `${lat.toFixed(2)},${lng.toFixed(2)}`;
 }
 async function fetchWeather(lat, lng){
   const url =
@@ -406,7 +256,6 @@ function nearestHourlyIndex(times, targetDate){
   return bestI;
 }
 function weatherLikelihood(cloud, rainProb){
-  // Use this to gate “Sunny now”
   if (rainProb >= 50 || cloud >= 80) return 'bad';
   if (cloud >= 50) return 'mixed';
   return 'good';
@@ -421,8 +270,6 @@ function formatWeatherShort(w, i){
   const label = like === 'good' ? 'Likely sun' : like === 'mixed' ? 'Mixed' : 'Sun unlikely';
   return `${icon} ${label} • ${Math.round(temp)}°C • Cloud ${Math.round(cloud)}% • Rain ${Math.round(rain)}% • Wind ${Math.round(wind)} mph`;
 }
-
-// Concurrency helper
 async function runWithConcurrency(items, limit, fn){
   const out = [];
   let i = 0;
@@ -477,17 +324,17 @@ function openPubOnMap(pub){
   m.openPopup();
 }
 
-// ---------- Static map thumbnail (no key) ----------
+// ---------- Static map thumbnail ----------
 function staticMapUrl(lat,lng){
   const center = `${lat},${lng}`;
-  // staticmap.openstreetmap.de: simple, no API key
-  // size is in px, keep small for mobile
   return `https://staticmap.openstreetmap.de/staticmap.php?center=${encodeURIComponent(center)}&zoom=16&size=640x280&markers=${encodeURIComponent(center)},red-pushpin`;
 }
+function directionsUrl(pub){
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pub.lat + ',' + pub.lng)}`;
+}
 
-// ---------- Planner logic ----------
+// ---------- Planner ----------
 function pickBest(rows, now){
-  // prefer sunny-now, else next-sun. weather must not be "bad" for sunny-now label
   const candidates = rows.filter(r => r.effective.kind !== 'no-sun');
   if (!candidates.length) return null;
 
@@ -505,8 +352,7 @@ function pickBest(rows, now){
 
   return candidates[0];
 }
-
-function pickNextAfter(rows, pivotTime, excludeId, horizonStart, horizonEnd, baseLoc){
+function pickNextAfter(rows, pivotTime, excludeId, horizonStart, horizonEnd){
   const t = new Date(pivotTime.getTime() + SWITCH_GAP_MIN*60*1000);
   if (t > horizonEnd) return null;
 
@@ -529,22 +375,20 @@ function pickNextAfter(rows, pivotTime, excludeId, horizonStart, horizonEnd, bas
     const tb = b.pivotSun.kind === 'next-sun' ? (b.pivotSun.start - t) : 0;
     if (ta !== tb) return ta - tb;
 
-    // re-evaluate distance (baseLoc is same)
     return a.walkMin - b.walkMin;
   });
 
-  // Convert pivotSun into effective using the same pub's weather at that time (best-effort)
-  // We'll keep it as is; weather gating will be applied in render.
   return candidates[0];
-}
-
-function directionsUrl(pub){
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pub.lat + ',' + pub.lng)}`;
 }
 
 // ---------- Render ----------
 async function render(){
   const token = ++lastRenderToken;
+
+  if (!PUBS.length){
+    el.plan.innerHTML = `<div class="bigCard bad"><div class="bigTitle">Loading data…</div></div>`;
+    return;
+  }
 
   const now = new Date();
   const horizonStart = now;
@@ -552,9 +396,8 @@ async function render(){
   const baseLoc = userLoc || NOTTINGHAM_CENTER;
 
   el.statusLine.textContent = userLoc ? 'Using your location' : 'Tap Near me for walking times.';
-  el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min`;
+  el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min • Cal: ${CALIBRATION_DATE.y}-${pad2(CALIBRATION_DATE.m)}-${pad2(CALIBRATION_DATE.d)}`;
 
-  // Compute sun + distances first
   let rows = PUBS.map(pub => {
     const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
     const walkMin = walkMinutesFromKm(distKm);
@@ -562,17 +405,13 @@ async function render(){
     return { pub, distKm, walkMin, sun, effective: { ...sun }, weatherNow: null, weatherAtStart: null };
   });
 
-  // Weather: fetch by bucket, then apply to each pub time we care about (now and next-sun start)
-  // We only need weather to gate labels and ranking; use pub’s own bucket.
-  // Fetch buckets for all pubs (few calls due to toFixed(2))
-  const bucketSet = new Map(); // key -> {lat,lng}
+  // Weather fetch buckets
+  const bucketSet = new Map();
   for (const r of rows){
     const k = weatherKey(r.pub.lat, r.pub.lng);
     if (!bucketSet.has(k)) bucketSet.set(k, { lat: r.pub.lat, lng: r.pub.lng });
   }
   const buckets = [...bucketSet.values()];
-
-  // Fetch with concurrency
   const bucketData = await runWithConcurrency(buckets, 4, async (b) => {
     try { return { key: weatherKey(b.lat,b.lng), data: await getWeather(b.lat,b.lng) }; }
     catch { return { key: weatherKey(b.lat,b.lng), data: null }; }
@@ -592,9 +431,7 @@ async function render(){
     return { data, i, like, cloud, rain };
   }
 
-  // Apply weather gating to effective status:
-  // - If sun says sunny-now but weather is "bad", downgrade to "bad-now" (NOT sunny)
-  // - If next-sun but weather at start is "bad", keep next-sun but mark as "bad-next" for display and ranking
+  // Weather gating
   rows = rows.map(r => {
     const wNow = weatherInfoFor(r.pub, now);
     r.weatherNow = wNow;
@@ -602,7 +439,6 @@ async function render(){
     let effective = { ...r.sun };
     if (r.sun.kind === 'sunny-now') {
       if (wNow && wNow.like === 'bad') {
-        // Not allowed to show “Sunny now” when weather is bad
         effective = { kind:'bad-now', spot: r.sun.spot, start: r.sun.start, end: r.sun.end };
       }
     }
@@ -617,8 +453,6 @@ async function render(){
     return r;
   });
 
-  // Sort (only for selecting best and list):
-  // sunny-now (good weather) -> next-sun (good/mixed) -> bad-next -> bad-now -> no-sun
   function rankKind(k){
     if (k === 'sunny-now') return 0;
     if (k === 'next-sun') return 1;
@@ -646,10 +480,9 @@ async function render(){
     : null;
 
   const best2Raw = (best1 && pivot)
-    ? pickNextAfter(rows, pivot, best1.pub.id, horizonStart, horizonEnd, baseLoc)
+    ? pickNextAfter(rows, pivot, best1.pub.id, horizonStart, horizonEnd)
     : null;
 
-  // Convert best2Raw pivotSun to effective using weather at pivot time (same gating)
   let best2 = null;
   if (best2Raw) {
     const t2 = best2Raw.pivotNow;
@@ -666,55 +499,29 @@ async function render(){
     best2 = { ...best2Raw, effective: eff2, sun: sun2 };
   }
 
-  // Update map highlight if map exists
   if (map) setMapHighlights(best1?.pub?.id || null, best2?.pub?.id || null);
 
-  // --- Render Plan ---
-  el.plan.innerHTML = `<div class="planHeader">Suggested plan</div>`;
+  // --- Plan ---
+  el.plan.innerHTML = `<div class="sectionTitle">Suggested plan</div>`;
 
   if (!best1) {
     el.plan.insertAdjacentHTML('beforeend', `
       <div class="bigCard bad">
-        <div class="bigTop">
-          <div>
-            <div class="bigTitle">No likely sun found</div>
-            <div class="bigSub">Within the next ${HORIZON_MIN} minutes.</div>
-          </div>
-          <div class="pill bad">—</div>
-        </div>
-        <div class="bigBody">
-          <div class="mini">Try again later, or adjust spot bearings after real observations.</div>
-        </div>
+        <div class="bigTitle">No likely sun found</div>
+        <div class="mini">Within the next ${HORIZON_MIN} minutes.</div>
       </div>
     `);
   } else {
     el.plan.appendChild(buildPlanCard(best1, 1, now));
-    if (best2) {
-      el.plan.appendChild(buildPlanCard(best2, 2, now, best1));
-    } else {
-      el.plan.insertAdjacentHTML('beforeend', `
-        <div class="bigCard next">
-          <div class="bigTop">
-            <div>
-              <div class="bigTitle">2. Next best</div>
-              <div class="bigSub">No better switch found within the next ${HORIZON_MIN} minutes.</div>
-            </div>
-            <div class="pill next">—</div>
-          </div>
-        </div>
-      `);
-    }
+    if (best2) el.plan.appendChild(buildPlanCard(best2, 2, now, best1));
   }
 
-  // --- Render “Next sunny nearby” list (ONLY FIVE) ---
+  // --- List (five) ---
   const exclude = new Set([best1?.pub?.id, best2?.pub?.id].filter(Boolean));
-  const candidates = rows.filter(r => !exclude.has(r.pub.id));
-
-  // Only show items that have some sun-related status (including bad-next/bad-now if you want),
-  // but to match “next sunny pubs”, we filter out “no-sun”, and also filter out “bad-now” (not sunny).
-  const list = candidates
+  const list = rows
+    .filter(r => !exclude.has(r.pub.id))
     .filter(r => r.effective.kind !== 'no-sun')
-    .filter(r => r.effective.kind !== 'bad-now') // not sunny now due to weather
+    .filter(r => r.effective.kind !== 'bad-now')
     .slice(0, 5);
 
   el.results.innerHTML = '';
@@ -728,11 +535,8 @@ async function render(){
 function buildPlanCard(row, number, now, prevRow = null){
   const { pub, walkMin, effective, weatherNow, weatherAtStart } = row;
 
-  // Label + styling
-  let cardClass = 'bigCard';
   let pillClass = 'bad';
   let pillText = '—';
-
   let headline = number === 1 ? '1. Sunny now' : '2. Next best';
   let timeLine = '';
   let rightLine = '';
@@ -740,7 +544,6 @@ function buildPlanCard(row, number, now, prevRow = null){
   let spotLine = effective.spot?.name ? `Spot: ${effective.spot.name}` : 'Spot: —';
 
   if (effective.kind === 'sunny-now') {
-    cardClass += ' sun';
     pillClass = 'sun';
     pillText = 'Sunny now';
     headline = number === 1 ? '1. Sunny now' : `2. Sunny`;
@@ -748,7 +551,6 @@ function buildPlanCard(row, number, now, prevRow = null){
     rightLine = `Shade in ${minsBetween(now, effective.end)} min`;
     if (weatherNow?.data) weatherLine = `Weather: ${formatWeatherShort(weatherNow.data, weatherNow.i)}`;
   } else if (effective.kind === 'next-sun') {
-    cardClass += ' next';
     pillClass = 'next';
     pillText = 'Next sun';
     headline = number === 1 ? '1. Next sun' : '2. Next best';
@@ -756,7 +558,6 @@ function buildPlanCard(row, number, now, prevRow = null){
     rightLine = `Starts in ${minsBetween(now, effective.start)} min`;
     if (weatherAtStart?.data) weatherLine = `Weather: ${formatWeatherShort(weatherAtStart.data, weatherAtStart.i)}`;
   } else if (effective.kind === 'bad-next') {
-    cardClass += ' next';
     pillClass = 'bad';
     pillText = 'Cloudy';
     headline = number === 1 ? '1. Next sun (weather poor)' : '2. Next best (weather poor)';
@@ -765,7 +566,6 @@ function buildPlanCard(row, number, now, prevRow = null){
     const wi = row.weatherAtStart;
     if (wi?.data) weatherLine = `Weather: ${formatWeatherShort(wi.data, wi.i)}`;
   } else if (effective.kind === 'bad-now') {
-    cardClass += ' bad';
     pillClass = 'bad';
     pillText = 'Cloudy';
     headline = number === 1 ? '1. Not sunny now' : '2. Not sunny';
@@ -774,15 +574,11 @@ function buildPlanCard(row, number, now, prevRow = null){
     const wi = row.weatherNow;
     if (wi?.data) weatherLine = `Weather: ${formatWeatherShort(wi.data, wi.i)}`;
   } else {
-    cardClass += ' bad';
-    pillClass = 'bad';
-    pillText = '—';
     headline = number === 1 ? '1. No sun' : '2. No sun';
     timeLine = `Next ${HORIZON_MIN} min`;
     rightLine = `No direct sun predicted`;
   }
 
-  // Leave time hint for card #2 when it’s a real next-sun (or bad-next)
   let leaveHint = '';
   if (prevRow && number === 2 && (effective.kind === 'next-sun' || effective.kind === 'bad-next')) {
     const leave = new Date(effective.start.getTime() - (walkMin + 2) * 60 * 1000);
@@ -790,12 +586,12 @@ function buildPlanCard(row, number, now, prevRow = null){
   }
 
   const card = document.createElement('div');
-  card.className = cardClass;
+  card.className = 'bigCard';
   card.innerHTML = `
     <div class="bigTop">
       <div>
         <div class="bigTitle">${escapeHtml(headline)}</div>
-        <div class="bigSub"><strong>${escapeHtml(pub.name)}</strong> • ${walkMin} min walk • ${escapeHtml(pub.area || '')}</div>
+        <div class="bigSub"><strong>${escapeHtml(pub.name)}</strong> • ${walkMin} min walk</div>
       </div>
       <div class="pill ${pillClass}">${escapeHtml(pillText)}</div>
     </div>
@@ -822,13 +618,10 @@ function buildPlanCard(row, number, now, prevRow = null){
     e.stopPropagation();
     setView('map');
     initMapOnce();
-    if (map) setMapHighlights(number === 1 ? pub.id : null, number === 2 ? pub.id : null);
     openPubOnMap(pub);
   });
 
-  // Tap card: directions (simple mobile behaviour)
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
-
   return card;
 }
 
@@ -867,7 +660,7 @@ function buildListCard(row, now){
     <div class="cardTop">
       <div>
         <div class="cardTitle">${escapeHtml(pub.name)}</div>
-        <div class="cardSub">${escapeHtml(pub.area || '')} • ${walkMin} min walk</div>
+        <div class="cardSub">${walkMin} min walk</div>
       </div>
       <span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>
     </div>
@@ -899,29 +692,183 @@ function buildListCard(row, now){
     openPubOnMap(pub);
   });
 
-  // Tap card = directions (simple)
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
-
   return card;
 }
 
-// ---------- Boot ----------
-function boot(){
-  // Default view
-  setView(viewMode);
+// ---------- CSV loading + conversion to pubs/spots ----------
+async function loadCsvText(){
+  const res = await fetch('./public/data/DrinkingintheSunData.csv', { cache:'no-store' });
+  if (!res.ok) throw new Error('Could not load CSV');
+  return res.text();
+}
 
-  // Button label
-  el.nearBtnText.textContent = 'Near me';
+function parseCSVLine(line){
+  const out = [];
+  let cur = '';
+  let inQ = false;
 
-  // If we already have a stored location, show status accordingly
-  if (userLoc) {
-    el.statusLine.textContent = 'Using your location';
+  for (let i=0;i<line.length;i++){
+    const ch = line[i];
+    if (ch === '"'){
+      if (inQ && line[i+1] === '"'){ cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === ',' && !inQ){
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+function toTimeHHMM(s){
+  const t = String(s ?? '').trim();
+  if (!t) return null;
+
+  // Accept "11.50" => "11:50"
+  if (/^\d{1,2}\.\d{2}$/.test(t)){
+    const [h,m] = t.split('.');
+    return `${pad2(+h)}:${m}`;
+  }
+  // Accept "7:5" -> "07:05"
+  if (/^\d{1,2}:\d{1,2}$/.test(t)){
+    const [h,m] = t.split(':');
+    return `${pad2(+h)}:${pad2(+m)}`;
+  }
+  // Accept "0755"
+  if (/^\d{3,4}$/.test(t)){
+    const tt = t.padStart(4,'0');
+    return `${tt.slice(0,2)}:${tt.slice(2)}`;
+  }
+  return t; // assume already HH:MM
+}
+
+function makeLocalDateTimeOnCalibration(hhmm){
+  const [hh, mm] = hhmm.split(':').map(n => +n);
+  // local time (Europe/London on user device)
+  return new Date(CALIBRATION_DATE.y, CALIBRATION_DATE.m - 1, CALIBRATION_DATE.d, hh, mm, 0, 0);
+}
+
+function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
+  const inT = toTimeHHMM(sunIn);
+  const outT = toTimeHHMM(sunOut);
+  if (!inT || !outT) return { valid:false };
+
+  const dtIn = makeLocalDateTimeOnCalibration(inT);
+  const dtOut = makeLocalDateTimeOnCalibration(outT);
+
+  const pIn = sunBearingAltitude(dtIn, pubLat, pubLng);
+  const pOut = sunBearingAltitude(dtOut, pubLat, pubLng);
+
+  return {
+    valid:true,
+    azIn: pIn.bearing,
+    altIn: pIn.alt,
+    azOut: pOut.bearing,
+    altOut: pOut.alt,
+    inTime: inT,
+    outTime: outT
+  };
+}
+
+function csvToPubs(csvText){
+  const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
+
+  // Find header line that starts with Pub ID,Pub Name,...
+  const headerIdx = lines.findIndex(l => l.toLowerCase().startsWith('pub id,'));
+  if (headerIdx < 0) return [];
+
+  const header = parseCSVLine(lines[headerIdx]);
+  const rows = [];
+
+  for (let i=headerIdx+1;i<lines.length;i++){
+    const line = lines[i];
+    if (/^lists:/i.test(line)) break;
+    if (/^pubs:/i.test(line)) continue;
+    const cols = parseCSVLine(line);
+    if (cols.length < 6) continue;
+
+    const rec = {};
+    for (let c=0;c<header.length;c++){
+      rec[header[c]] = cols[c] ?? '';
+    }
+    if (String(rec['Pub ID']||'').trim().toUpperCase().startsWith('PUB') === false) continue;
+    rows.push(rec);
   }
 
-  render();
+  // Group into pubs
+  const pubs = rows.map(r => {
+    const lat = parseFloat(r['Latitude']);
+    const lng = parseFloat(r['Longitude']);
+    const id = String(r['Pub ID']).trim() || (String(r['Pub Name']).trim().toLowerCase().replace(/\W+/g,'-'));
 
-  // Live refresh (recompute) every minute
-  setInterval(() => render(), 60 * 1000);
+    // Build up to 3 spots
+    const spots = [];
+
+    function addSpot(letter){
+      const type = String(r[`Spot ${letter} Type`] || '').trim();
+      const detail = String(r[`Spot ${letter} Detail`] || '').trim();
+      const sunIn = r[`Spot ${letter} Sun In`];
+      const sunOut = r[`Spot ${letter} Sun Out`];
+
+      if (!type && !detail) return;
+      if (!sunIn || !sunOut) return;
+
+      const name = detail ? `${type} — ${detail}` : type;
+
+      const cal = buildCalForSpot(lat, lng, sunIn, sunOut);
+      spots.push({
+        name,
+        type,
+        detail,
+        cal
+      });
+    }
+
+    addSpot('A');
+    addSpot('B');
+    addSpot('C');
+
+    return {
+      id,
+      name: String(r['Pub Name']||'').trim(),
+      area: String(r['Address']||'').trim(),
+      lat, lng,
+      spots: spots.filter(s => s.cal && s.cal.valid)
+    };
+  });
+
+  // Filter out pubs with no usable spots/coords
+  return pubs
+    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .filter(p => p.spots.length > 0);
+}
+
+// ---------- Boot ----------
+async function boot(){
+  setView(viewMode);
+  el.nearBtnText.textContent = 'Near me';
+
+  try{
+    const csvText = await loadCsvText();
+    PUBS = csvToPubs(csvText);
+
+    // Build map markers if map already open
+    if (viewMode === 'map') initMapOnce();
+
+    render();
+    setInterval(() => render(), 60 * 1000);
+  } catch (e){
+    el.plan.innerHTML = `
+      <div class="bigCard bad">
+        <div class="bigTitle">Data load failed</div>
+        <div class="mini">Ensure the CSV is at <strong>public/data/DrinkingintheSunData.csv</strong>.</div>
+      </div>
+    `;
+  }
 }
 
 boot();
