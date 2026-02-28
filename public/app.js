@@ -1,8 +1,9 @@
 /* Drinking in the Sun — LIVE (next 2 hours) — Model A + Lou Reed “Perfect Day”
-   - Loads CSV: ./public/data/DrinkingintheSunData.csv
-   - Uses Sun In/Out on 8 Aug to define obstruction edge in sun-angle space
-   - Predicts sun for TODAY, but only displays within next 2 hours in the main list
-   - Lou Reed planner builds a 4–5 pub itinerary from a chosen start time
+   CSV: ./public/data/DrinkingintheSunData.csv
+
+   Adds:
+   - Cycling bias toward Beeston / Lakeside / Basford / Lion at Basford
+   - “Next sun in Nottingham” (next likely sunny day) when no sun in next 2 hours
 */
 
 const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
@@ -10,19 +11,17 @@ const HORIZON_MIN = 120;
 const STEP_MIN = 5;
 const SWITCH_GAP_MIN = 5;
 
-// Calibration used ONLY to convert your in/out times into sun-angles (edge baseline)
 const CALIBRATION_DATE = { y: 2026, m: 8, d: 8 }; // 8 Aug 2026
 
-// Lou Reed planner defaults
 const PERFECT_DAY = {
-  endHourLocal: 20,           // plan ends ~20:00
+  endHourLocal: 20,
   minStopMin: 35,
   maxStopMin: 75,
   bufferMin: 5,
-  maxWaitMin: 25,             // don’t wait more than this for sun at a pub
-  walkMaxKm: 2.2,             // per-hop radius
-  cycleMaxKm: 7.5,            // per-hop radius
-  cycleKmh: 15                // basic city cycling
+  maxWaitMin: 25,
+  walkMaxKm: 2.2,
+  cycleMaxKm: 7.5,
+  cycleKmh: 15
 };
 
 // ---------- DOM ----------
@@ -39,6 +38,10 @@ const el = {
   plan: document.getElementById('plan'),
   results: document.getElementById('results'),
 
+  nextSunCard: document.getElementById('nextSunCard'),
+  nextSunText: document.getElementById('nextSunText'),
+  nextSunRefresh: document.getElementById('nextSunRefresh'),
+
   louOverlay: document.getElementById('louOverlay'),
   louBackdrop: document.getElementById('louBackdrop'),
   louClose: document.getElementById('louClose'),
@@ -51,14 +54,18 @@ const el = {
 };
 
 // ---------- State ----------
-let userLoc = loadUserLoc();               // {lat,lng} or null
-let viewMode = loadViewMode() || 'list';   // list | map
+let userLoc = loadUserLoc();
+let viewMode = loadViewMode() || 'list';
 let map = null;
-const markers = new Map();                // pubId -> marker
+const markers = new Map();
 let lastRenderToken = 0;
 
-let PUBS = [];                            // loaded from CSV
-let louMode = 'walk';                     // walk | cycle
+let PUBS = [];
+let louMode = 'walk';
+
+// Next-sun daily forecast cache
+let nextSunCache = { t: 0, msg: 'Checking forecast…' };
+const NEXTSUN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // ---------- Storage ----------
 function loadUserLoc(){
@@ -72,6 +79,59 @@ function loadViewMode(){
 }
 function saveViewMode(v){
   try { localStorage.setItem('ditS_viewMode', v); } catch {}
+}
+
+// ---------- Helpers ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fmtHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function minsBetween(a,b){ return Math.max(0, Math.round((b - a) / 60000)); }
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
+function addMinutes(d, m){ return new Date(d.getTime() + m*60*1000); }
+function normName(s){ return String(s||'').toLowerCase(); }
+
+// ---------- Distance ----------
+function haversineKm(a, b){
+  const R = 6371;
+  const toRad = (x) => x * Math.PI/180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s1 = Math.sin(dLat/2);
+  const s2 = Math.sin(dLng/2);
+  const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+  return 2*R*Math.asin(Math.min(1, Math.sqrt(q)));
+}
+function walkMinutesFromKm(km){
+  return Math.max(1, Math.round(km / 4.8 * 60));
+}
+function cycleMinutesFromKm(km){
+  return Math.max(1, Math.round(km / PERFECT_DAY.cycleKmh * 60));
+}
+
+// ---------- Cycling “wide-afield” bias ----------
+function cycleWideBonus(pub){
+  const n = normName(pub.name);
+  const a = normName(pub.area);
+
+  const named =
+    (n.includes('lakeside') || a.includes('lakeside')) ? 30 :
+    (n.includes('beeston')  || a.includes('beeston'))  ? 25 :
+    (n.includes('basford')  || a.includes('basford'))  ? 20 :
+    (n.includes('lion at basford') || n.includes('lion at baseford')) ? 25 : 0;
+
+  const kmFromCenter = haversineKm(
+    { lat: NOTTINGHAM_CENTER.lat, lng: NOTTINGHAM_CENTER.lng },
+    { lat: pub.lat, lng: pub.lng }
+  );
+
+  const dist =
+    kmFromCenter >= 6 ? 18 :
+    kmFromCenter >= 4 ? 12 :
+    kmFromCenter >= 3 ? 8  : 0;
+
+  return named + dist;
 }
 
 // ---------- Location ----------
@@ -114,34 +174,6 @@ function setView(mode){
 }
 el.viewToggleBtn?.addEventListener('click', () => setView(viewMode === 'list' ? 'map' : 'list'));
 
-// ---------- Helpers ----------
-function pad2(n){ return String(n).padStart(2,'0'); }
-function fmtHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
-function minsBetween(a,b){ return Math.max(0, Math.round((b - a) / 60000)); }
-function escapeHtml(s){
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
-function addMinutes(d, m){ return new Date(d.getTime() + m*60*1000); }
-
-// ---------- Distance ----------
-function haversineKm(a, b){
-  const R = 6371;
-  const toRad = (x) => x * Math.PI/180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const s1 = Math.sin(dLat/2);
-  const s2 = Math.sin(dLng/2);
-  const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
-  return 2*R*Math.asin(Math.min(1, Math.sqrt(q)));
-}
-function walkMinutesFromKm(km){
-  return Math.max(1, Math.round(km / 4.8 * 60)); // ~4.8 km/h
-}
-function cycleMinutesFromKm(km){
-  return Math.max(1, Math.round(km / PERFECT_DAY.cycleKmh * 60));
-}
-
 // ---------- Sun position helpers ----------
 function radToDeg(r){ return r * 180 / Math.PI; }
 function azimuthToBearingDeg(azRad){
@@ -152,16 +184,12 @@ function sunBearingAltitude(dateTime, lat, lng){
   const pos = SunCalc.getPosition(dateTime, lat, lng);
   return { bearing: azimuthToBearingDeg(pos.azimuth), alt: radToDeg(pos.altitude) };
 }
-
-// Wrap-safe interpolation axis
 function unwrapAzRange(azIn, azOut){
   let a = azIn;
   let b = azOut;
-
   let d = b - a;
   if (d > 180) b -= 360;
   if (d < -180) b += 360;
-
   if (b < a) [a, b] = [b, a];
   return { a, b };
 }
@@ -185,7 +213,6 @@ function spotInSun_ModelA(pub, spot, dateTime){
 
   const { a, b } = unwrapAzRange(azIn, azOut);
   const z = unwrapAz(bearing, a);
-
   if (z < a || z > b) return false;
 
   const span = (b - a);
@@ -193,7 +220,6 @@ function spotInSun_ModelA(pub, spot, dateTime){
 
   const u = clamp((z - a) / span, 0, 1);
   const requiredAlt = altIn + u * (altOut - altIn);
-
   return alt >= requiredAlt;
 }
 
@@ -229,7 +255,6 @@ function sunStatusForPub(pub, now, horizonStart, horizonEnd){
   const spotInfos = pub.spots.map(spot => {
     const dayWindows = computeWindowsForDate(pub, spot, day);
 
-    // Clip to next 2 hours only
     const windows = dayWindows
       .map(w => ({
         start: w.start < horizonStart ? horizonStart : w.start,
@@ -268,7 +293,6 @@ const WEATHER_TTL_MS = 30 * 60 * 1000;
 const weatherCache = new Map();
 
 function weatherKey(lat,lng){
-  // keep caching but more granular than ~1km bucket
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
 async function fetchWeather(lat, lng){
@@ -330,6 +354,95 @@ async function runWithConcurrency(items, limit, fn){
   return out;
 }
 
+// ---------- Next sun in Nottingham (daily forecast) ----------
+async function fetchNextSunDaily(){
+  // Using Nottingham center; can swap to userLoc if you want.
+  const lat = NOTTINGHAM_CENTER.lat;
+  const lng = NOTTINGHAM_CENTER.lng;
+
+  // daily vars: precipitation_probability_max + cloud_cover_mean might not exist in all configs,
+  // so we also use weather_code as fallback.
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${lat}&longitude=${lng}` +
+    `&daily=weather_code,precipitation_probability_max,cloud_cover_mean` +
+    `&forecast_days=7&timezone=auto`;
+
+  const res = await fetch(url, { cache:'no-store' });
+  if (!res.ok) throw new Error('daily forecast failed');
+  return res.json();
+}
+
+function isLikelySunnyDay(daily, i){
+  const code = daily.weather_code?.[i];
+  const rain = daily.precipitation_probability_max?.[i];
+  const cloud = daily.cloud_cover_mean?.[i];
+
+  // Prefer cloud+rain if available
+  if (typeof rain === 'number' && typeof cloud === 'number'){
+    return rain < 40 && cloud < 60;
+  }
+
+  // Fallback: weather_code (Open-Meteo codes: 0 clear, 1 mainly clear, 2 partly cloudy)
+  if (typeof code === 'number'){
+    return code === 0 || code === 1 || code === 2;
+  }
+
+  return false;
+}
+
+function formatDayLabel(isoDateStr){
+  // isoDateStr like "2026-02-28"
+  const d = new Date(isoDateStr + 'T12:00:00');
+  return d.toLocaleDateString(undefined, { weekday:'short', day:'2-digit', month:'short' });
+}
+
+async function updateNextSunCard(force=false){
+  const now = Date.now();
+  if (!force && (now - nextSunCache.t) < NEXTSUN_TTL_MS){
+    el.nextSunText.textContent = nextSunCache.msg;
+    return;
+  }
+
+  try{
+    el.nextSunText.textContent = 'Checking forecast…';
+    const data = await fetchNextSunDaily();
+    const daily = data.daily || {};
+    const days = daily.time || [];
+
+    let pick = null;
+    for (let i=0;i<days.length;i++){
+      if (isLikelySunnyDay(daily, i)){
+        pick = days[i];
+        break;
+      }
+    }
+
+    if (!pick){
+      nextSunCache = { t: Date.now(), msg: 'No likely sunny day in the next 7 days (forecast).' };
+      el.nextSunText.textContent = nextSunCache.msg;
+      return;
+    }
+
+    const pickDate = new Date(pick + 'T12:00:00');
+    const nowDate = new Date();
+    const daysAway = Math.round((pickDate - new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), 12,0,0,0)) / (24*60*60*1000));
+
+    const label = formatDayLabel(pick);
+    const msg = daysAway <= 0
+      ? `Likely sun today (${label}).`
+      : `Likely sun in ${daysAway} day${daysAway===1?'':'s'} (${label}).`;
+
+    nextSunCache = { t: Date.now(), msg };
+    el.nextSunText.textContent = msg;
+  } catch {
+    nextSunCache = { t: Date.now(), msg: 'Forecast unavailable.' };
+    el.nextSunText.textContent = nextSunCache.msg;
+  }
+}
+
+el.nextSunRefresh?.addEventListener('click', () => updateNextSunCard(true));
+
 // ---------- Map ----------
 function initMapOnce(){
   if (map) return;
@@ -363,7 +476,7 @@ function directionsUrl(pub){
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pub.lat + ',' + pub.lng)}`;
 }
 
-// ---------- Planner ----------
+// ---------- Main planner (top 2 cards) ----------
 function pickBest(rows, now){
   const candidates = rows.filter(r => r.effective.kind !== 'no-sun');
   if (!candidates.length) return null;
@@ -428,6 +541,7 @@ async function render(){
   el.statusLine.textContent = userLoc ? 'Using your location' : 'Tap Near me for walking times.';
   el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min`;
 
+  // Compute sun + distance
   let rows = PUBS.map(pub => {
     const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
     const walkMin = walkMinutesFromKm(distKm);
@@ -435,9 +549,8 @@ async function render(){
     return { pub, distKm, walkMin, sun, effective: { ...sun }, weatherNow: null, weatherAtStart: null };
   });
 
-  // Weather fetch per pub (cached)
-  const pubsForWx = rows.map(r => r.pub);
-  const wxData = await runWithConcurrency(pubsForWx, 4, async (p) => {
+  // Weather per pub (cached)
+  const wxData = await runWithConcurrency(PUBS, 4, async (p) => {
     try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
     catch { return { id: p.id, data: null }; }
   });
@@ -448,12 +561,10 @@ async function render(){
     const data = wxById.get(pub.id);
     if (!data) return null;
 
-    // Use current for "now" if close enough
     if (Math.abs(time.getTime() - Date.now()) < 20 * 60 * 1000 && data.current){
       const cloud = data.current.cloud_cover;
       const rain = data.current.precipitation_probability;
       const like = weatherLikelihood(cloud, rain);
-      // fabricate an hourly index for formatter
       const i = nearestHourlyIndex(data.hourly.time, time);
       return { data, i, like, cloud, rain };
     }
@@ -465,7 +576,7 @@ async function render(){
     return { data, i, like, cloud, rain };
   }
 
-  // Weather gating
+  // Weather gating to effective kind
   rows = rows.map(r => {
     const wNow = weatherInfoFor(r.pub, now);
     r.weatherNow = wNow;
@@ -507,6 +618,16 @@ async function render(){
   });
 
   const best1 = pickBest(rows, now);
+
+  // Show/hide "next sun in Nottingham" card when nothing sunny in the next 2 hours
+  const hasAnySunInHorizon = rows.some(r => (r.effective.kind === 'sunny-now' || r.effective.kind === 'next-sun'));
+  if (!hasAnySunInHorizon){
+    el.nextSunCard.style.display = '';
+    await updateNextSunCard(false);
+  } else {
+    el.nextSunCard.style.display = 'none';
+  }
+
   const pivot = best1
     ? (best1.effective.kind === 'sunny-now' || best1.effective.kind === 'bad-now')
       ? best1.effective.end
@@ -646,14 +767,12 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
     e.stopPropagation();
     window.open(directionsUrl(pub), '_blank', 'noopener');
   });
-
   card.querySelector('[data-act="map"]').addEventListener('click', (e) => {
     e.stopPropagation();
     setView('map');
     initMapOnce();
     openPubOnMap(pub);
   });
-
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
   return card;
 }
@@ -717,14 +836,12 @@ function buildListCard(row, now){
     e.stopPropagation();
     window.open(directionsUrl(pub), '_blank', 'noopener');
   });
-
   card.querySelector('[data-act="map"]').addEventListener('click', (e) => {
     e.stopPropagation();
     setView('map');
     initMapOnce();
     openPubOnMap(pub);
   });
-
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
   return card;
 }
@@ -759,13 +876,11 @@ function timeTodayFromHHMM(hhmm){
 
 function bestSunWindowForPubInRange(pub, arriveTime, endTime){
   const day = new Date(arriveTime.getFullYear(), arriveTime.getMonth(), arriveTime.getDate(), 12, 0, 0, 0);
-
   let best = null;
 
   for (const spot of pub.spots){
     const wins = computeWindowsForDate(pub, spot, day);
     for (const w of wins){
-      // ignore windows that end before arrival
       if (w.end <= arriveTime) continue;
 
       const start = w.start < arriveTime ? arriveTime : w.start;
@@ -778,7 +893,6 @@ function bestSunWindowForPubInRange(pub, arriveTime, endTime){
       const candidate = { spot, start, end, waitMin, durMin };
       if (!best) best = candidate;
       else {
-        // prefer less waiting, then longer duration
         if (candidate.waitMin < best.waitMin) best = candidate;
         else if (candidate.waitMin === best.waitMin && candidate.durMin > best.durMin) best = candidate;
       }
@@ -802,7 +916,6 @@ async function buildPerfectDayPlan(){
   let t = new Date(startTime);
   const visited = new Set();
 
-  // Preload weather for all pubs (cached, concurrency limited)
   const wxData = await runWithConcurrency(PUBS, 4, async (p) => {
     try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
     catch { return { id: p.id, data: null }; }
@@ -818,11 +931,6 @@ async function buildPerfectDayPlan(){
     return weatherLikelihood(cloud, rain);
   }
 
-  function travelMinTo(pub){
-    const km = haversineKm(currentLoc, { lat: pub.lat, lng: pub.lng });
-    return louMode === 'cycle' ? cycleMinutesFromKm(km) : walkMinutesFromKm(km);
-  }
-
   function maxHopKm(){
     return louMode === 'cycle' ? PERFECT_DAY.cycleMaxKm : PERFECT_DAY.walkMaxKm;
   }
@@ -836,10 +944,11 @@ async function buildPerfectDayPlan(){
       .filter(p => !visited.has(p.id))
       .map(p => {
         const km = haversineKm(currentLoc, { lat: p.lat, lng: p.lng });
-        return { pub: p, km, travelMin: louMode === 'cycle' ? cycleMinutesFromKm(km) : walkMinutesFromKm(km) };
+        const travelMin = louMode === 'cycle' ? cycleMinutesFromKm(km) : walkMinutesFromKm(km);
+        return { pub: p, km, travelMin };
       })
       .filter(x => x.km <= maxHopKm())
-      .slice(0, 50); // safety cap
+      .slice(0, 60);
 
     let bestPick = null;
 
@@ -849,20 +958,20 @@ async function buildPerfectDayPlan(){
 
       const win = bestSunWindowForPubInRange(c.pub, arrive, planEnd);
       if (!win) continue;
-
-      // don’t wait ages for sun
       if (win.waitMin > PERFECT_DAY.maxWaitMin) continue;
 
-      // weather penalty: if “bad” at window start, skip unless nothing else
       const like = weatherLike(c.pub, win.start);
       const weatherPenalty = (like === 'bad') ? 50 : (like === 'mixed') ? 10 : 0;
 
-      // score: less wait + more sun + less travel + weather penalty
+      // Cycling mode: bias wider-afield targets (Beeston/Lakeside/Basford/Lion at Basford)
+      const wideBonus = (louMode === 'cycle') ? cycleWideBonus(c.pub) : 0;
+
       const score =
         (win.waitMin * 3) +
         (c.travelMin * 1.5) +
         weatherPenalty -
-        (win.durMin * 2);
+        (win.durMin * 2) -
+        wideBonus;
 
       if (!bestPick || score < bestPick.score){
         bestPick = { ...c, win, score, like };
@@ -876,11 +985,8 @@ async function buildPerfectDayPlan(){
     const endMaxStay = addMinutes(start, PERFECT_DAY.maxStopMin);
     const endMinStay = addMinutes(start, PERFECT_DAY.minStopMin);
 
-    // Stay until sun ends or max stay; but at least min stay if possible
     let leave = bestPick.win.end < endMinStay ? bestPick.win.end : bestPick.win.end;
     leave = (leave > endMaxStay) ? endMaxStay : leave;
-
-    // If the window is shorter than min stay, still accept it (it’s the sun constraint)
     if (leave <= start) break;
 
     out.push({
@@ -900,7 +1006,7 @@ async function buildPerfectDayPlan(){
   }
 
   if (!out.length){
-    el.louOut.innerHTML = `<div class="mini">No workable sun-led route found from that start time (try cycling mode or a different start).</div>`;
+    el.louOut.innerHTML = `<div class="mini">No workable sun-led route found (try cycling mode or a different start).</div>`;
     return;
   }
 
@@ -939,7 +1045,6 @@ async function buildPerfectDayPlan(){
     }).join('')}
   `;
 
-  // Wire buttons
   el.louOut.querySelectorAll('[data-gmaps]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1107,6 +1212,7 @@ async function boot(){
     PUBS = csvToPubs(csvText);
 
     if (viewMode === 'map') initMapOnce();
+
     render();
     setInterval(() => render(), 60 * 1000);
   } catch (e){
