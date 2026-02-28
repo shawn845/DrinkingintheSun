@@ -15,6 +15,7 @@
   <div class="app">
     <div class="topbar">
       <button id="nearBtn" class="btn"><span id="nearBtnText">Near me</span></button>
+      <button id="louBtn" class="btn lou"><span id="louBtnText">Lou Reed</span></button>
       <button id="viewToggleBtn" class="btn"><span id="viewToggleText">Map</span></button>
     </div>
 
@@ -32,6 +33,45 @@
     <div id="mapPanel" class="panel" style="display:none">
       <div id="map" class="map"></div>
     </div>
+  </div>
+
+  <!-- Lou Reed overlay -->
+  <div id="louOverlay" class="overlay" style="display:none" aria-hidden="true">
+    <div class="overlayCard">
+      <div class="overlayTop">
+        <div>
+          <div class="overlayTitle">Perfect Day</div>
+          <div class="overlaySub">A 4–5 pub plan that tries to keep you in the sun.</div>
+        </div>
+        <button id="louClose" class="iconBtn" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="overlayControls">
+        <div class="seg">
+          <button id="modeWalk" class="segBtn active" type="button">Walking</button>
+          <button id="modeCycle" class="segBtn" type="button">Cycling</button>
+        </div>
+
+        <label class="field">
+          <span>Start time</span>
+          <input id="louStart" type="time" value="12:00" />
+        </label>
+
+        <label class="field">
+          <span>Stops</span>
+          <select id="louStops">
+            <option value="4">4 pubs</option>
+            <option value="5" selected>5 pubs</option>
+          </select>
+        </label>
+
+        <button id="louBuild" class="btn primary" type="button">Build plan</button>
+      </div>
+
+      <div id="louOut" class="overlayOut"></div>
+      <div class="overlayHint">Tip: tap “Near me” first for better routing.</div>
+    </div>
+    <div id="louBackdrop" class="overlayBackdrop"></div>
   </div>
 
   <!-- SunCalc (sun position) -->
