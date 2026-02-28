@@ -3,70 +3,48 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Drinking in the Sun — Nottingham</title>
-
-  <meta name="theme-color" content="#fbf7ef" />
+  <title>Drinking in the Sun</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="stylesheet" href="./public/styles.css" />
 
-  <!-- Leaflet (no API key) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- Leaflet (map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
 <body>
   <div class="app">
-    <header class="top">
-      <div class="brand">
-        <div class="title">Drinking in the Sun</div>
-        <div class="subtitle">Find a pint in the sun (next 2 hours)</div>
-      </div>
-
-      <div class="topActions">
-        <button id="nearBtn" class="btn" type="button" aria-label="Near me">
-          <span class="btnIcon">📍</span><span id="nearBtnText">Near me</span>
-        </button>
-        <button id="viewToggleBtn" class="btn" type="button" aria-label="Toggle map">
-          <span class="btnIcon">🗺️</span><span id="viewToggleText">Map</span>
-        </button>
-      </div>
-    </header>
+    <div class="topbar">
+      <button id="nearBtn" class="btn"><span id="nearBtnText">Near me</span></button>
+      <button id="viewToggleBtn" class="btn"><span id="viewToggleText">Map</span></button>
+    </div>
 
     <div class="status">
       <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
-      <div id="statusHint" class="statusHint">Updated — • Horizon: next 120 min</div>
+      <div id="statusHint" class="statusHint"></div>
     </div>
 
-    <main class="main">
-      <section id="listPanel" class="panel listPanel">
-        <section id="plan" class="plan"></section>
+    <div id="listPanel" class="panel">
+      <div id="plan"></div>
+      <div class="sectionTitle">Next sunny nearby</div>
+      <div id="results"></div>
+    </div>
 
-        <section class="section">
-          <div class="sectionTitle">Next sunny nearby</div>
-          <div id="results" class="results"></div>
-        </section>
+    <div id="mapPanel" class="panel" style="display:none">
+      <div id="map" class="map"></div>
+    </div>
 
-        <footer class="foot">
-          Weather: Open-Meteo hourly (city-scale). Sun: position-only estimate (buildings/trees not modelled).
-        </footer>
-      </section>
-
-      <section id="mapPanel" class="panel mapPanel" aria-label="Map panel">
-        <div id="map"></div>
-        <div class="mapFoot">Pins 1 and 2 match the plan.</div>
-      </section>
-    </main>
+    <div class="footer mini">
+      Data: PhotoPills in/out • Model A (edge interpolation)
+    </div>
   </div>
 
-  <!-- SunCalc -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js" crossorigin="anonymous"></script>
-  <!-- Leaflet -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+  <!-- SunCalc (sun position) -->
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+
+  <!-- Leaflet (map) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script src="./public/app.js"></script>
-
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
-    }
-  </script>
 </body>
 </html>
