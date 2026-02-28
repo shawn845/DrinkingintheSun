@@ -32,10 +32,11 @@ body{
   padding:10px;
 }
 
-.topbar{ display:flex; gap:10px; }
+.topbar{ display:flex; gap:10px; flex-wrap:wrap; }
 
 .btn{
   flex:1;
+  min-width:120px;
   border:1px solid var(--line);
   background:var(--btn);
   color:var(--text-strong);
@@ -64,7 +65,15 @@ body{
   border-radius:12px;
   padding:10px 12px;
 }
-.statusLine{ color:var(--text-strong); font-weight:600; }
+
+.statusRow{
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  align-items:flex-start;
+}
+
+.statusLine{ color:var(--text-strong); font-weight:700; }
 .statusHint{ color:var(--muted); font-size:12px; margin-top:4px; }
 
 .panel{ background:transparent; overflow:auto; }
@@ -91,12 +100,13 @@ body{
   gap:10px;
   align-items:flex-start;
 }
-.bigTitle{ font-size:16px; font-weight:800; color:var(--text-strong); }
+
+.bigTitle{ font-size:16px; font-weight:900; color:var(--text-strong); }
 .bigSub{ font-size:12px; color:var(--muted); margin-top:2px; }
 
 .pill{
   font-size:12px;
-  font-weight:700;
+  font-weight:800;
   padding:6px 10px;
   border-radius:999px;
   border:1px solid var(--line);
@@ -125,7 +135,6 @@ body{
 }
 
 .actionBtn, .smallBtn{
-  flex:1;
   border:1px solid var(--line);
   background:var(--btn);
   color:var(--text-strong);
@@ -133,11 +142,12 @@ body{
   padding:10px 12px;
   font-size:14px;
 }
+.actions .actionBtn{ flex:1; }
 .actionBtn.primary{
   border-color:#cfe0ff;
   background:#eef4ff;
   color:var(--next);
-  font-weight:800;
+  font-weight:900;
 }
 
 .cardTop{
@@ -146,12 +156,12 @@ body{
   gap:10px;
   align-items:flex-start;
 }
-.cardTitle{ font-weight:800; color:var(--text-strong); }
+.cardTitle{ font-weight:900; color:var(--text-strong); }
 .cardSub{ font-size:12px; color:var(--muted); margin-top:2px; }
 
 .badge{
   font-size:12px;
-  font-weight:800;
+  font-weight:900;
   padding:6px 10px;
   border-radius:999px;
   border:1px solid var(--line);
@@ -176,6 +186,43 @@ body{
   border-radius:14px;
   border:1px solid var(--line);
   overflow:hidden;
+}
+
+/* small segmented control */
+.seg{
+  display:flex;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+  background:var(--btn);
+}
+.seg.small .segBtn{ padding:8px 10px; font-size:13px; }
+.segBtn{
+  flex:1;
+  padding:10px 12px;
+  border:0;
+  background:var(--btn);
+  color:var(--text-strong);
+  font-weight:900;
+}
+.segBtn.active{
+  background:#eef4ff;
+  color:var(--next);
+}
+
+/* favourite star button */
+.starBtn{
+  border:1px solid var(--line);
+  background:var(--btn);
+  border-radius:12px;
+  padding:6px 10px;
+  font-size:14px;
+  font-weight:900;
+  color:var(--text-strong);
+}
+.starBtn.on{
+  border-color:#f3e2a0;
+  background:#fff9e6;
 }
 
 /* Next sun card */
@@ -251,7 +298,6 @@ body{
   font-size:18px;
   line-height:1;
 }
-
 .overlayControls{
   margin-top:12px;
   display:grid;
@@ -259,25 +305,12 @@ body{
   gap:10px;
   align-items:end;
 }
-.seg{
-  grid-column: 1 / span 2;
+.overlayActions{
   display:flex;
-  border:1px solid var(--line);
-  border-radius:12px;
-  overflow:hidden;
+  gap:8px;
+  margin-top:10px;
 }
-.segBtn{
-  flex:1;
-  padding:10px 12px;
-  border:0;
-  background:var(--btn);
-  color:var(--text-strong);
-  font-weight:800;
-}
-.segBtn.active{
-  background:#eef4ff;
-  color:var(--next);
-}
+.overlayActions .smallBtn{ flex:1; }
 .field{
   display:flex;
   flex-direction:column;
