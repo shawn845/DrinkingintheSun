@@ -1,9 +1,13 @@
-/* Drinking in the Sun — LIVE (next 2 hours) — Model A + Lou Reed “Perfect Day”
-   CSV: ./public/data/DrinkingintheSunData.csv
-
-   Adds:
-   - Cycling bias toward Beeston / Lakeside / Basford / Lion at Basford
-   - “Next sun in Nottingham” (next likely sunny day) when no sun in next 2 hours
+/* Drinking in the Sun — LIVE (next 2 hours)
+   Model A + Lou Reed “Perfect Day” + upgrades:
+   1) Spot clarity on cards
+   2) Open now + closing soon (if opening/closing times exist in CSV)
+   3) Today/Tomorrow toggle (still next 2 hours horizon)
+   4) Favourites (stars + filter)
+   5) Share plan (Lou Reed overlay)
+   6) Multiple sun windows per spot supported
+   7) Optional edge profile points (Spot A Profile 1..6 etc)
+   8) Cache computed windows per pub/spot/day
 */
 
 const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
@@ -29,8 +33,14 @@ const el = {
   nearBtn: document.getElementById('nearBtn'),
   nearBtnText: document.getElementById('nearBtnText'),
   louBtn: document.getElementById('louBtn'),
+  favToggleBtn: document.getElementById('favToggleBtn'),
+  favToggleText: document.getElementById('favToggleText'),
   viewToggleBtn: document.getElementById('viewToggleBtn'),
   viewToggleText: document.getElementById('viewToggleText'),
+
+  dayTodayBtn: document.getElementById('dayTodayBtn'),
+  dayTomorrowBtn: document.getElementById('dayTomorrowBtn'),
+
   statusLine: document.getElementById('statusLine'),
   statusHint: document.getElementById('statusHint'),
   listPanel: document.getElementById('listPanel'),
@@ -50,47 +60,57 @@ const el = {
   louStart: document.getElementById('louStart'),
   louStops: document.getElementById('louStops'),
   modeWalk: document.getElementById('modeWalk'),
-  modeCycle: document.getElementById('modeCycle')
+  modeCycle: document.getElementById('modeCycle'),
+  louShare: document.getElementById('louShare'),
+  louCopy: document.getElementById('louCopy')
 };
 
 // ---------- State ----------
-let userLoc = loadUserLoc();
-let viewMode = loadViewMode() || 'list';
+let userLoc = loadJSON('ditS_userLoc', null);
+let viewMode = loadStr('ditS_viewMode', 'list');
+let dayMode = loadStr('ditS_dayMode', 'today'); // today | tomorrow
+let favOnly = loadBool('ditS_favOnly', false);
+let favourites = new Set(loadJSON('ditS_favourites', []));
+let louMode = 'walk';
+
 let map = null;
 const markers = new Map();
 let lastRenderToken = 0;
 
-let PUBS = [];
-let louMode = 'walk';
+let PUBS = []; // loaded from CSV
 
 // Next-sun daily forecast cache
 let nextSunCache = { t: 0, msg: 'Checking forecast…' };
-const NEXTSUN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const NEXTSUN_TTL_MS = 60 * 60 * 1000;
 
-// ---------- Storage ----------
-function loadUserLoc(){
-  try { return JSON.parse(localStorage.getItem('ditS_userLoc') || 'null'); } catch { return null; }
-}
-function saveUserLoc(loc){
-  localStorage.setItem('ditS_userLoc', JSON.stringify(loc));
-}
-function loadViewMode(){
-  try { return localStorage.getItem('ditS_viewMode'); } catch { return null; }
-}
-function saveViewMode(v){
-  try { localStorage.setItem('ditS_viewMode', v); } catch {}
-}
+// Windows cache: key -> windows[]
+const windowsCache = new Map(); // key = pubId|spotName|YYYY-MM-DD|profileHash
+
+// Weather cache (per-pub) already internal
+const WEATHER_TTL_MS = 30 * 60 * 1000;
+const weatherCache = new Map(); // key -> {t,data}
+
+// ---------- Storage helpers ----------
+function loadStr(k, fallback){ try { return localStorage.getItem(k) ?? fallback; } catch { return fallback; } }
+function saveStr(k,v){ try { localStorage.setItem(k, v); } catch {} }
+function loadBool(k, fallback){ try { const v = localStorage.getItem(k); return v === null ? fallback : (v === '1'); } catch { return fallback; } }
+function saveBool(k,v){ try { localStorage.setItem(k, v ? '1' : '0'); } catch {} }
+function loadJSON(k, fallback){ try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fallback; } catch { return fallback; } }
+function saveJSON(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
 // ---------- Helpers ----------
 function pad2(n){ return String(n).padStart(2,'0'); }
 function fmtHM(d){ return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 function minsBetween(a,b){ return Math.max(0, Math.round((b - a) / 60000)); }
+function addMinutes(d, m){ return new Date(d.getTime() + m*60*1000); }
+function addDays(d, days){ return new Date(d.getTime() + days*24*60*60*1000); }
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function clamp(x, a, b){ return Math.max(a, Math.min(b, x)); }
-function addMinutes(d, m){ return new Date(d.getTime() + m*60*1000); }
 function normName(s){ return String(s||'').toLowerCase(); }
+function isoDateLocal(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function isSameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
 
 // ---------- Distance ----------
 function haversineKm(a, b){
@@ -103,12 +123,8 @@ function haversineKm(a, b){
   const q = s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
   return 2*R*Math.asin(Math.min(1, Math.sqrt(q)));
 }
-function walkMinutesFromKm(km){
-  return Math.max(1, Math.round(km / 4.8 * 60));
-}
-function cycleMinutesFromKm(km){
-  return Math.max(1, Math.round(km / PERFECT_DAY.cycleKmh * 60));
-}
+function walkMinutesFromKm(km){ return Math.max(1, Math.round(km / 4.8 * 60)); }
+function cycleMinutesFromKm(km){ return Math.max(1, Math.round(km / PERFECT_DAY.cycleKmh * 60)); }
 
 // ---------- Cycling “wide-afield” bias ----------
 function cycleWideBonus(pub){
@@ -134,15 +150,59 @@ function cycleWideBonus(pub){
   return named + dist;
 }
 
+// ---------- Open/close time parsing ----------
+function toTimeHHMM(s){
+  const t = String(s ?? '').trim();
+  if (!t) return null;
+  if (/^\d{1,2}\.\d{2}$/.test(t)){
+    const [h,m] = t.split('.');
+    return `${pad2(+h)}:${m}`;
+  }
+  if (/^\d{1,2}:\d{1,2}$/.test(t)){
+    const [h,m] = t.split(':');
+    return `${pad2(+h)}:${pad2(+m)}`;
+  }
+  if (/^\d{3,4}$/.test(t)){
+    const tt = t.padStart(4,'0');
+    return `${tt.slice(0,2)}:${tt.slice(2)}`;
+  }
+  return t;
+}
+function parseOpenClose(pub){
+  // If CSV has these columns, we support them:
+  // "Opening Time" and "Closing Time" (or common variants)
+  const open = pub.openingTime ? toTimeHHMM(pub.openingTime) : null;
+  const close = pub.closingTime ? toTimeHHMM(pub.closingTime) : null;
+  if (!open || !close) return null;
+  return { open, close };
+}
+function isOpenAt(pub, dateTime){
+  const oc = parseOpenClose(pub);
+  if (!oc) return { known:false, open:true, closesInMin:null };
+
+  const [oh, om] = oc.open.split(':').map(Number);
+  const [ch, cm] = oc.close.split(':').map(Number);
+
+  const d = new Date(dateTime);
+  const openDT = new Date(d.getFullYear(), d.getMonth(), d.getDate(), oh, om, 0, 0);
+  let closeDT = new Date(d.getFullYear(), d.getMonth(), d.getDate(), ch, cm, 0, 0);
+
+  // If close is "earlier" than open, assume after midnight
+  if (closeDT <= openDT) closeDT = addDays(closeDT, 1);
+
+  const isOpen = dateTime >= openDT && dateTime <= closeDT;
+  const closesInMin = isOpen ? minsBetween(dateTime, closeDT) : null;
+  return { known:true, open:isOpen, closesInMin };
+}
+
 // ---------- Location ----------
 function requestLocation(){
   if (!navigator.geolocation) return;
   el.nearBtnText.textContent = 'Locating…';
-
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      saveUserLoc(userLoc);
+      saveJSON('ditS_userLoc', userLoc);
       el.nearBtnText.textContent = 'Near me';
       render();
     },
@@ -158,7 +218,7 @@ el.nearBtn?.addEventListener('click', requestLocation);
 // ---------- View toggle ----------
 function setView(mode){
   viewMode = mode;
-  saveViewMode(mode);
+  saveStr('ditS_viewMode', mode);
 
   if (mode === 'list') {
     el.mapPanel.style.display = 'none';
@@ -174,7 +234,35 @@ function setView(mode){
 }
 el.viewToggleBtn?.addEventListener('click', () => setView(viewMode === 'list' ? 'map' : 'list'));
 
-// ---------- Sun position helpers ----------
+// ---------- Day mode toggle (Today / Tomorrow) ----------
+function setDayMode(mode){
+  dayMode = mode;
+  saveStr('ditS_dayMode', mode);
+  el.dayTodayBtn.classList.toggle('active', mode === 'today');
+  el.dayTomorrowBtn.classList.toggle('active', mode === 'tomorrow');
+  render();
+}
+el.dayTodayBtn?.addEventListener('click', () => setDayMode('today'));
+el.dayTomorrowBtn?.addEventListener('click', () => setDayMode('tomorrow'));
+
+// ---------- Favourites ----------
+function setFavOnly(v){
+  favOnly = v;
+  saveBool('ditS_favOnly', v);
+  el.favToggleText.textContent = v ? 'Favourites ✓' : 'Favourites';
+  render();
+}
+el.favToggleBtn?.addEventListener('click', () => setFavOnly(!favOnly));
+
+function isFav(pubId){ return favourites.has(pubId); }
+function toggleFav(pubId){
+  if (favourites.has(pubId)) favourites.delete(pubId);
+  else favourites.add(pubId);
+  saveJSON('ditS_favourites', [...favourites]);
+  render();
+}
+
+// ---------- Sun helpers ----------
 function radToDeg(r){ return r * 180 / Math.PI; }
 function azimuthToBearingDeg(azRad){
   const azDeg = azRad * 180 / Math.PI;
@@ -200,30 +288,78 @@ function unwrapAz(az, a){
   return z;
 }
 
-// ---------- Model A ----------
+// ---------- Optional edge profile points (piecewise) ----------
+function profileHash(points){
+  // stable-ish hash for caching
+  if (!points || !points.length) return 'none';
+  return points.map(p => `${p.az.toFixed(2)}:${p.alt.toFixed(2)}`).join('|');
+}
+
+function requiredAltFromProfile(zUnwrapped, pointsUnwrapped){
+  // pointsUnwrapped: sorted by azUnwrapped, each {az, alt}
+  if (pointsUnwrapped.length < 2) return null;
+  if (zUnwrapped <= pointsUnwrapped[0].az) return pointsUnwrapped[0].alt;
+  if (zUnwrapped >= pointsUnwrapped[pointsUnwrapped.length-1].az) return pointsUnwrapped[pointsUnwrapped.length-1].alt;
+
+  for (let i=0;i<pointsUnwrapped.length-1;i++){
+    const p0 = pointsUnwrapped[i];
+    const p1 = pointsUnwrapped[i+1];
+    if (zUnwrapped >= p0.az && zUnwrapped <= p1.az){
+      const span = (p1.az - p0.az);
+      const u = span <= 0.0001 ? 0 : (zUnwrapped - p0.az) / span;
+      return p0.alt + u * (p1.alt - p0.alt);
+    }
+  }
+  return null;
+}
+
+// ---------- Model A (with optional profile points) ----------
 function spotInSun_ModelA(pub, spot, dateTime){
   if (!spot?.cal || !spot.cal.valid) return false;
 
   const { bearing, alt } = sunBearingAltitude(dateTime, pub.lat, pub.lng);
 
-  const azIn = spot.cal.azIn;
-  const altIn = spot.cal.altIn;
-  const azOut = spot.cal.azOut;
-  const altOut = spot.cal.altOut;
+  // Use profile points if present, else fall back to in/out line
+  const pts = spot.cal.profilePoints && spot.cal.profilePoints.length >= 2
+    ? spot.cal.profilePoints
+    : null;
 
-  const { a, b } = unwrapAzRange(azIn, azOut);
-  const z = unwrapAz(bearing, a);
-  if (z < a || z > b) return false;
+  if (!pts){
+    const { a, b } = unwrapAzRange(spot.cal.azIn, spot.cal.azOut);
+    const z = unwrapAz(bearing, a);
+    if (z < a || z > b) return false;
 
-  const span = (b - a);
-  if (span <= 0.0001) return false;
+    const span = (b - a);
+    if (span <= 0.0001) return false;
 
-  const u = clamp((z - a) / span, 0, 1);
-  const requiredAlt = altIn + u * (altOut - altIn);
+    const u = clamp((z - a) / span, 0, 1);
+    const requiredAlt = spot.cal.altIn + u * (spot.cal.altOut - spot.cal.altIn);
+    return alt >= requiredAlt;
+  }
+
+  // Profile-point mode: unwrap around first point
+  const anchor = pts[0].az;
+  const ptsUnwrapped = pts.map(p => ({ az: unwrapAz(p.az, anchor), alt: p.alt }))
+    .sort((x,y) => x.az - y.az);
+
+  const z = unwrapAz(bearing, anchor);
+  const minAz = ptsUnwrapped[0].az;
+  const maxAz = ptsUnwrapped[ptsUnwrapped.length-1].az;
+  if (z < minAz || z > maxAz) return false;
+
+  const requiredAlt = requiredAltFromProfile(z, ptsUnwrapped);
+  if (requiredAlt === null) return false;
   return alt >= requiredAlt;
 }
 
+// ---------- Caching windows per pub/spot/day ----------
 function computeWindowsForDate(pub, spot, dayDate){
+  const dateKey = isoDateLocal(dayDate);
+  const pHash = profileHash(spot.cal.profilePoints || []);
+  const cacheKey = `${pub.id}|${spot.name}|${dateKey}|${pHash}`;
+
+  if (windowsCache.has(cacheKey)) return windowsCache.get(cacheKey);
+
   const times = SunCalc.getTimes(dayDate, pub.lat, pub.lng);
   let startDay = times.sunrise;
   let endDay   = times.sunset;
@@ -246,7 +382,9 @@ function computeWindowsForDate(pub, spot, dayDate){
   }
   if (currentStart) windows.push({ start: currentStart, end: new Date(endDay) });
 
-  return windows.filter(w => (w.end - w.start) >= 10*60*1000);
+  const out = windows.filter(w => (w.end - w.start) >= 10*60*1000);
+  windowsCache.set(cacheKey, out);
+  return out;
 }
 
 function sunStatusForPub(pub, now, horizonStart, horizonEnd){
@@ -255,6 +393,7 @@ function sunStatusForPub(pub, now, horizonStart, horizonEnd){
   const spotInfos = pub.spots.map(spot => {
     const dayWindows = computeWindowsForDate(pub, spot, day);
 
+    // clip to next 2 hours only
     const windows = dayWindows
       .map(w => ({
         start: w.start < horizonStart ? horizonStart : w.start,
@@ -289,12 +428,8 @@ function sunStatusForPub(pub, now, horizonStart, horizonEnd){
 }
 
 // ---------- Weather (Open-Meteo) ----------
-const WEATHER_TTL_MS = 30 * 60 * 1000;
-const weatherCache = new Map();
+function weatherKey(lat,lng){ return `${lat.toFixed(4)},${lng.toFixed(4)}`; }
 
-function weatherKey(lat,lng){
-  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
-}
 async function fetchWeather(lat, lng){
   const url =
     `https://api.open-meteo.com/v1/forecast` +
@@ -311,7 +446,6 @@ async function getWeather(lat,lng){
   const now = Date.now();
   const c = weatherCache.get(key);
   if (c && (now - c.t) < WEATHER_TTL_MS) return c.data;
-
   const data = await fetchWeather(lat,lng);
   weatherCache.set(key, { t: now, data });
   return data;
@@ -356,12 +490,9 @@ async function runWithConcurrency(items, limit, fn){
 
 // ---------- Next sun in Nottingham (daily forecast) ----------
 async function fetchNextSunDaily(){
-  // Using Nottingham center; can swap to userLoc if you want.
   const lat = NOTTINGHAM_CENTER.lat;
   const lng = NOTTINGHAM_CENTER.lng;
 
-  // daily vars: precipitation_probability_max + cloud_cover_mean might not exist in all configs,
-  // so we also use weather_code as fallback.
   const url =
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${lat}&longitude=${lng}` +
@@ -372,38 +503,29 @@ async function fetchNextSunDaily(){
   if (!res.ok) throw new Error('daily forecast failed');
   return res.json();
 }
-
 function isLikelySunnyDay(daily, i){
   const code = daily.weather_code?.[i];
   const rain = daily.precipitation_probability_max?.[i];
   const cloud = daily.cloud_cover_mean?.[i];
 
-  // Prefer cloud+rain if available
   if (typeof rain === 'number' && typeof cloud === 'number'){
     return rain < 40 && cloud < 60;
   }
-
-  // Fallback: weather_code (Open-Meteo codes: 0 clear, 1 mainly clear, 2 partly cloudy)
   if (typeof code === 'number'){
     return code === 0 || code === 1 || code === 2;
   }
-
   return false;
 }
-
 function formatDayLabel(isoDateStr){
-  // isoDateStr like "2026-02-28"
   const d = new Date(isoDateStr + 'T12:00:00');
   return d.toLocaleDateString(undefined, { weekday:'short', day:'2-digit', month:'short' });
 }
-
 async function updateNextSunCard(force=false){
   const now = Date.now();
   if (!force && (now - nextSunCache.t) < NEXTSUN_TTL_MS){
     el.nextSunText.textContent = nextSunCache.msg;
     return;
   }
-
   try{
     el.nextSunText.textContent = 'Checking forecast…';
     const data = await fetchNextSunDaily();
@@ -412,10 +534,7 @@ async function updateNextSunCard(force=false){
 
     let pick = null;
     for (let i=0;i<days.length;i++){
-      if (isLikelySunnyDay(daily, i)){
-        pick = days[i];
-        break;
-      }
+      if (isLikelySunnyDay(daily, i)){ pick = days[i]; break; }
     }
 
     if (!pick){
@@ -440,7 +559,6 @@ async function updateNextSunCard(force=false){
     el.nextSunText.textContent = nextSunCache.msg;
   }
 }
-
 el.nextSunRefresh?.addEventListener('click', () => updateNextSunCard(true));
 
 // ---------- Map ----------
@@ -476,7 +594,49 @@ function directionsUrl(pub){
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pub.lat + ',' + pub.lng)}`;
 }
 
-// ---------- Main planner (top 2 cards) ----------
+// ---------- Day selection (today/tomorrow affects now+horizon) ----------
+function getBaseNow(){
+  const now = new Date();
+  if (dayMode === 'today') return now;
+  const tmr = addDays(now, 1);
+  return new Date(tmr.getFullYear(), tmr.getMonth(), tmr.getDate(), now.getHours(), now.getMinutes(), 0, 0);
+}
+
+// ---------- UI building (spot clarity + open/closed + favourite star) ----------
+function sunLineForEffective(effective, now){
+  if (effective.kind === 'sunny-now'){
+    return `Sun now • until ${fmtHM(effective.end)} (${minsBetween(now, effective.end)} min)`;
+  }
+  if (effective.kind === 'next-sun'){
+    return `Next sun • ${fmtHM(effective.start)}–${fmtHM(effective.end)} (in ${minsBetween(now, effective.start)} min)`;
+  }
+  if (effective.kind === 'bad-next'){
+    return `Sun angle soon • weather poor`;
+  }
+  if (effective.kind === 'bad-now'){
+    return `Sun angle ok • weather poor`;
+  }
+  return `No direct sun predicted`;
+}
+
+function openLine(pub, now){
+  const st = isOpenAt(pub, now);
+  if (!st.known) return null;
+  if (!st.open) return 'Closed now';
+  if (st.closesInMin !== null && st.closesInMin <= 45) return `Open • closes in ${st.closesInMin} min`;
+  return `Open now`;
+}
+
+function shouldIncludePub(pub, now){
+  // If we know hours and it's closed, we exclude from main list + plan
+  const st = isOpenAt(pub, now);
+  if (st.known && !st.open) return false;
+  // favourites filter
+  if (favOnly && !isFav(pub.id)) return false;
+  return true;
+}
+
+// ---------- Main planner helpers ----------
 function pickBest(rows, now){
   const candidates = rows.filter(r => r.effective.kind !== 'no-sun');
   if (!candidates.length) return null;
@@ -495,6 +655,7 @@ function pickBest(rows, now){
 
   return candidates[0];
 }
+
 function pickNextAfter(rows, pivotTime, excludeId, horizonStart, horizonEnd){
   const t = addMinutes(pivotTime, SWITCH_GAP_MIN);
   if (t > horizonEnd) return null;
@@ -533,24 +694,23 @@ async function render(){
     return;
   }
 
-  const now = new Date();
+  const now = getBaseNow();
   const horizonStart = now;
   const horizonEnd = addMinutes(now, HORIZON_MIN);
   const baseLoc = userLoc || NOTTINGHAM_CENTER;
 
-  el.statusLine.textContent = userLoc ? 'Using your location' : 'Tap Near me for walking times.';
-  el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min`;
+  el.nearBtnText.textContent = 'Near me';
+  el.favToggleText.textContent = favOnly ? 'Favourites ✓' : 'Favourites';
 
-  // Compute sun + distance
-  let rows = PUBS.map(pub => {
-    const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
-    const walkMin = walkMinutesFromKm(distKm);
-    const sun = sunStatusForPub(pub, now, horizonStart, horizonEnd);
-    return { pub, distKm, walkMin, sun, effective: { ...sun }, weatherNow: null, weatherAtStart: null };
-  });
+  const dayLabel = dayMode === 'today' ? 'Today' : 'Tomorrow';
+  el.statusLine.textContent = userLoc ? `Using your location • ${dayLabel}` : `Tap Near me for walking times • ${dayLabel}`;
+  el.statusHint.textContent = `Updated ${fmtHM(new Date())} • Viewing: ${dayLabel} • Horizon: next ${HORIZON_MIN} min`;
 
-  // Weather per pub (cached)
-  const wxData = await runWithConcurrency(PUBS, 4, async (p) => {
+  // Filter pubs by open + favourites before any heavy work
+  const pubsFiltered = PUBS.filter(p => shouldIncludePub(p, now));
+
+  // Weather only for filtered pubs (speed)
+  const wxData = await runWithConcurrency(pubsFiltered, 4, async (p) => {
     try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
     catch { return { id: p.id, data: null }; }
   });
@@ -561,7 +721,8 @@ async function render(){
     const data = wxById.get(pub.id);
     if (!data) return null;
 
-    if (Math.abs(time.getTime() - Date.now()) < 20 * 60 * 1000 && data.current){
+    // If viewing "today" and time is near real now, prefer current
+    if (dayMode === 'today' && Math.abs(time.getTime() - Date.now()) < 20 * 60 * 1000 && data.current){
       const cloud = data.current.cloud_cover;
       const rain = data.current.precipitation_probability;
       const like = weatherLikelihood(cloud, rain);
@@ -576,7 +737,15 @@ async function render(){
     return { data, i, like, cloud, rain };
   }
 
-  // Weather gating to effective kind
+  // Compute rows
+  let rows = pubsFiltered.map(pub => {
+    const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
+    const walkMin = walkMinutesFromKm(distKm);
+    const sun = sunStatusForPub(pub, now, horizonStart, horizonEnd);
+    return { pub, distKm, walkMin, sun, effective: { ...sun }, weatherNow: null, weatherAtStart: null };
+  });
+
+  // Weather gating
   rows = rows.map(r => {
     const wNow = weatherInfoFor(r.pub, now);
     r.weatherNow = wNow;
@@ -605,6 +774,7 @@ async function render(){
     if (k === 'bad-now') return 3;
     return 9;
   }
+
   rows.sort((a,b) => {
     const ra = rankKind(a.effective.kind);
     const rb = rankKind(b.effective.kind);
@@ -619,7 +789,7 @@ async function render(){
 
   const best1 = pickBest(rows, now);
 
-  // Show/hide "next sun in Nottingham" card when nothing sunny in the next 2 hours
+  // Next-sun card only when there is NO sun in the horizon (or filtered list empty)
   const hasAnySunInHorizon = rows.some(r => (r.effective.kind === 'sunny-now' || r.effective.kind === 'next-sun'));
   if (!hasAnySunInHorizon){
     el.nextSunCard.style.display = '';
@@ -654,7 +824,7 @@ async function render(){
     best2 = { ...best2Raw, effective: eff2, sun: sun2 };
   }
 
-  // --- Plan ---
+  // --- Plan UI ---
   el.plan.innerHTML = `<div class="sectionTitle">Suggested plan</div>`;
   if (!best1) {
     el.plan.insertAdjacentHTML('beforeend', `
@@ -687,13 +857,15 @@ async function render(){
 function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
   const { pub, walkMin, effective } = row;
 
+  const fav = isFav(pub.id);
+  const openTxt = openLine(pub, now);
+
   let pillClass = 'bad';
   let pillText = '—';
   let headline = number === 1 ? '1. Sunny now' : '2. Next best';
   let timeLine = '';
   let rightLine = '';
   let weatherLine = 'Weather: unavailable';
-  let spotLine = effective.spot?.name ? `Spot: ${effective.spot.name}` : 'Spot: —';
 
   if (effective.kind === 'sunny-now') {
     pillClass = 'sun';
@@ -733,6 +905,9 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
     rightLine = `No direct sun predicted`;
   }
 
+  const spotLine = effective.spot?.name ? `Sit: ${effective.spot.name}` : 'Sit: —';
+  const sunLine = sunLineForEffective(effective, now);
+
   let leaveHint = '';
   if (prevRow && number === 2 && (effective.kind === 'next-sun' || effective.kind === 'bad-next')) {
     const leave = addMinutes(effective.start, -(walkMin + 2));
@@ -747,12 +922,18 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
         <div class="bigTitle">${escapeHtml(headline)}</div>
         <div class="bigSub"><strong>${escapeHtml(pub.name)}</strong> • ${walkMin} min walk</div>
       </div>
-      <div class="pill ${pillClass}">${escapeHtml(pillText)}</div>
+
+      <div style="display:flex; gap:8px; align-items:flex-start;">
+        <button class="starBtn ${fav ? 'on':''}" type="button" data-star="${escapeHtml(pub.id)}">${fav ? '★' : '☆'}</button>
+        <div class="pill ${pillClass}">${escapeHtml(pillText)}</div>
+      </div>
     </div>
 
     <div class="bigBody">
       <div class="rowLine"><span><strong>${escapeHtml(timeLine)}</strong></span><span>${escapeHtml(rightLine)}</span></div>
       <div class="mini">${escapeHtml(spotLine)}</div>
+      <div class="mini">${escapeHtml(sunLine)}</div>
+      ${openTxt ? `<div class="mini">${escapeHtml(openTxt)}</div>` : ``}
       <div class="mini">${escapeHtml(weatherLine)}</div>
       ${leaveHint ? `<div class="mini">${escapeHtml(leaveHint)}</div>` : ``}
 
@@ -762,6 +943,11 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
       </div>
     </div>
   `;
+
+  card.querySelector('[data-star]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFav(pub.id);
+  });
 
   card.querySelector('[data-act="directions"]').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -779,29 +965,19 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
 
 function buildListCard(row, now){
   const { pub, walkMin, effective } = row;
+  const fav = isFav(pub.id);
+  const openTxt = openLine(pub, now);
 
   let badgeClass = 'bad';
   let badgeText = '—';
-  let line1 = '';
-  let line2 = effective.spot?.name ? `Spot: ${effective.spot.name}` : '';
 
-  if (effective.kind === 'sunny-now') {
-    badgeClass = 'sun';
-    badgeText = 'Sunny now';
-    line1 = `Sun for ${minsBetween(now, effective.end)} min`;
-  } else if (effective.kind === 'next-sun') {
-    badgeClass = 'next';
-    badgeText = 'Next sun';
-    line1 = `Starts in ${minsBetween(now, effective.start)} min`;
-  } else if (effective.kind === 'bad-next') {
-    badgeClass = 'bad';
-    badgeText = 'Cloudy';
-    line1 = `Sun angle soon, but weather poor`;
-  } else {
-    badgeClass = 'bad';
-    badgeText = '—';
-    line1 = `No direct sun predicted`;
-  }
+  if (effective.kind === 'sunny-now') { badgeClass='sun'; badgeText='Sunny now'; }
+  else if (effective.kind === 'next-sun') { badgeClass='next'; badgeText='Next sun'; }
+  else if (effective.kind === 'bad-next') { badgeClass='bad'; badgeText='Cloudy'; }
+  else { badgeClass='bad'; badgeText='—'; }
+
+  const sunLine = sunLineForEffective(effective, now);
+  const spotLine = effective.spot?.name ? `Sit: ${effective.spot.name}` : `Sit: —`;
 
   const card = document.createElement('div');
   card.className = 'card';
@@ -814,12 +990,17 @@ function buildListCard(row, now){
         <div class="cardTitle">${escapeHtml(pub.name)}</div>
         <div class="cardSub">${walkMin} min walk</div>
       </div>
-      <span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+
+      <div style="display:flex; gap:8px; align-items:flex-start;">
+        <button class="starBtn ${fav ? 'on':''}" type="button" data-star="${escapeHtml(pub.id)}">${fav ? '★' : '☆'}</button>
+        <span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+      </div>
     </div>
 
     <div class="cardBody">
-      <div class="rowLine"><span>${escapeHtml(line1)}</span></div>
-      ${line2 ? `<div class="mini">${escapeHtml(line2)}</div>` : ``}
+      <div class="mini">${escapeHtml(spotLine)}</div>
+      <div class="mini">${escapeHtml(sunLine)}</div>
+      ${openTxt ? `<div class="mini">${escapeHtml(openTxt)}</div>` : ``}
 
       <div class="thumb">
         <img src="${thumbUrl}" alt="Map preview for ${escapeHtml(pub.name)}" loading="lazy" />
@@ -832,6 +1013,11 @@ function buildListCard(row, now){
     </div>
   `;
 
+  card.querySelector('[data-star]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFav(pub.id);
+  });
+
   card.querySelector('[data-act="directions"]').addEventListener('click', (e) => {
     e.stopPropagation();
     window.open(directionsUrl(pub), '_blank', 'noopener');
@@ -842,6 +1028,7 @@ function buildListCard(row, now){
     initMapOnce();
     openPubOnMap(pub);
   });
+
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
   return card;
 }
@@ -851,6 +1038,8 @@ function openLou(){
   el.louOverlay.style.display = '';
   el.louOverlay.setAttribute('aria-hidden', 'false');
   el.louOut.innerHTML = '';
+  el.louShare.disabled = true;
+  el.louCopy.disabled = true;
 }
 function closeLou(){
   el.louOverlay.style.display = 'none';
@@ -870,8 +1059,8 @@ el.modeCycle?.addEventListener('click', () => setLouMode('cycle'));
 
 function timeTodayFromHHMM(hhmm){
   const [hh, mm] = hhmm.split(':').map(n => +n);
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
+  const base = getBaseNow(); // matches Today/Tomorrow
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm, 0, 0);
 }
 
 function bestSunWindowForPubInRange(pub, arriveTime, endTime){
@@ -901,6 +1090,19 @@ function bestSunWindowForPubInRange(pub, arriveTime, endTime){
   return best;
 }
 
+function makeShareText(stops, modeLabel, startTime){
+  const lines = [];
+  lines.push(`Perfect Day (${modeLabel}) — start ${fmtHM(startTime)}`);
+  lines.push('');
+  stops.forEach((s, idx) => {
+    lines.push(
+      `${idx+1}. ${s.pub.name} — arrive ${fmtHM(s.arrive)} | sun ${fmtHM(s.start)}–${fmtHM(s.leave)} | spot: ${s.spot?.name || '—'}`
+    );
+    lines.push(`   ${directionsUrl(s.pub)}`);
+  });
+  return lines.join('\n');
+}
+
 async function buildPerfectDayPlan(){
   if (!PUBS.length){
     el.louOut.innerHTML = `<div class="mini">Data not loaded yet.</div>`;
@@ -916,7 +1118,10 @@ async function buildPerfectDayPlan(){
   let t = new Date(startTime);
   const visited = new Set();
 
-  const wxData = await runWithConcurrency(PUBS, 4, async (p) => {
+  // Candidate pubs: must be open at start time if hours are known
+  const pubsForPlan = PUBS.filter(p => shouldIncludePub(p, startTime));
+
+  const wxData = await runWithConcurrency(pubsForPlan, 4, async (p) => {
     try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
     catch { return { id: p.id, data: null }; }
   });
@@ -931,16 +1136,14 @@ async function buildPerfectDayPlan(){
     return weatherLikelihood(cloud, rain);
   }
 
-  function maxHopKm(){
-    return louMode === 'cycle' ? PERFECT_DAY.cycleMaxKm : PERFECT_DAY.walkMaxKm;
-  }
+  function maxHopKm(){ return louMode === 'cycle' ? PERFECT_DAY.cycleMaxKm : PERFECT_DAY.walkMaxKm; }
 
   const out = [];
 
   for (let i=0; i<stopCount; i++){
     if (t >= planEnd) break;
 
-    const candidates = PUBS
+    const candidates = pubsForPlan
       .filter(p => !visited.has(p.id))
       .map(p => {
         const km = haversineKm(currentLoc, { lat: p.lat, lng: p.lng });
@@ -948,13 +1151,17 @@ async function buildPerfectDayPlan(){
         return { pub: p, km, travelMin };
       })
       .filter(x => x.km <= maxHopKm())
-      .slice(0, 60);
+      .slice(0, 70);
 
     let bestPick = null;
 
     for (const c of candidates){
       const arrive = addMinutes(t, c.travelMin);
       if (arrive >= planEnd) continue;
+
+      // if opening hours known and closed on arrival, skip
+      const openState = isOpenAt(c.pub, arrive);
+      if (openState.known && !openState.open) continue;
 
       const win = bestSunWindowForPubInRange(c.pub, arrive, planEnd);
       if (!win) continue;
@@ -963,7 +1170,6 @@ async function buildPerfectDayPlan(){
       const like = weatherLike(c.pub, win.start);
       const weatherPenalty = (like === 'bad') ? 50 : (like === 'mixed') ? 10 : 0;
 
-      // Cycling mode: bias wider-afield targets (Beeston/Lakeside/Basford/Lion at Basford)
       const wideBonus = (louMode === 'cycle') ? cycleWideBonus(c.pub) : 0;
 
       const score =
@@ -985,8 +1191,9 @@ async function buildPerfectDayPlan(){
     const endMaxStay = addMinutes(start, PERFECT_DAY.maxStopMin);
     const endMinStay = addMinutes(start, PERFECT_DAY.minStopMin);
 
-    let leave = bestPick.win.end < endMinStay ? bestPick.win.end : bestPick.win.end;
+    let leave = bestPick.win.end;
     leave = (leave > endMaxStay) ? endMaxStay : leave;
+    // allow shorter than min stay if sun window is short
     if (leave <= start) break;
 
     out.push({
@@ -1007,10 +1214,35 @@ async function buildPerfectDayPlan(){
 
   if (!out.length){
     el.louOut.innerHTML = `<div class="mini">No workable sun-led route found (try cycling mode or a different start).</div>`;
+    el.louShare.disabled = true;
+    el.louCopy.disabled = true;
     return;
   }
 
   const modeLabel = louMode === 'cycle' ? 'Cycling' : 'Walking';
+  const shareText = makeShareText(out, modeLabel, startTime);
+
+  // enable share/copy
+  el.louShare.disabled = false;
+  el.louCopy.disabled = false;
+
+  el.louShare.onclick = async () => {
+    try{
+      if (navigator.share){
+        await navigator.share({ title:'Perfect Day', text: shareText });
+      } else {
+        await navigator.clipboard.writeText(shareText);
+      }
+    } catch {}
+  };
+
+  el.louCopy.onclick = async () => {
+    try{
+      await navigator.clipboard.writeText(shareText);
+      el.louCopy.textContent = 'Copied ✓';
+      setTimeout(() => (el.louCopy.textContent = 'Copy'), 1200);
+    } catch {}
+  };
 
   el.louOut.innerHTML = `
     <div class="bigCard">
@@ -1024,6 +1256,7 @@ async function buildPerfectDayPlan(){
         s.weatherLike === 'good' ? '☀️ likely' :
         s.weatherLike === 'mixed' ? '⛅ mixed' :
         s.weatherLike === 'bad' ? '☁️ sun unlikely' : '—';
+      const openTxt = openLine(s.pub, s.arrive);
 
       return `
         <div class="card">
@@ -1034,7 +1267,8 @@ async function buildPerfectDayPlan(){
             </div>
             <span class="badge next">${escapeHtml(wx)}</span>
           </div>
-          <div class="mini">Spot: ${escapeHtml(s.spot?.name || '—')}</div>
+          <div class="mini">Sit: ${escapeHtml(s.spot?.name || '—')}</div>
+          ${openTxt ? `<div class="mini">${escapeHtml(openTxt)}</div>` : ``}
           <div class="mini">${escapeHtml(s.travelMin)} min ${escapeHtml(travelLabel)} • ${escapeHtml(s.km.toFixed(1))} km</div>
           <div class="cardActions">
             <button class="smallBtn" type="button" data-gmaps="${escapeHtml(gmaps)}">Directions</button>
@@ -1067,12 +1301,14 @@ async function buildPerfectDayPlan(){
 
 el.louBuild?.addEventListener('click', () => {
   el.louOut.innerHTML = `<div class="mini">Building plan…</div>`;
+  el.louShare.disabled = true;
+  el.louCopy.disabled = true;
   buildPerfectDayPlan().catch(() => {
     el.louOut.innerHTML = `<div class="mini">Could not build plan.</div>`;
   });
 });
 
-// ---------- CSV loading ----------
+// ---------- CSV loading + calibration conversion ----------
 async function loadCsvText(){
   const res = await fetch('./public/data/DrinkingintheSunData.csv', { cache:'no-store' });
   if (!res.ok) throw new Error('Could not load CSV');
@@ -1098,29 +1334,13 @@ function parseCSVLine(line){
   out.push(cur);
   return out.map(s => s.trim());
 }
-function toTimeHHMM(s){
-  const t = String(s ?? '').trim();
-  if (!t) return null;
 
-  if (/^\d{1,2}\.\d{2}$/.test(t)){
-    const [h,m] = t.split('.');
-    return `${pad2(+h)}:${m}`;
-  }
-  if (/^\d{1,2}:\d{1,2}$/.test(t)){
-    const [h,m] = t.split(':');
-    return `${pad2(+h)}:${pad2(+m)}`;
-  }
-  if (/^\d{3,4}$/.test(t)){
-    const tt = t.padStart(4,'0');
-    return `${tt.slice(0,2)}:${tt.slice(2)}`;
-  }
-  return t;
-}
 function makeLocalDateTimeOnCalibration(hhmm){
   const [hh, mm] = hhmm.split(':').map(n => +n);
   return new Date(CALIBRATION_DATE.y, CALIBRATION_DATE.m - 1, CALIBRATION_DATE.d, hh, mm, 0, 0);
 }
-function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
+
+function buildCalForSpot(pubLat, pubLng, sunIn, sunOut, profileTimesHHMM){
   const inT = toTimeHHMM(sunIn);
   const outT = toTimeHHMM(sunOut);
   if (!inT || !outT) return { valid:false };
@@ -1131,6 +1351,22 @@ function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
   const pIn = sunBearingAltitude(dtIn, pubLat, pubLng);
   const pOut = sunBearingAltitude(dtOut, pubLat, pubLng);
 
+  // Optional profile points: times that sit on the same edge; convert each to (az,alt)
+  const profilePoints = [];
+  for (const t of (profileTimesHHMM || [])){
+    const tt = toTimeHHMM(t);
+    if (!tt) continue;
+    const dt = makeLocalDateTimeOnCalibration(tt);
+    const p = sunBearingAltitude(dt, pubLat, pubLng);
+    profilePoints.push({ az: p.bearing, alt: p.alt });
+  }
+
+  // Always include in/out as endpoints for profile mode if any profile points exist
+  let points = null;
+  if (profilePoints.length){
+    points = [{ az: pIn.bearing, alt: pIn.alt }, ...profilePoints, { az: pOut.bearing, alt: pOut.alt }];
+  }
+
   return {
     valid:true,
     azIn: pIn.bearing,
@@ -1138,9 +1374,18 @@ function buildCalForSpot(pubLat, pubLng, sunIn, sunOut){
     azOut: pOut.bearing,
     altOut: pOut.alt,
     inTime: inT,
-    outTime: outT
+    outTime: outT,
+    profilePoints: points
   };
 }
+
+function getField(rec, ...names){
+  for (const n of names){
+    if (rec[n] !== undefined && rec[n] !== null && String(rec[n]).trim() !== '') return rec[n];
+  }
+  return '';
+}
+
 function csvToPubs(csvText){
   const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
 
@@ -1171,23 +1416,34 @@ function csvToPubs(csvText){
     const lng = parseFloat(r['Longitude']);
     const id = String(r['Pub ID']).trim() || (String(r['Pub Name']).trim().toLowerCase().replace(/\W+/g,'-'));
 
+    // opening/closing if present
+    const openingTime = getField(r, 'Opening Time', 'Opening', 'Open', 'Opens');
+    const closingTime = getField(r, 'Closing Time', 'Closing', 'Close', 'Closes');
+
     const spots = [];
+    function profileCols(letter){
+      // Support up to 6 profile points: "Spot A Profile 1" .. "Spot A Profile 6"
+      const arr = [];
+      for (let i=1;i<=6;i++){
+        const v = r[`Spot ${letter} Profile ${i}`];
+        if (v !== undefined && String(v).trim() !== '') arr.push(v);
+      }
+      return arr;
+    }
+
     function addSpot(letter){
       const type = String(r[`Spot ${letter} Type`] || '').trim();
       const detail = String(r[`Spot ${letter} Detail`] || '').trim();
       const sunIn = r[`Spot ${letter} Sun In`];
       const sunOut = r[`Spot ${letter} Sun Out`];
-
       if (!type && !detail) return;
       if (!sunIn || !sunOut) return;
 
       const name = detail ? `${type} — ${detail}` : type;
-      const cal = buildCalForSpot(lat, lng, sunIn, sunOut);
-
-      if (cal && cal.valid){
-        spots.push({ name, type, detail, cal });
-      }
+      const cal = buildCalForSpot(lat, lng, sunIn, sunOut, profileCols(letter));
+      if (cal && cal.valid) spots.push({ name, type, detail, cal });
     }
+
     addSpot('A'); addSpot('B'); addSpot('C');
 
     return {
@@ -1195,6 +1451,8 @@ function csvToPubs(csvText){
       name: String(r['Pub Name']||'').trim(),
       area: String(r['Address']||'').trim(),
       lat, lng,
+      openingTime: String(openingTime||'').trim(),
+      closingTime: String(closingTime||'').trim(),
       spots
     };
   })
@@ -1204,8 +1462,10 @@ function csvToPubs(csvText){
 
 // ---------- Boot ----------
 async function boot(){
+  // initial UI state
   setView(viewMode);
-  el.nearBtnText.textContent = 'Near me';
+  setDayMode(dayMode);
+  setFavOnly(favOnly);
 
   try{
     const csvText = await loadCsvText();
@@ -1215,7 +1475,7 @@ async function boot(){
 
     render();
     setInterval(() => render(), 60 * 1000);
-  } catch (e){
+  } catch {
     el.plan.innerHTML = `
       <div class="bigCard bad">
         <div class="bigTitle">Data load failed</div>
