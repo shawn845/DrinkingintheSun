@@ -16,12 +16,22 @@
     <div class="topbar">
       <button id="nearBtn" class="btn"><span id="nearBtnText">Near me</span></button>
       <button id="louBtn" class="btn lou"><span id="louBtnText">Lou Reed</span></button>
+      <button id="favToggleBtn" class="btn"><span id="favToggleText">Favourites</span></button>
       <button id="viewToggleBtn" class="btn"><span id="viewToggleText">Map</span></button>
     </div>
 
     <div class="status">
-      <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
-      <div id="statusHint" class="statusHint"></div>
+      <div class="statusRow">
+        <div>
+          <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
+          <div id="statusHint" class="statusHint"></div>
+        </div>
+
+        <div class="seg small">
+          <button id="dayTodayBtn" class="segBtn active" type="button">Today</button>
+          <button id="dayTomorrowBtn" class="segBtn" type="button">Tomorrow</button>
+        </div>
+      </div>
 
       <!-- Appears when no sun in next 2 hours -->
       <div id="nextSunCard" class="nextSunCard" style="display:none">
@@ -73,6 +83,11 @@
         </label>
 
         <button id="louBuild" class="btn primary" type="button">Build plan</button>
+      </div>
+
+      <div class="overlayActions">
+        <button id="louShare" class="smallBtn" type="button" disabled>Share</button>
+        <button id="louCopy" class="smallBtn" type="button" disabled>Copy</button>
       </div>
 
       <div id="louOut" class="overlayOut"></div>
