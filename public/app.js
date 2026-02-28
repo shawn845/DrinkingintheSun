@@ -239,7 +239,7 @@ const WEATHER_TTL_MS = 30 * 60 * 1000;
 const weatherCache = new Map(); // key -> { t, data }
 
 function weatherKey(lat,lng){
-  return `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
 async function fetchWeather(lat, lng){
   const url =
