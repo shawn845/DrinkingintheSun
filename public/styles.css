@@ -32,10 +32,7 @@ body{
   padding:10px;
 }
 
-.topbar{
-  display:flex;
-  gap:10px;
-}
+.topbar{ display:flex; gap:10px; }
 
 .btn{
   flex:1;
@@ -47,6 +44,20 @@ body{
   font-size:16px;
 }
 
+.btn.primary{
+  border-color:#cfe0ff;
+  background:#eef4ff;
+  color:var(--next);
+  font-weight:800;
+}
+
+.btn.lou{
+  border-color:#e9e1ff;
+  background:#f6f3ff;
+  color:#4b2fb9;
+  font-weight:800;
+}
+
 .status{
   background:var(--panel);
   border:1px solid var(--line);
@@ -56,10 +67,7 @@ body{
 .statusLine{ color:var(--text-strong); font-weight:600; }
 .statusHint{ color:var(--muted); font-size:12px; margin-top:4px; }
 
-.panel{
-  background:transparent;
-  overflow:auto;
-}
+.panel{ background:transparent; overflow:auto; }
 
 .sectionTitle{
   margin:10px 0 6px;
@@ -83,7 +91,6 @@ body{
   gap:10px;
   align-items:flex-start;
 }
-
 .bigTitle{ font-size:16px; font-weight:800; color:var(--text-strong); }
 .bigSub{ font-size:12px; color:var(--muted); margin-top:2px; }
 
@@ -109,11 +116,7 @@ body{
   color:var(--text-strong);
 }
 
-.mini{
-  color:var(--muted);
-  font-size:12px;
-  margin-top:6px;
-}
+.mini{ color:var(--muted); font-size:12px; margin-top:6px; }
 
 .actions, .cardActions{
   display:flex;
@@ -173,4 +176,107 @@ body{
   border-radius:14px;
   border:1px solid var(--line);
   overflow:hidden;
+}
+
+/* Overlay */
+.overlay{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+}
+.overlayBackdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.25);
+}
+.overlayCard{
+  position:relative;
+  z-index:2;
+  margin:10px;
+  max-width:720px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:12px;
+}
+@media (min-width: 820px){
+  .overlayCard{ margin:24px auto; }
+}
+.overlayTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.overlayTitle{
+  font-size:18px;
+  font-weight:900;
+  color:var(--text-strong);
+}
+.overlaySub{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:4px;
+}
+.iconBtn{
+  border:1px solid var(--line);
+  background:var(--btn);
+  color:var(--text-strong);
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  font-size:18px;
+  line-height:1;
+}
+
+.overlayControls{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+  align-items:end;
+}
+.seg{
+  grid-column: 1 / span 2;
+  display:flex;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:hidden;
+}
+.segBtn{
+  flex:1;
+  padding:10px 12px;
+  border:0;
+  background:var(--btn);
+  color:var(--text-strong);
+  font-weight:800;
+}
+.segBtn.active{
+  background:#eef4ff;
+  color:var(--next);
+}
+.field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:12px;
+  color:var(--muted);
+}
+.field input, .field select{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px 12px;
+  font-size:14px;
+  background:var(--btn);
+  color:var(--text-strong);
+}
+.overlayOut{
+  margin-top:12px;
+  max-height:55vh;
+  overflow:auto;
+}
+.overlayHint{
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
 }
