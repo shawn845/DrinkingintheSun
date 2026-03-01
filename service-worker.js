@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v15';
+const CACHE_VERSION = 'v16';
 const CACHE_NAME = `drinking-in-the-sun-${CACHE_VERSION}`;
 const RUNTIME = `drinking-in-the-sun-runtime-${CACHE_VERSION}`;
 
@@ -40,6 +40,21 @@ self.addEventListener('fetch', (event) => {
         return fresh;
       } catch {
         return (await caches.match(req)) || (await caches.match('./index.html'));
+      }
+    })());
+    return;
+  }
+
+  // Network-first for CSV data
+  if (url.origin === self.location.origin && url.pathname.endsWith('/public/data/DrinkingintheSunData.csv')) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(req, { cache: 'no-store' });
+        const c = await caches.open(RUNTIME);
+        c.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        return (await caches.match(req)) || new Response('', { status: 503 });
       }
     })());
     return;
