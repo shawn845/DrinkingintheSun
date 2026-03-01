@@ -1,11 +1,6 @@
 /* Drinking in the Sun — LIVE (next 2 hours)
-   Model A + Lou Reed + favourites + opening hours + profile points + caching
-   Best practical weather accuracy:
-   - "Sunny now" is NOT blocked by cloud-cover forecasts (too many false negatives)
-   - Only blocked when rain is likely (precip prob) or precip is detected
-   - Optional RainViewer radar overlay on the map (visual nowcast)
-
-   CSV: ./public/data/DrinkingintheSunData.csv
+   Uses sun geometry for sun windows, and Open-Meteo for weather display.
+   Badge/icons now come from weather codes (not "Sunny now" text).
 */
 
 const NOTTINGHAM_CENTER = { lat: 52.9548, lng: -1.1581 };
@@ -38,7 +33,6 @@ const el = {
 
   statusLine: document.getElementById('statusLine'),
   statusHint: document.getElementById('statusHint'),
-  wxHint: document.getElementById('wxHint'),
 
   listPanel: document.getElementById('listPanel'),
   mapPanel: document.getElementById('mapPanel'),
@@ -48,9 +42,6 @@ const el = {
   nextSunCard: document.getElementById('nextSunCard'),
   nextSunText: document.getElementById('nextSunText'),
   nextSunRefresh: document.getElementById('nextSunRefresh'),
-
-  radarToggleBtn: document.getElementById('radarToggleBtn'),
-  radarTime: document.getElementById('radarTime'),
 
   louOverlay: document.getElementById('louOverlay'),
   louBackdrop: document.getElementById('louBackdrop'),
@@ -90,20 +81,12 @@ let PUBS = [];
 let nextSunCache = { t: 0, msg: 'Checking forecast…' };
 const NEXTSUN_TTL_MS = 60 * 60 * 1000;
 
-// Windows cache: key -> windows[]
-const windowsCache = new Map(); // key = pubId|spotName|YYYY-MM-DD|profileHash
+// Windows cache
+const windowsCache = new Map();
 
 // Weather cache
 const WEATHER_TTL_MS = 30 * 60 * 1000;
-const weatherCache = new Map(); // key -> {t,data}
-
-// Radar state (RainViewer)
-let radarOn = loadBool('ditS_radarOn', false);
-let radarLayer = null;
-let radarFrames = [];
-let radarFrameIdx = 0;
-let radarTimer = null;
-let radarMeta = null; // {host, frames[]}
+const weatherCache = new Map();
 
 // ---------- Helpers ----------
 function pad2(n){ return String(n).padStart(2,'0'); }
@@ -225,7 +208,6 @@ function toggleFav(pubId){
 function requestLocation(){
   if (!navigator.geolocation) return;
   el.nearBtnText.textContent = 'Locating…';
-
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -287,7 +269,7 @@ function unwrapAz(az, a){
   return z;
 }
 
-// ---------- Optional edge profile points ----------
+// ---------- Optional profile hash ----------
 function profileHash(points){
   if (!points || !points.length) return 'none';
   return points.map(p => `${p.az.toFixed(2)}:${p.alt.toFixed(2)}`).join('|');
@@ -443,32 +425,6 @@ function nearestHourlyIndex(times, targetDate){
   }
   return bestI;
 }
-
-/* Best-practical gating:
-   - "bad" only when rain is likely
-   - cloud cover never blocks "sunny now" (only affects label)
-*/
-function weatherLikelihood(cloud, rainProb, precipNow){
-  if ((typeof precipNow === 'number' && precipNow > 0) || (typeof rainProb === 'number' && rainProb >= 55)) return 'bad';
-  if (typeof cloud === 'number' && cloud >= 80) return 'mixed';
-  if (typeof cloud === 'number' && cloud >= 55) return 'mixed';
-  return 'good';
-}
-
-function formatWeatherShort(w, i){
-  const temp = w.hourly.temperature_2m[i];
-  const cloud = w.hourly.cloud_cover[i];
-  const rain = w.hourly.precipitation_probability[i];
-  const wind = w.hourly.wind_speed_10m[i];
-
-  // Do NOT label as "Sun unlikely" purely from cloud; reserve that for rain
-  const like = weatherLikelihood(cloud, rain, null);
-  const icon = like === 'good' ? '☀️' : like === 'mixed' ? '⛅' : '☁️';
-  const label = like === 'good' ? 'Likely sun' : like === 'mixed' ? 'Mixed' : 'Rain likely';
-
-  return `${icon} ${label} • ${Math.round(temp)}°C • Cloud ${Math.round(cloud)}% • Rain ${Math.round(rain)}% • Wind ${Math.round(wind)} mph`;
-}
-
 async function runWithConcurrency(items, limit, fn){
   const out = [];
   let i = 0;
@@ -482,7 +438,31 @@ async function runWithConcurrency(items, limit, fn){
   return out;
 }
 
-// ---------- Next sun in Nottingham (daily forecast) ----------
+// Weather code -> icon
+function wxIconFromCode(code, rainProb, precipNow){
+  // Prefer rain if detected/likely
+  if ((typeof precipNow === 'number' && precipNow > 0) || (typeof rainProb === 'number' && rainProb >= 60)) return '🌧';
+
+  // WMO codes (Open-Meteo)
+  if (code === 0) return '☀️';
+  if (code === 1) return '🌤';
+  if (code === 2) return '⛅';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫';
+  if ([51,53,55,56,57].includes(code)) return '🌦';
+  if ([61,63,65,66,67,80,81,82].includes(code)) return '🌧';
+  if ([71,73,75,77,85,86].includes(code)) return '🌨';
+  if ([95,96,99].includes(code)) return '⛈';
+  return '⛅';
+}
+
+function sunLineForEffective(effective, now){
+  if (effective.kind === 'sunny-now') return `Sun now • until ${fmtHM(effective.end)} (${minsBetween(now, effective.end)} min)`;
+  if (effective.kind === 'next-sun') return `Next sun • ${fmtHM(effective.start)}–${fmtHM(effective.end)} (in ${minsBetween(now, effective.start)} min)`;
+  return `No direct sun predicted`;
+}
+
+// ---------- Next sun in Nottingham ----------
 async function fetchNextSunDaily(){
   const lat = NOTTINGHAM_CENTER.lat;
   const lng = NOTTINGHAM_CENTER.lng;
@@ -551,23 +531,16 @@ function initMapOnce(){
   if (!window.L) return;
 
   map = L.map('map', { zoomControl:true }).setView([NOTTINGHAM_CENTER.lat, NOTTINGHAM_CENTER.lng], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
   PUBS.forEach(pub => {
     const m = L.marker([pub.lat, pub.lng]).addTo(map);
     markers.set(pub.id, m);
   });
-
-  // Radar toggle
-  el.radarToggleBtn?.addEventListener('click', () => {
-    radarOn = !radarOn;
-    saveBool('ditS_radarOn', radarOn);
-    updateRadarUI();
-  });
-
-  updateRadarUI();
 }
-
 function openPubOnMap(pub){
   initMapOnce();
   const m = markers.get(pub.id);
@@ -581,89 +554,7 @@ function directionsUrl(pub){
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pub.lat + ',' + pub.lng)}`;
 }
 
-// ---------- Radar (RainViewer) ----------
-async function loadRadarMeta(){
-  const res = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache:'no-store' });
-  if (!res.ok) throw new Error('radar meta fetch failed');
-  const data = await res.json();
-  // prefer radar past+nowcast frames
-  const host = data.host;
-  const radar = data.radar || {};
-  const frames = []
-    .concat(radar.past || [])
-    .concat(radar.nowcast || []);
-  // keep last ~12 frames
-  const use = frames.slice(-12);
-  return { host, frames: use };
-}
-
-function formatRadarTime(ts){
-  const d = new Date(ts * 1000);
-  return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
-}
-
-function radarTileUrl(host, path){
-  // standard tile endpoint
-  return `${host}${path}/256/{z}/{x}/{y}/2/1_1.png`;
-}
-
-async function ensureRadar(){
-  if (radarMeta && radarMeta.frames?.length) return radarMeta;
-  radarMeta = await loadRadarMeta();
-  return radarMeta;
-}
-
-async function updateRadarUI(){
-  if (!map) return;
-
-  if (!radarOn){
-    el.radarToggleBtn.textContent = 'Radar: Off';
-    el.radarTime.textContent = '';
-    if (radarLayer){ map.removeLayer(radarLayer); radarLayer = null; }
-    if (radarTimer){ clearInterval(radarTimer); radarTimer = null; }
-    return;
-  }
-
-  el.radarToggleBtn.textContent = 'Radar: On';
-
-  try{
-    const meta = await ensureRadar();
-    radarFrames = meta.frames || [];
-    if (!radarFrames.length) throw new Error('no radar frames');
-
-    radarFrameIdx = radarFrames.length - 1;
-
-    const showFrame = (idx) => {
-      const fr = radarFrames[idx];
-      const url = radarTileUrl(meta.host, fr.path);
-      if (radarLayer) map.removeLayer(radarLayer);
-      radarLayer = L.tileLayer(url, { opacity: 0.55, zIndex: 500 }).addTo(map);
-      el.radarTime.textContent = `Radar ${formatRadarTime(fr.time)}`;
-    };
-
-    showFrame(radarFrameIdx);
-
-    if (radarTimer) clearInterval(radarTimer);
-    radarTimer = setInterval(() => {
-      radarFrameIdx = (radarFrameIdx + 1) % radarFrames.length;
-      showFrame(radarFrameIdx);
-    }, 1200);
-
-  } catch {
-    el.radarTime.textContent = 'Radar unavailable';
-  }
-}
-
-// ---------- “where to sit” helper ----------
-function sunLineForEffective(effective, now){
-  if (effective.kind === 'sunny-now') return `Sun now • until ${fmtHM(effective.end)} (${minsBetween(now, effective.end)} min)`;
-  if (effective.kind === 'next-sun') return `Next sun • ${fmtHM(effective.start)}–${fmtHM(effective.end)} (in ${minsBetween(now, effective.start)} min)`;
-  if (effective.kind === 'bad-next') return `Sun angle soon • rain likely`;
-  if (effective.kind === 'bad-now') return `Sun angle ok • rain likely`;
-  return `No direct sun predicted`;
-}
-
-// ---------- Inclusion filter ----------
+// ---------- Filters ----------
 function shouldIncludePub(pub, now){
   const st = isOpenAt(pub, now);
   if (st.known && !st.open) return false;
@@ -687,10 +578,8 @@ function pickBest(rows, now){
 
     return a.walkMin - b.walkMin;
   });
-
   return candidates[0];
 }
-
 function pickNextAfter(rows, pivotTime, excludeId, horizonStart, horizonEnd){
   const t = addMinutes(pivotTime, SWITCH_GAP_MIN);
   if (t > horizonEnd) return null;
@@ -739,10 +628,8 @@ async function render(){
   el.statusLine.textContent = userLoc ? 'Using your location' : 'Tap Near me for walking times.';
   el.statusHint.textContent = `Updated ${fmtHM(now)} • Horizon: next ${HORIZON_MIN} min`;
 
-  // Filter pubs early (open + favourites)
   const pubsFiltered = PUBS.filter(p => shouldIncludePub(p, now));
 
-  // Fetch weather only for filtered pubs (speed)
   const wxData = await runWithConcurrency(pubsFiltered, 4, async (p) => {
     try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
     catch { return { id: p.id, data: null }; }
@@ -750,95 +637,47 @@ async function render(){
   if (token !== lastRenderToken) return;
   const wxById = new Map(wxData.map(x => [x.id, x.data]));
 
-  // helper: weather info at time
   function weatherInfoFor(pub, time){
     const data = wxById.get(pub.id);
     if (!data) return null;
 
-    // Always use current for "now" if present
+    // Prefer current for "now"
     if (Math.abs(time.getTime() - Date.now()) < 90 * 60 * 1000 && data.current){
-      const cloud = data.current.cloud_cover;
-      const rainProb = data.current.precipitation_probability;
-      const precipNow = data.current.precipitation;
-      const like = weatherLikelihood(cloud, rainProb, precipNow);
-      const i = nearestHourlyIndex(data.hourly.time, time);
-      return { data, i, like, cloud, rainProb, precipNow };
+      const icon = wxIconFromCode(data.current.weather_code, data.current.precipitation_probability, data.current.precipitation);
+      return { data, icon };
     }
 
     const i = nearestHourlyIndex(data.hourly.time, time);
-    const cloud = data.hourly.cloud_cover[i];
-    const rainProb = data.hourly.precipitation_probability[i];
-    const like = weatherLikelihood(cloud, rainProb, null);
-    return { data, i, like, cloud, rainProb, precipNow:null };
+    const icon = wxIconFromCode(data.hourly.weather_code[i], data.hourly.precipitation_probability[i], null);
+    return { data, icon };
   }
 
-  // Show a compact weather hint for Nottingham centre (debug-friendly, user-facing)
-  try{
-    const w = await getWeather(NOTTINGHAM_CENTER.lat, NOTTINGHAM_CENTER.lng);
-    if (w?.current){
-      const cloud = w.current.cloud_cover;
-      const rainProb = w.current.precipitation_probability;
-      const precip = w.current.precipitation;
-      const like = weatherLikelihood(cloud, rainProb, precip);
-      const label = like === 'bad' ? 'Rain likely' : (like === 'mixed' ? 'Mixed' : 'Likely sun');
-      el.wxHint.style.display = '';
-      el.wxHint.textContent = `Nowcast: ${label} • Cloud ${Math.round(cloud)}% • Rain ${Math.round(rainProb)}%`;
-    } else {
-      el.wxHint.style.display = 'none';
-    }
-  } catch {
-    el.wxHint.style.display = 'none';
-  }
-
-  // Compute rows
   let rows = pubsFiltered.map(pub => {
     const distKm = haversineKm(baseLoc, { lat: pub.lat, lng: pub.lng });
     const walkMin = walkMinutesFromKm(distKm);
     const sun = sunStatusForPub(pub, now, horizonStart, horizonEnd);
-    return { pub, distKm, walkMin, sun, effective: { ...sun }, weatherNow: null, weatherAtStart: null };
+    return { pub, distKm, walkMin, sun, effective: { ...sun }, wxNow: null, wxAtStart: null };
   });
 
-  // Weather gating: only rain blocks "Sunny now"
   rows = rows.map(r => {
-    const wNow = weatherInfoFor(r.pub, now);
-    r.weatherNow = wNow;
-
-    let effective = { ...r.sun };
-
-    // If sun says "sunny-now" but rain likely -> downgrade
-    if (r.sun.kind === 'sunny-now') {
-      if (wNow && wNow.like === 'bad') {
-        effective = { kind:'bad-now', spot: r.sun.spot, start: r.sun.start, end: r.sun.end };
-      }
-    }
-    // If next-sun but rain likely at start -> mark bad-next
-    if (r.sun.kind === 'next-sun') {
-      const wStart = weatherInfoFor(r.pub, r.sun.start);
-      r.weatherAtStart = wStart;
-      if (wStart && wStart.like === 'bad') {
-        effective = { kind:'bad-next', spot: r.sun.spot, start: r.sun.start, end: r.sun.end };
-      }
-    }
-
-    r.effective = effective;
+    r.wxNow = weatherInfoFor(r.pub, now);
+    if (r.sun.kind === 'next-sun') r.wxAtStart = weatherInfoFor(r.pub, r.sun.start);
+    r.effective = { ...r.sun };
     return r;
   });
 
   function rankKind(k){
     if (k === 'sunny-now') return 0;
     if (k === 'next-sun') return 1;
-    if (k === 'bad-next') return 2;
-    if (k === 'bad-now') return 3;
     return 9;
   }
-
   rows.sort((a,b) => {
     const ra = rankKind(a.effective.kind);
     const rb = rankKind(b.effective.kind);
     if (ra !== rb) return ra - rb;
 
-    const ta = (a.effective.kind === 'next-sun' || a.effective.kind === 'bad-next') ? (a.effective.start - now) : 0;
-    const tb = (b.effective.kind === 'next-sun' || b.effective.kind === 'bad-next') ? (b.effective.start - now) : 0;
+    const ta = (a.effective.kind === 'next-sun') ? (a.effective.start - now) : 0;
+    const tb = (b.effective.kind === 'next-sun') ? (b.effective.start - now) : 0;
     if (ta !== tb) return ta - tb;
 
     return a.walkMin - b.walkMin;
@@ -846,7 +685,6 @@ async function render(){
 
   const best1 = pickBest(rows, now);
 
-  // Next-sun card only when there is NO sun in horizon
   const hasAnySunInHorizon = rows.some(r => (r.effective.kind === 'sunny-now' || r.effective.kind === 'next-sun'));
   if (!hasAnySunInHorizon){
     el.nextSunCard.style.display = '';
@@ -856,9 +694,7 @@ async function render(){
   }
 
   const pivot = best1
-    ? (best1.effective.kind === 'sunny-now' || best1.effective.kind === 'bad-now')
-      ? best1.effective.end
-      : best1.effective.start
+    ? (best1.effective.kind === 'sunny-now' ? best1.effective.end : best1.effective.start)
     : null;
 
   const best2Raw = (best1 && pivot)
@@ -866,22 +702,8 @@ async function render(){
     : null;
 
   let best2 = null;
-  if (best2Raw) {
-    const t2 = best2Raw.pivotNow;
-    const sun2 = best2Raw.pivotSun;
-    let eff2 = { ...sun2 };
-    const w2Now = weatherInfoFor(best2Raw.pub, t2);
-    if (sun2.kind === 'sunny-now' && w2Now && w2Now.like === 'bad') {
-      eff2 = { kind:'bad-now', spot: sun2.spot, start: sun2.start, end: sun2.end };
-    }
-    if (sun2.kind === 'next-sun') {
-      const w2Start = weatherInfoFor(best2Raw.pub, sun2.start);
-      if (w2Start && w2Start.like === 'bad') eff2 = { kind:'bad-next', spot: sun2.spot, start: sun2.start, end: sun2.end };
-    }
-    best2 = { ...best2Raw, effective: eff2, sun: sun2 };
-  }
+  if (best2Raw) best2 = best2Raw;
 
-  // --- Plan UI ---
   el.plan.innerHTML = `<div class="sectionTitle">Suggested plan</div>`;
   if (!best1) {
     el.plan.insertAdjacentHTML('beforeend', `
@@ -891,73 +713,42 @@ async function render(){
       </div>
     `);
   } else {
-    el.plan.appendChild(buildPlanCard(best1, 1, now, weatherInfoFor));
-    if (best2) el.plan.appendChild(buildPlanCard(best2, 2, now, weatherInfoFor, best1));
+    el.plan.appendChild(buildPlanCard(best1, 1, now));
+    if (best2) el.plan.appendChild(buildPlanCard(best2, 2, now, best1));
   }
 
-  // --- List (five) ---
   const exclude = new Set([best1?.pub?.id, best2?.pub?.id].filter(Boolean));
   const list = rows
     .filter(r => !exclude.has(r.pub.id))
     .filter(r => r.effective.kind !== 'no-sun')
-    .filter(r => r.effective.kind !== 'bad-now') // don't show "sunny now" if rain likely
     .slice(0, 5);
 
   el.results.innerHTML = '';
   if (!list.length) {
-    el.results.innerHTML = `<div class="mini">No likely sun options found nearby in the next ${HORIZON_MIN} minutes.</div>`;
+    el.results.innerHTML = `<div class="mini">No sun options found nearby in the next ${HORIZON_MIN} minutes.</div>`;
   } else {
     list.forEach(r => el.results.appendChild(buildListCard(r, now)));
   }
 }
 
-function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
-  const { pub, walkMin, effective } = row;
+function buildPlanCard(row, number, now, prevRow = null){
+  const { pub, walkMin, effective, wxNow, wxAtStart } = row;
 
   const fav = isFav(pub.id);
   const openTxt = openLine(pub, now);
+  const wxIcon = (effective.kind === 'next-sun' ? (wxAtStart?.icon || '⛅') : (wxNow?.icon || '⛅'));
 
-  let pillClass = 'bad';
-  let pillText = '—';
-  let headline = number === 1 ? '1. Sunny now' : '2. Next best';
+  let headline = number === 1 ? '1. Best now' : '2. Next best';
   let timeLine = '';
   let rightLine = '';
-  let weatherLine = 'Weather: unavailable';
 
   if (effective.kind === 'sunny-now') {
-    pillClass = 'sun';
-    pillText = 'Sunny now';
-    headline = number === 1 ? '1. Sunny now' : `2. Sunny`;
     timeLine = `${fmtHM(now)}–${fmtHM(effective.end)}`;
     rightLine = `Shade in ${minsBetween(now, effective.end)} min`;
-    const w = weatherInfoFor(pub, now);
-    if (w?.data) weatherLine = `Weather: ${formatWeatherShort(w.data, w.i)}`;
   } else if (effective.kind === 'next-sun') {
-    pillClass = 'next';
-    pillText = 'Next sun';
-    headline = number === 1 ? '1. Next sun' : '2. Next best';
     timeLine = `${fmtHM(effective.start)}–${fmtHM(effective.end)}`;
     rightLine = `Starts in ${minsBetween(now, effective.start)} min`;
-    const w = weatherInfoFor(pub, effective.start);
-    if (w?.data) weatherLine = `Weather: ${formatWeatherShort(w.data, w.i)}`;
-  } else if (effective.kind === 'bad-next') {
-    pillClass = 'bad';
-    pillText = 'Rain';
-    headline = number === 1 ? '1. Next sun (rain likely)' : '2. Next best (rain likely)';
-    timeLine = `${fmtHM(effective.start)}–${fmtHM(effective.end)}`;
-    rightLine = `Starts in ${minsBetween(now, effective.start)} min`;
-    const w = weatherInfoFor(pub, effective.start);
-    if (w?.data) weatherLine = `Weather: ${formatWeatherShort(w.data, w.i)}`;
-  } else if (effective.kind === 'bad-now') {
-    pillClass = 'bad';
-    pillText = 'Rain';
-    headline = number === 1 ? '1. Not sunny now' : '2. Not sunny';
-    timeLine = `${fmtHM(now)}–${fmtHM(effective.end)}`;
-    rightLine = `Rain likely now`;
-    const w = weatherInfoFor(pub, now);
-    if (w?.data) weatherLine = `Weather: ${formatWeatherShort(w.data, w.i)}`;
   } else {
-    headline = number === 1 ? '1. No sun' : '2. No sun';
     timeLine = `Next ${HORIZON_MIN} min`;
     rightLine = `No direct sun predicted`;
   }
@@ -966,7 +757,7 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
   const sunLine = sunLineForEffective(effective, now);
 
   let leaveHint = '';
-  if (prevRow && number === 2 && (effective.kind === 'next-sun' || effective.kind === 'bad-next')) {
+  if (prevRow && number === 2 && (effective.kind === 'next-sun')) {
     const leave = addMinutes(effective.start, -(walkMin + 2));
     leaveHint = `Leave ~ ${fmtHM(leave)} to arrive for the start.`;
   }
@@ -982,7 +773,7 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
       </div>
       <div style="display:flex; gap:8px; align-items:flex-start;">
         <button class="starBtn ${fav ? 'on':''}" type="button" data-star="${escapeHtml(pub.id)}">${fav ? '★' : '☆'}</button>
-        <div class="pill ${pillClass}">${escapeHtml(pillText)}</div>
+        <span class="badge wx">${escapeHtml(wxIcon)}</span>
       </div>
     </div>
 
@@ -991,7 +782,6 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
       <div class="mini">${escapeHtml(spotLine)}</div>
       <div class="mini">${escapeHtml(sunLine)}</div>
       ${openTxt ? `<div class="mini">${escapeHtml(openTxt)}</div>` : ``}
-      <div class="mini">${escapeHtml(weatherLine)}</div>
       ${leaveHint ? `<div class="mini">${escapeHtml(leaveHint)}</div>` : ``}
 
       <div class="actions">
@@ -1002,32 +792,21 @@ function buildPlanCard(row, number, now, weatherInfoFor, prevRow = null){
   `;
 
   card.querySelector('[data-star]')?.addEventListener('click', (e) => { e.stopPropagation(); toggleFav(pub.id); });
-
   card.querySelector('[data-act="directions"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    window.open(directionsUrl(pub), '_blank', 'noopener');
+    e.stopPropagation(); window.open(directionsUrl(pub), '_blank', 'noopener');
   });
   card.querySelector('[data-act="map"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    setView('map');
-    initMapOnce();
-    openPubOnMap(pub);
+    e.stopPropagation(); setView('map'); initMapOnce(); openPubOnMap(pub);
   });
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
-
   return card;
 }
 
 function buildListCard(row, now){
-  const { pub, walkMin, effective } = row;
+  const { pub, walkMin, effective, wxNow, wxAtStart } = row;
   const fav = isFav(pub.id);
   const openTxt = openLine(pub, now);
-
-  let badgeClass = 'bad';
-  let badgeText = '—';
-  if (effective.kind === 'sunny-now') { badgeClass='sun'; badgeText='Sunny now'; }
-  else if (effective.kind === 'next-sun') { badgeClass='next'; badgeText='Next sun'; }
-  else if (effective.kind === 'bad-next') { badgeClass='bad'; badgeText='Rain'; }
+  const wxIcon = (effective.kind === 'next-sun' ? (wxAtStart?.icon || '⛅') : (wxNow?.icon || '⛅'));
 
   const sunLine = sunLineForEffective(effective, now);
   const spotLine = effective.spot?.name ? `Sit: ${effective.spot.name}` : `Sit: —`;
@@ -1044,7 +823,7 @@ function buildListCard(row, now){
 
       <div style="display:flex; gap:8px; align-items:flex-start;">
         <button class="starBtn ${fav ? 'on':''}" type="button" data-star="${escapeHtml(pub.id)}">${fav ? '★' : '☆'}</button>
-        <span class="badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+        <span class="badge wx">${escapeHtml(wxIcon)}</span>
       </div>
     </div>
 
@@ -1061,18 +840,12 @@ function buildListCard(row, now){
   `;
 
   card.querySelector('[data-star]')?.addEventListener('click', (e) => { e.stopPropagation(); toggleFav(pub.id); });
-
   card.querySelector('[data-act="directions"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    window.open(directionsUrl(pub), '_blank', 'noopener');
+    e.stopPropagation(); window.open(directionsUrl(pub), '_blank', 'noopener');
   });
   card.querySelector('[data-act="map"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    setView('map');
-    initMapOnce();
-    openPubOnMap(pub);
+    e.stopPropagation(); setView('map'); initMapOnce(); openPubOnMap(pub);
   });
-
   card.addEventListener('click', () => window.open(directionsUrl(pub), '_blank', 'noopener'));
   return card;
 }
@@ -1106,7 +879,6 @@ function timeTodayFromHHMM(hhmm){
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0, 0);
 }
-
 function bestSunWindowForPubInRange(pub, arriveTime, endTime){
   const day = new Date(arriveTime.getFullYear(), arriveTime.getMonth(), arriveTime.getDate(), 12, 0, 0, 0);
   let best = null;
@@ -1162,21 +934,6 @@ async function buildPerfectDayPlan(){
 
   const pubsForPlan = PUBS.filter(p => shouldIncludePub(p, startTime));
 
-  const wxData = await runWithConcurrency(pubsForPlan, 4, async (p) => {
-    try { return { id: p.id, data: await getWeather(p.lat, p.lng) }; }
-    catch { return { id: p.id, data: null }; }
-  });
-  const wxById = new Map(wxData.map(x => [x.id, x.data]));
-
-  function rainRisk(pub, time){
-    const data = wxById.get(pub.id);
-    if (!data) return null;
-    const i = nearestHourlyIndex(data.hourly.time, time);
-    return data.hourly.precipitation_probability[i];
-  }
-
-  function maxHopKm(){ return louMode === 'cycle' ? PERFECT_DAY.cycleMaxKm : PERFECT_DAY.walkMaxKm; }
-
   const out = [];
 
   for (let i=0; i<stopCount; i++){
@@ -1189,7 +946,7 @@ async function buildPerfectDayPlan(){
         const travelMin = louMode === 'cycle' ? cycleMinutesFromKm(km) : walkMinutesFromKm(km);
         return { pub: p, km, travelMin };
       })
-      .filter(x => x.km <= maxHopKm())
+      .filter(x => x.km <= (louMode === 'cycle' ? PERFECT_DAY.cycleMaxKm : PERFECT_DAY.walkMaxKm))
       .slice(0, 70);
 
     let bestPick = null;
@@ -1205,20 +962,16 @@ async function buildPerfectDayPlan(){
       if (!win) continue;
       if (win.waitMin > PERFECT_DAY.maxWaitMin) continue;
 
-      const rainP = rainRisk(c.pub, win.start);
-      const weatherPenalty = (typeof rainP === 'number' && rainP >= 55) ? 35 : (typeof rainP === 'number' && rainP >= 40 ? 10 : 0);
-
       const wideBonus = (louMode === 'cycle') ? cycleWideBonus(c.pub) : 0;
 
       const score =
         (win.waitMin * 3) +
-        (c.travelMin * 1.5) +
-        weatherPenalty -
+        (c.travelMin * 1.5) -
         (win.durMin * 2) -
         wideBonus;
 
       if (!bestPick || score < bestPick.score){
-        bestPick = { ...c, win, score, rainP };
+        bestPick = { ...c, win, score };
       }
     }
 
@@ -1239,8 +992,7 @@ async function buildPerfectDayPlan(){
       arrive,
       start,
       leave,
-      spot: bestPick.win.spot,
-      rainP: bestPick.rainP
+      spot: bestPick.win.spot
     });
 
     visited.add(bestPick.pub.id);
@@ -1263,11 +1015,8 @@ async function buildPerfectDayPlan(){
 
   el.louShare.onclick = async () => {
     try{
-      if (navigator.share){
-        await navigator.share({ title:'Perfect Day', text: shareText });
-      } else {
-        await navigator.clipboard.writeText(shareText);
-      }
+      if (navigator.share) await navigator.share({ title:'Perfect Day', text: shareText });
+      else await navigator.clipboard.writeText(shareText);
     } catch {}
   };
 
@@ -1288,10 +1037,6 @@ async function buildPerfectDayPlan(){
       const gmaps = directionsUrl(s.pub);
       const travelLabel = louMode === 'cycle' ? 'cycle' : 'walk';
       const openTxt = openLine(s.pub, s.arrive);
-      const wx = (typeof s.rainP === 'number')
-        ? (s.rainP >= 55 ? '☁️ rain likely' : s.rainP >= 40 ? '⛅ mixed' : '☀️ likely')
-        : '—';
-
       return `
         <div class="card">
           <div class="cardTop">
@@ -1299,7 +1044,6 @@ async function buildPerfectDayPlan(){
               <div class="cardTitle">${idx+1}. ${escapeHtml(s.pub.name)}</div>
               <div class="cardSub">${escapeHtml(fmtHM(s.arrive))} arrive • ${escapeHtml(fmtHM(s.start))} sun • ${escapeHtml(fmtHM(s.leave))} leave</div>
             </div>
-            <span class="badge next">${escapeHtml(wx)}</span>
           </div>
           <div class="mini">Sit: ${escapeHtml(s.spot?.name || '—')}</div>
           ${openTxt ? `<div class="mini">${escapeHtml(openTxt)}</div>` : ``}
@@ -1490,11 +1234,7 @@ async function boot(){
   try{
     const csvText = await loadCsvText();
     PUBS = csvToPubs(csvText);
-
     if (viewMode === 'map') initMapOnce();
-
-    // wire Lou overlay
-    el.louBtn?.addEventListener('click', openLou);
 
     render();
     setInterval(() => render(), 60 * 1000);
