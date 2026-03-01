@@ -13,24 +13,23 @@
 </head>
 <body>
   <div class="app">
+    <header class="brand">
+      <div class="brandTitle">Drinking in the Sun</div>
+      <div class="brandSub">Nottingham</div>
+    </header>
+
     <div class="topbar">
       <button id="nearBtn" class="btn"><span id="nearBtnText">Near me</span></button>
-      <button id="louBtn" class="btn lou"><span id="louBtnText">Lou Reed</span></button>
+      <button id="louBtn" class="btn lou"><span id="louBtnText">Perfect Day</span></button>
       <button id="favToggleBtn" class="btn"><span id="favToggleText">Favourites</span></button>
       <button id="viewToggleBtn" class="btn"><span id="viewToggleText">Map</span></button>
     </div>
 
     <div class="status">
-      <div class="statusRow">
-        <div>
-          <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
-          <div id="statusHint" class="statusHint"></div>
-        </div>
-
-        <div class="seg small">
-          <button id="dayTodayBtn" class="segBtn active" type="button">Today</button>
-          <button id="dayTomorrowBtn" class="segBtn" type="button">Tomorrow</button>
-        </div>
+      <div>
+        <div id="statusLine" class="statusLine">Tap Near me for walking times.</div>
+        <div id="statusHint" class="statusHint"></div>
+        <div id="wxHint" class="statusHint" style="margin-top:6px; display:none;"></div>
       </div>
 
       <!-- Appears when no sun in next 2 hours -->
@@ -48,6 +47,10 @@
     </div>
 
     <div id="mapPanel" class="panel" style="display:none">
+      <div class="mapTopbar">
+        <button id="radarToggleBtn" class="smallBtn" type="button">Radar: Off</button>
+        <div id="radarTime" class="mapMeta"></div>
+      </div>
       <div id="map" class="map"></div>
     </div>
   </div>
