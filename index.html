@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Drinking in the Sun</title>
   <link rel="manifest" href="./manifest.json" />
-  <link rel="stylesheet" href="./public/styles.css" />
+  <link rel="stylesheet" href="./public/styles.css?v=3" />
 
-  <!-- Leaflet (map) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 </head>
@@ -40,12 +39,13 @@
 
     <div id="listPanel" class="panel">
       <div id="plan"></div>
-      <div class="sectionTitle">Next sunny nearby</div>
+      <div class="sectionTitle">Options</div>
       <div id="results"></div>
     </div>
 
     <div id="mapPanel" class="panel" style="display:none">
       <div id="map" class="map"></div>
+      <div id="mapCard" class="mapCard" style="display:none"></div>
     </div>
   </div>
 
@@ -93,13 +93,10 @@
     <div id="louBackdrop" class="overlayBackdrop"></div>
   </div>
 
-  <!-- SunCalc (sun position) -->
   <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
-
-  <!-- Leaflet (map) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <script src="./public/app.js"></script>
+  <script src="./public/app.js?v=3"></script>
 </body>
 </html>
