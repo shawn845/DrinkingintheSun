@@ -409,18 +409,13 @@ button{
   font-size:12px;
 }
 
-/* --- Visible tint accents (sun = warm, no-sun = cool/neutral) --- */
-.cardTint0 { --tint: rgba(0, 0, 0, 0.02); --bar: rgba(0,0,0,0.12); }
+/* --- Visible tint accents --- */
+.cardTint0 { --tint: rgba(0,0,0,0.03); --bar: rgba(0,0,0,0.12); }   /* neutral for no-sun */
 .cardTint1 { --tint: rgba(255, 211, 77, 0.16); --bar: rgba(255, 211, 77, 0.70); }
 .cardTint2 { --tint: rgba(255, 211, 77, 0.24); --bar: rgba(255, 211, 77, 0.82); }
 .cardTint3 { --tint: rgba(255, 211, 77, 0.32); --bar: rgba(255, 211, 77, 0.92); }
 .cardTint4 { --tint: rgba(255, 211, 77, 0.40); --bar: rgba(255, 211, 77, 1.00); }
 
-/* If there's NO sun and the weather is mixed/rain, tint cool */
-.cardTint0.wxMixed{ --tint: rgba(140, 150, 160, 0.10); --bar: rgba(140, 150, 160, 0.45); }
-.cardTint0.wxRain{ --tint: rgba(100, 140, 200, 0.12); --bar: rgba(90, 120, 170, 0.75); }
-
-/* Apply the tint + bar */
 .bigCard, .card{
   background:
     radial-gradient(900px 500px at 18% -10%, var(--tint, rgba(0,0,0,0)) 0%, rgba(255,255,255,0) 60%),
