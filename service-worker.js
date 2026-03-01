@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v16';
+const CACHE_VERSION = 'v17';
 const CACHE_NAME = `drinking-in-the-sun-${CACHE_VERSION}`;
 const RUNTIME = `drinking-in-the-sun-runtime-${CACHE_VERSION}`;
 
