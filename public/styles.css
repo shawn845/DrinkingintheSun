@@ -23,7 +23,7 @@ body{
   color:var(--text);
 }
 
-/* Layout fix */
+/* Layout fix (full-height panels, iOS-safe) */
 .app{
   height:100svh;
   display:flex;
@@ -39,14 +39,33 @@ body{
 #listPanel{ overflow:auto; }
 #mapPanel{ position:relative; overflow:hidden; }
 
-/* Brand */
-.brand{ display:flex; flex-direction:column; gap:2px; padding:4px 2px; }
-.brandTitle{ font-size:18px; font-weight:900; color:var(--text-strong); letter-spacing:-0.02em; }
-.brandSub{ font-size:12px; color:var(--muted); }
+/* Brand header */
+.brand{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:4px 2px;
+}
+.brandTitle{
+  font-size:18px;
+  font-weight:900;
+  color:var(--text-strong);
+  letter-spacing:-0.02em;
+}
+.brandSub{
+  font-size:12px;
+  color:var(--muted);
+}
 
-/* Buttons */
-.topbar{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-@media (min-width: 560px){ .topbar{ grid-template-columns: 1fr 1fr 1fr 1fr; } }
+/* Top buttons */
+.topbar{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+@media (min-width: 560px){
+  .topbar{ grid-template-columns: 1fr 1fr 1fr 1fr; }
+}
 
 .btn{
   border:1px solid var(--line);
@@ -58,8 +77,20 @@ body{
   font-weight:900;
   box-shadow: var(--shadow);
 }
-.btn.primary{ border-color:#cfe0ff; background:#eef4ff; color:var(--next); }
-.btn.lou{ border-color:#e9e1ff; background:#f6f3ff; color:#4b2fb9; }
+
+.btn.primary{
+  border-color:#cfe0ff;
+  background:#eef4ff;
+  color:var(--next);
+  font-weight:900;
+}
+
+.btn.lou{
+  border-color:#e9e1ff;
+  background:#f6f3ff;
+  color:#4b2fb9;
+  font-weight:900;
+}
 
 /* Status */
 .status{
@@ -139,7 +170,11 @@ body{
   font-weight:900;
 }
 .actions .actionBtn{ flex:1; }
-.actionBtn.primary{ border-color:#cfe0ff; background:#eef4ff; color:var(--next); }
+.actionBtn.primary{
+  border-color:#cfe0ff;
+  background:#eef4ff;
+  color:var(--next);
+}
 
 .starBtn{
   border:1px solid var(--line);
@@ -150,8 +185,12 @@ body{
   font-weight:900;
   color:var(--text-strong);
 }
-.starBtn.on{ border-color:#f3e2a0; background:#fff9e6; }
+.starBtn.on{
+  border-color:#f3e2a0;
+  background:#fff9e6;
+}
 
+/* Weather icon badge (flat) */
 .badge.wx{
   border:0;
   background:transparent;
@@ -178,7 +217,10 @@ body{
   letter-spacing:.06em;
   color:var(--muted);
 }
-.nextSunText{ font-size:13px; color:var(--text-strong); }
+.nextSunText{
+  font-size:13px;
+  color:var(--text-strong);
+}
 
 /* Map */
 .map{
@@ -190,7 +232,7 @@ body{
   box-shadow: var(--shadow);
 }
 
-/* Bottom sheet */
+/* Bottom sheet card */
 .mapCard{
   position:absolute;
   left:12px;
@@ -203,9 +245,22 @@ body{
   box-shadow: var(--shadow);
   padding:12px;
 }
-.mapCardTop{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
-.mapCardTitle{ font-weight:900; color:var(--text-strong); font-size:16px; }
-.mapCardSub{ font-size:12px; color:var(--muted); margin-top:2px; }
+.mapCardTop{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+}
+.mapCardTitle{
+  font-weight:900;
+  color:var(--text-strong);
+  font-size:16px;
+}
+.mapCardSub{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:2px;
+}
 .mapCardClose{
   border:1px solid var(--line);
   background:var(--btn);
@@ -217,8 +272,17 @@ body{
   line-height:1;
   font-weight:900;
 }
-.mapCardRow{ margin-top:10px; font-size:12px; color:var(--muted); line-height:1.35; }
-.mapCardActions{ display:flex; gap:8px; margin-top:10px; }
+.mapCardRow{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.35;
+}
+.mapCardActions{
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
 .mapCardActions .smallBtn{ flex:1; }
 
 /* Overlay */
@@ -235,10 +299,25 @@ body{
   padding:12px;
   box-shadow: var(--shadow);
 }
-@media (min-width: 820px){ .overlayCard{ margin:24px auto; } }
-.overlayTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-.overlayTitle{ font-size:18px; font-weight:900; color:var(--text-strong); }
-.overlaySub{ font-size:12px; color:var(--muted); margin-top:4px; }
+@media (min-width: 820px){
+  .overlayCard{ margin:24px auto; }
+}
+.overlayTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.overlayTitle{
+  font-size:18px;
+  font-weight:900;
+  color:var(--text-strong);
+}
+.overlaySub{
+  font-size:12px;
+  color:var(--muted);
+  margin-top:4px;
+}
 .iconBtn{
   border:1px solid var(--line);
   background:var(--btn);
@@ -273,8 +352,17 @@ body{
   color:var(--text-strong);
   font-weight:900;
 }
-.segBtn.active{ background:#eef4ff; color:var(--next); }
-.field{ display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted); }
+.segBtn.active{
+  background:#eef4ff;
+  color:var(--next);
+}
+.field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:12px;
+  color:var(--muted);
+}
 .field input, .field select{
   border:1px solid var(--line);
   border-radius:14px;
@@ -284,12 +372,24 @@ body{
   color:var(--text-strong);
   font-weight:900;
 }
-.overlayActions{ display:flex; gap:8px; margin-top:10px; }
+.overlayActions{
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
 .overlayActions .smallBtn{ flex:1; }
-.overlayOut{ margin-top:12px; max-height:55vh; overflow:auto; }
-.overlayHint{ margin-top:10px; color:var(--muted); font-size:12px; }
+.overlayOut{
+  margin-top:12px;
+  max-height:55vh;
+  overflow:auto;
+}
+.overlayHint{
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+}
 
-/* --- Sun tint + weather mods --- */
+/* --- Sun tint accents --- */
 .cardTint0 { --tint: rgba(255, 211, 77, 0.00); }
 .cardTint1 { --tint: rgba(255, 211, 77, 0.06); }
 .cardTint2 { --tint: rgba(255, 211, 77, 0.10); }
@@ -318,6 +418,11 @@ body{
 .cardTint3::before{ background: rgba(255, 211, 77, 0.55); }
 .cardTint4::before{ background: rgba(255, 211, 77, 0.65); }
 
+/* Weather modifiers */
 .wxMixed{ filter: saturate(0.95); }
-.wxRain{ filter: saturate(0.85); }
-.wxRain::before{ background: rgba(90, 120, 170, 0.55) !important; }
+.wxRain{
+  filter: saturate(0.85);
+}
+.wxRain::before{
+  background: rgba(90, 120, 170, 0.55) !important;
+}
