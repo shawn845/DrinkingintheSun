@@ -148,8 +148,7 @@ body{
   background:var(--btn2);
   white-space:nowrap;
 }
-.pill.sun, .badge.sun{ color:var(--good); border-color:#cfe9d6; background:#eef9f1; }
-.pill.next, .badge.next{ color:var(--next); border-color:#cfe0ff; background:#eef4ff; }
+.badge.wx{ background:#fff; }
 .pill.bad, .badge.bad{ color:var(--bad); border-color:#f0d0cc; background:#fff0ee; }
 
 .rowLine{
@@ -230,17 +229,6 @@ body{
 }
 
 /* Map */
-.mapTopbar{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-}
-.mapMeta{
-  font-size:12px;
-  color:var(--muted);
-}
 .map{
   height:100%;
   min-height:60vh;
