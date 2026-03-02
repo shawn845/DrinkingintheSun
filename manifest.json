@@ -1,8 +1,0 @@
-{
-  "name": "Drinking in the Sun",
-  "short_name": "Sun Pubs",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#f6f6f6",
-  "theme_color": "#f6f6f6"
-}
