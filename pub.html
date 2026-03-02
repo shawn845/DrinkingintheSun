@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Pub info</title>
+  <link rel="stylesheet" href="./public/styles.css" />
+  <style>
+    .page{padding:12px}
+    .hero{border:1px solid var(--line); border-radius:20px; overflow:hidden; box-shadow:var(--shadow); background:#fff}
+    .hero img{width:100%; height:220px; object-fit:cover; display:block; background:#f3f3f4}
+    .heroBody{padding:14px}
+    .backRow{display:flex; gap:10px; align-items:center; margin-bottom:12px}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="backRow">
+      <button class="btn" id="backBtn">Back</button>
+      <div class="pill mono" id="pubIdPill"></div>
+    </div>
+
+    <div class="hero">
+      <img id="photo" alt="" />
+      <div class="heroBody">
+        <div class="title" id="name"></div>
+        <div class="sub" id="addr"></div>
+        <div style="margin-top:10px" class="pill" id="open"></div>
+        <div style="margin-top:12px" class="sub" id="notes"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const CONFIG = { DATA_URL: "./public/data/pubs.csv" };
+
+function parseCSV(text){
+  const rows=[]; let i=0,f="",r=[],q=false;
+  while(i<text.length){
+    const c=text[i];
+    if(c==='"'){ if(q && text[i+1]==='"'){ f+='"'; i+=2; continue; } q=!q; i++; continue; }
+    if(!q && (c===','||c==='\n'||c==='\r')){
+      if(c==='\r' && text[i+1]==='\n') i++;
+      r.push(f.trim()); f='';
+      if(c==='\n'||c==='\r'){ if(r.some(x=>x.length)) rows.push(r); r=[]; }
+      i++; continue;
+    }
+    f+=c; i++;
+  }
+  r.push(f.trim()); if(r.some(x=>x.length)) rows.push(r);
+  if(!rows.length) return [];
+  const head=rows[0];
+  return rows.slice(1).map(rr=>Object.fromEntries(head.map((h,idx)=>[h,(rr[idx]??"").trim()])));
+}
+
+function fallbackSVG(title){
+  const t=(title||"Pub").slice(0,28).replace(/[&<>"]/g,"");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3f3f4"/><stop offset="1" stop-color="#e9e9eb"/>
+    </linearGradient></defs>
+    <rect width="100%" height="100%" fill="url(#g)"/>
+    <circle cx="980" cy="170" r="90" fill="#ffd400" opacity="0.9"/>
+    <text x="80" y="420" font-family="system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif" font-size="64" font-weight="900" fill="#111">${t}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+(async function(){
+  const qs = new URLSearchParams(location.search);
+  const pubId = qs.get("pubId") || "";
+  const nameQ = qs.get("name") || "";
+
+  document.getElementById("pubIdPill").textContent = pubId || "Pub";
+  document.getElementById("backBtn").onclick = () => history.back();
+
+  const text = await fetch(CONFIG.DATA_URL, {cache:"no-store"}).then(r=>r.text());
+  const rows = parseCSV(text);
+
+  const row =
+    rows.find(r => pubId && (r["Pub ID"]||"").trim() === pubId) ||
+    rows.find(r => (r["Pub Name"]||"") === nameQ) ||
+    null;
+
+  const name = row ? (row["Pub Name"]||nameQ||"Pub") : (nameQ||"Pub");
+  const addr = row ? (row["Address"]||"") : "";
+  const openFrom = row ? (row["Opening From"]||"") : "";
+  const openTo = row ? (row["Opening To"]||"") : "";
+  const notes = row ? (row["Notes about pub"]||"") : "";
+  const photo = row ? (row["Photo URL"]||row["photo_url"]||row["Pub Photo"]||"") : "";
+
+  document.getElementById("name").textContent = name;
+  document.getElementById("addr").textContent = addr;
+  document.getElementById("open").textContent = (openFrom && openTo) ? `Open: ${openFrom}–${openTo}` : "Open times: not set";
+  document.getElementById("notes").textContent = notes || "No notes yet.";
+
+  const img = document.getElementById("photo");
+  img.src = photo || fallbackSVG(name);
+})();
+</script>
+</body>
+</html>
