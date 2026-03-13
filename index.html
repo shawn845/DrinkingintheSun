@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Drinking in the Sun Nottingham | Find pubs in the sun</title>
+  <meta name="description" content="Find pubs in the sun across Nottingham and Nottinghamshire. See which pubs are sunny now, which ones keep the latest sun today, and exactly where to sit when you get there." />
+  <meta name="theme-color" content="#fbfaf7" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Drinking in the Sun" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./public/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./public/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./public/icons/favicon-16.png" />
+  <link rel="shortcut icon" href="./public/icons/favicon-32.png" />
+  <meta property="og:title" content="Drinking in the Sun Nottingham | Find pubs in the sun" />
+  <meta property="og:description" content="Find pubs in the sun across Nottingham and Nottinghamshire. See which pubs are sunny now, which ones keep the latest sun today, and exactly where to sit when you get there." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Drinking in the Sun" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Drinking in the Sun Nottingham | Find pubs in the sun" />
+  <meta name="twitter:description" content="Find pubs in the sun across Nottingham and Nottinghamshire. See which pubs are sunny now, which ones keep the latest sun today, and exactly where to sit when you get there." />
+  <style>
+    :root{--bg:#fbfaf7;--panel:#fff;--line:rgba(0,0,0,.08);--text:#2f2f2f;--muted:#6c6c6c;--sun:#d8ae32;--sun2:#f5d471;--radius:22px;--shadow:0 10px 24px rgba(0,0,0,.08);--max:980px}
+    *{box-sizing:border-box} html,body{margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#fffdf7,#fbfaf7);color:var(--text);line-height:1.45}
+    a{text-decoration:none;color:inherit}
+    .wrap{max-width:var(--max);margin:0 auto;padding:24px 18px 56px}
+    .brandBar{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+    .brandBar img{width:52px;height:52px;border-radius:16px;display:block;box-shadow:0 8px 18px rgba(0,0,0,.08)}
+    .brandText{display:flex;flex-direction:column;line-height:1.04}
+    .brandText strong{font-size:26px;letter-spacing:-.03em}
+    .brandText span{font-size:14px;color:var(--muted)}
+    .hero{padding:8px 0 10px}
+    .eyebrow{display:inline-block;padding:8px 12px;border-radius:999px;background:rgba(216,174,50,.18);font-weight:800;font-size:13px;color:#7e5b00;margin-bottom:14px}
+    h1{font-size:clamp(34px,6vw,64px);line-height:1.02;letter-spacing:-.03em;margin:0 0 14px}
+    .sub{font-size:clamp(18px,2.6vw,24px);color:#4a4a4a;max-width:720px;margin:0 0 22px}
+    .ctaRow{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;padding:14px 18px;border-radius:999px;font-weight:800;border:1px solid var(--line);background:var(--panel);box-shadow:0 2px 8px rgba(0,0,0,.05)}
+    .btnPrimary{background:linear-gradient(180deg,var(--sun2),var(--sun));color:#1c1c1c;box-shadow:0 8px 18px rgba(216,174,50,.25);border-color:transparent}
+    .fine{font-size:14px;color:var(--muted);margin-top:14px}
+    .section{margin-top:38px}
+    .section h2{font-size:clamp(26px,3vw,38px);margin:0 0 10px;letter-spacing:-.02em}
+    .section p.lead{color:#575757;font-size:18px;margin:0 0 18px;max-width:760px}
+    .howCard,.install{background:var(--panel);border:1px solid var(--line);border-radius:28px;padding:22px;box-shadow:var(--shadow)}
+    .howList{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px}
+    .howItem{padding:18px;border:1px solid var(--line);border-radius:22px;background:#fff}
+    .howItem h3{margin:0 0 8px;font-size:22px;letter-spacing:-.02em}
+    .howItem p{margin:0;color:#5d5d5d}
+    .shotGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .shotCard{background:var(--panel);border:1px solid var(--line);border-radius:28px;overflow:hidden;box-shadow:var(--shadow)}
+    .shotImgWrap{padding:18px 18px 0;background:linear-gradient(180deg,#fff8e1,#fff)}
+    .shotImg{display:block;width:100%;height:auto;border-radius:28px;border:1px solid rgba(0,0,0,.08);box-shadow:0 10px 26px rgba(0,0,0,.08)}
+    .shotBody{padding:18px}
+    .shotBody h3{margin:0 0 8px;font-size:22px;letter-spacing:-.02em}
+    .shotBody p{margin:0;color:#5d5d5d}
+    .install ol{margin:12px 0 0 20px;padding:0}
+    .install li{margin:8px 0}
+    @media (max-width: 900px){.howList,.shotGrid{grid-template-columns:1fr}}
+  </style>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+          if (window.caches) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+        } catch (e) {}
+      });
+    }
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brandBar">
+      <img src="./public/icons/icon-192.png" alt="Drinking in the Sun logo" />
+      <div class="brandText">
+        <strong>Drinking in the Sun</strong>
+        <span>Nottingham</span>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="eyebrow">Built in Nottingham · Expanding across Nottinghamshire</div>
+      <h1>Find pubs in the sun across Nottinghamshire</h1>
+      <p class="sub">See which pubs are sunny now, which ones keep the latest sun today, and exactly where to sit when you get there.</p>
+      <div class="ctaRow">
+        <a class="btn btnPrimary" href="./app/">Open the app</a>
+        <a class="btn" href="#install">Install on iPhone</a>
+      </div>
+      <div class="fine">No account needed.</div>
+    </section>
+
+    <section class="section">
+      <h2>How it works</h2>
+      <div class="howCard">
+        <p class="lead">The app uses calibrated pub sun spots and current weather conditions to help you choose where to go. Open the list, switch to the map, or tap into a pub to see the exact spot and timing.</p>
+        <div class="howList">
+          <div class="howItem">
+            <h3>List view</h3>
+            <p>See which pubs are sunny now and when the next sun window starts.</p>
+          </div>
+          <div class="howItem">
+            <h3>Map view</h3>
+            <p>Browse clustered pub locations across Nottingham and compare options visually.</p>
+          </div>
+          <div class="howItem">
+            <h3>Pub view</h3>
+            <p>Open a pub to get directions, the best seating location, and the exact sun window.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>See the app in action</h2>
+      <div class="shotGrid">
+        <article class="shotCard">
+          <div class="shotImgWrap"><img class="shotImg" src="./public/screenshots/list-view.webp" alt="Drinking in the Sun list view showing pub cards, current sun status, and the app header." /></div>
+          <div class="shotBody"><h3>List view</h3><p>Browse pubs quickly, see what is sunny now, and check when the next sun window starts.</p></div>
+        </article>
+        <article class="shotCard">
+          <div class="shotImgWrap"><img class="shotImg" src="./public/screenshots/map-view.webp" alt="Drinking in the Sun map view showing clustered pub markers across Nottingham." /></div>
+          <div class="shotBody"><h3>Map view</h3><p>See pub locations across Nottingham and use clustered markers to explore the city at a glance.</p></div>
+        </article>
+        <article class="shotCard">
+          <div class="shotImgWrap"><img class="shotImg" src="./public/screenshots/detail-view.webp" alt="Drinking in the Sun pub view showing the pub photo, directions button, seating location, and sun timing bar." /></div>
+          <div class="shotBody"><h3>Pub view</h3><p>Open a pub to get directions, the best seating location, and the exact sun window for that spot.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="install">
+      <h2>Install on iPhone</h2>
+      <div class="install">
+        <p>Use Drinking in the Sun like an app on your home screen.</p>
+        <ol>
+          <li>Open the app in <strong>Safari</strong></li>
+          <li>Tap the <strong>Share</strong> button</li>
+          <li>Tap <strong>Add to Home Screen</strong></li>
+        </ol>
+        <div class="ctaRow" style="margin-top:18px"><a class="btn btnPrimary" href="./app/">Open app in Safari</a></div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
