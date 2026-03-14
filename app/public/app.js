@@ -1,3 +1,4 @@
+
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
 
@@ -659,13 +660,21 @@ function renderSpotPhoto(url, altText) {
   if (!src) return '';
 
   return `
-    <div class="spotPhotoWrap">
+    <div style="margin:0 0 12px 0; border-radius:14px; overflow:hidden; line-height:0;">
       <img
-        class="spotPhoto"
         src="${escapeAttr(src)}"
         alt="${escapeAttr(altText || '')}"
         loading="lazy"
         onerror="this.style.display='none'; this.parentNode.style.display='none';"
+        style="
+          display:block;
+          width:100%;
+          max-width:100%;
+          height:auto;
+          aspect-ratio:4 / 3;
+          object-fit:cover;
+          border-radius:14px;
+        "
       />
     </div>
   `;
