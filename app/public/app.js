@@ -632,8 +632,8 @@ function openDetail(pubId, sourceView = 'list') {
   const bState = pub.spotB && pub.spotBToday ? buildSpotStateWeatherAware(pub.spotBToday, now) : null;
 
   const mainPhoto = pub.imageUrl || '';
-  const spotAPhoto = pub.spotAPhotoUrl || mainPhoto;
-  const spotBPhoto = pub.spotBPhotoUrl || mainPhoto;
+  const spotAPhoto = pub.spotAPhotoUrl || '';
+  const spotBPhoto = pub.spotBPhotoUrl || '';
 
   els.modalContent.innerHTML = `
     <img class="heroImg" src="${escapeAttr(mainPhoto)}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
