@@ -1,4 +1,3 @@
-
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
 
@@ -213,6 +212,8 @@ function normalizeRow(row) {
     spotBStart: pick('spot_b_sun_start'),
     spotBEnd: pick('spot_b_sun_end'),
     imageUrl: pick('image_url'),
+    spotAPhotoUrl: pick('spot_a_photo_url'),
+    spotBPhotoUrl: pick('spot_b_photo_url'),
     notes: pick('notes')
   };
 }
@@ -629,8 +630,12 @@ function openDetail(pubId, sourceView = 'list') {
   const aState = buildSpotStateWeatherAware(pub.spotAToday, now);
   const bState = pub.spotB && pub.spotBToday ? buildSpotStateWeatherAware(pub.spotBToday, now) : null;
 
+  const mainPhoto = pub.imageUrl || '';
+  const spotAPhoto = pub.spotAPhotoUrl || mainPhoto;
+  const spotBPhoto = pub.spotBPhotoUrl || mainPhoto;
+
   els.modalContent.innerHTML = `
-    <img class="heroImg" src="${escapeAttr(pub.imageUrl || '')}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
+    <img class="heroImg" src="${escapeAttr(mainPhoto)}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
     <div class="detailBody">
       <h2 class="detailTitle">${escapeHtml(pub.name)}</h2>
       <div class="detailAddress">${escapeHtml(pub.address || '')}</div>
@@ -640,8 +645,8 @@ function openDetail(pubId, sourceView = 'list') {
       </div>
     </div>
     <div class="spotList">
-      ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState)}
-      ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState) : ''}
+      ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState, spotAPhoto)}
+      ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState, spotBPhoto) : ''}
     </div>
   `;
 
@@ -649,7 +654,24 @@ function openDetail(pubId, sourceView = 'list') {
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
 }
 
-function renderSpotCard(kicker, name, windowObj, stateObj) {
+function renderSpotPhoto(url, altText) {
+  const src = String(url || '').trim();
+  if (!src) return '';
+
+  return `
+    <div class="spotPhotoWrap">
+      <img
+        class="spotPhoto"
+        src="${escapeAttr(src)}"
+        alt="${escapeAttr(altText || '')}"
+        loading="lazy"
+        onerror="this.style.display='none'; this.parentNode.style.display='none';"
+      />
+    </div>
+  `;
+}
+
+function renderSpotCard(kicker, name, windowObj, stateObj, photoUrl = '') {
   const todayStart = new Date(windowObj.start);
   todayStart.setHours(7, 0, 0, 0);
 
@@ -663,6 +685,7 @@ function renderSpotCard(kicker, name, windowObj, stateObj) {
 
   return `
     <section class="spotCard">
+      ${renderSpotPhoto(photoUrl, `${name} photo`)}
       <div class="spotHead">
         <div>
           <div class="spotKicker">${escapeHtml(kicker)}</div>
