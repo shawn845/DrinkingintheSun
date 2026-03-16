@@ -154,6 +154,14 @@ img{display:block}
   padding:0 2px 8px;
 }
 
+.rowHeaderActions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
 .rowTitle{
   margin:0;
   font-size:16px;
@@ -168,8 +176,13 @@ img{display:block}
   display:flex;
   gap:12px;
   overflow-x:auto;
-  padding:2px 2px 10px;
+  padding:2px 2px 12px;
   scroll-snap-type:x proximity;
+  scroll-padding-inline:2px;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  touch-action:pan-x pinch-zoom;
 }
 
 .hScroll::-webkit-scrollbar{
@@ -193,7 +206,9 @@ img{display:block}
 .cardSmall{
   min-width:248px;
   max-width:268px;
+  flex:0 0 auto;
   scroll-snap-align:start;
+  scroll-snap-stop:normal;
 }
 
 .cardButton{
@@ -215,6 +230,63 @@ img{display:block}
 .cardBody{
   padding:12px;
 }
+.cardBadges{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin:0 0 8px;
+}
+
+.miniBadge,
+.detailBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:5px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#faf9f4;
+  color:#4a4a4a;
+  font-size:11px;
+  font-weight:800;
+}
+
+.rideLine{
+  margin-top:8px;
+  font-size:12px;
+  color:var(--muted);
+  font-weight:750;
+}
+
+.filterChip{
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text);
+  padding:8px 12px;
+  border-radius:999px;
+  font-weight:800;
+  box-shadow:0 2px 8px rgba(0,0,0,.05);
+}
+
+.filterChip.isActive{
+  background:rgba(245,197,66,.22);
+  border-color:rgba(245,197,66,.5);
+}
+
+.detailBadges{
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.detailTravel{
+  margin-top:10px;
+  font-size:13px;
+  color:var(--muted);
+  font-weight:750;
+}
+
 
 .cardTitle{
   margin:0;
@@ -327,53 +399,6 @@ img{display:block}
   aspect-ratio:4/3;
   object-fit:cover;
   background:#ececec;
-}
-
-
-.detailGalleryWrap,
-.detailSlide{
-  position:relative;
-}
-
-.detailGallery{
-  display:flex;
-  overflow-x:auto;
-  overscroll-behavior-x:contain;
-  -webkit-overflow-scrolling:touch;
-  scroll-snap-type:x proximity;
-  scrollbar-width:none;
-}
-
-.detailGallery::-webkit-scrollbar{
-  display:none;
-}
-
-.detailSlide{
-  flex:0 0 100%;
-  width:100%;
-  scroll-snap-align:start;
-}
-
-.detailSlideImg{
-  width:100%;
-}
-
-.detailGalleryLabel{
-  position:absolute;
-  left:12px;
-  bottom:12px;
-  z-index:1;
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding:7px 10px;
-  border-radius:999px;
-  background:rgba(255,255,255,.92);
-  color:#2f2f2f;
-  font-size:12px;
-  font-weight:800;
-  border:1px solid rgba(0,0,0,.08);
-  box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
 
 .detailBody{
@@ -567,4 +592,109 @@ img{display:block}
   .vList{
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
+}
+
+
+/* Header reset: remove logo/title clutter and keep controls only */
+.topbar .brand,
+.topbar .branding,
+.topbar .logo,
+.topbar .logoWrap,
+.topbar .logoMark,
+.topbar .logoBadge,
+.topbar .title,
+.topbar .appTitle,
+.topbar .headerTitle,
+.topbar .headerText,
+.topbar .brandText,
+.topbar .brandLockup,
+.topbar img,
+.topbar svg{
+  display:none !important;
+}
+
+.topbar .left,
+.topbar .leftCol,
+.topbar .topbarLeft,
+.topbar .brandCol,
+.topbar .headerLeft{
+  display:contents;
+}
+
+.modal{
+  position:relative;
+}
+
+.modalClose{
+  position:absolute;
+  top:12px;
+  right:12px;
+  float:none;
+  margin:0;
+}
+
+.detailGalleryWrap,
+.detailGallerySingle{
+  position:relative;
+  margin-bottom:8px;
+}
+
+.detailGallery{
+  display:flex;
+  overflow-x:auto;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+  scrollbar-width:none;
+}
+
+.detailGallery::-webkit-scrollbar{
+  display:none;
+}
+
+.detailSlide{
+  position:relative;
+  flex:0 0 100%;
+  width:100%;
+  margin:0;
+  scroll-snap-align:start;
+}
+
+.detailGallery .heroImg,
+.detailGallerySingle .heroImg{
+  width:100%;
+  min-width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+  display:block;
+}
+
+.detailGalleryHint{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  background:rgba(0,0,0,.58);
+  color:#fff;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  line-height:1;
+}
+
+.detailGalleryDots{
+  display:flex;
+  justify-content:center;
+  gap:7px;
+  padding:10px 0 2px;
+}
+
+.detailDot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:rgba(0,0,0,.18);
+}
+
+.detailDot.isActive{
+  background:rgba(0,0,0,.44);
 }
