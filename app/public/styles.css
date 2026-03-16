@@ -179,10 +179,8 @@ img{display:block}
   padding:2px 2px 12px;
   scroll-snap-type:x proximity;
   scroll-padding-inline:2px;
-  overscroll-behavior-x:contain;
   -webkit-overflow-scrolling:touch;
   scrollbar-width:none;
-  touch-action:pan-x pinch-zoom;
 }
 
 .hScroll::-webkit-scrollbar{
@@ -208,7 +206,6 @@ img{display:block}
   max-width:268px;
   flex:0 0 auto;
   scroll-snap-align:start;
-  scroll-snap-stop:normal;
 }
 
 .cardButton{
@@ -644,7 +641,6 @@ img{display:block}
   overflow-x:auto;
   scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling:touch;
-  overscroll-behavior-x:contain;
   scrollbar-width:none;
 }
 
@@ -698,3 +694,11 @@ img{display:block}
 .detailDot.isActive{
   background:rgba(0,0,0,.44);
 }
+
+
+.modalContent{position:relative;}
+.modalClose{position:absolute;top:12px;right:12px;z-index:20;}
+.detailGalleryWrap{position:relative;}
+.detailGalleryDots{position:relative;z-index:2;}
+.detailDot{cursor:pointer;transition:background .18s ease, transform .18s ease;}
+.detailDot.isActive{transform:scale(1.12);}
