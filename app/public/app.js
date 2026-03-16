@@ -891,6 +891,7 @@ function openDetail(pubId, sourceView = 'list') {
   `;
 
   els.modalOverlay.classList.remove('isHidden');
+  bindDetailGalleryDots();
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
 }
 
@@ -931,6 +932,40 @@ function renderSpotCard(kicker, name, windowObj, stateObj) {
       <div class="spotWindow">Sun today: ${fmtTime(windowObj.start)}–${fmtTime(windowObj.end)}</div>
     </section>
   `;
+}
+
+
+function bindDetailGalleryDots() {
+  const gallery = els.modalContent.querySelector('.detailGallery');
+  if (!gallery) return;
+
+  const slides = Array.from(gallery.querySelectorAll('.detailSlide'));
+  const dots = Array.from(els.modalContent.querySelectorAll('.detailDot'));
+  if (!slides.length || !dots.length) return;
+
+  let ticking = false;
+
+  const update = () => {
+    ticking = false;
+    const width = gallery.clientWidth || 1;
+    const raw = gallery.scrollLeft / width;
+    const index = Math.max(0, Math.min(dots.length - 1, Math.round(raw)));
+    dots.forEach((dot, i) => dot.classList.toggle('isActive', i == index));
+  };
+
+  gallery.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(update);
+  }, { passive: true });
+
+  dots.forEach((dot, index) => {
+    dot.addEventListener('click', () => {
+      gallery.scrollTo({ left: gallery.clientWidth * index, behavior: 'smooth' });
+    });
+  });
+
+  window.requestAnimationFrame(update);
 }
 
 function closeModal(push = false) {
