@@ -738,3 +738,38 @@ img{display:block}
 .detailGalleryDots{position:relative;z-index:2;}
 .detailDot{cursor:pointer;transition:background .18s ease, transform .18s ease;}
 .detailDot.isActive{transform:scale(1.12);}
+
+
+
+html.modalOpen,
+body.modalOpen{
+  overflow:hidden;
+  height:100%;
+}
+
+body.modalOpen{
+  position:fixed;
+  left:0;
+  right:0;
+  width:100%;
+}
+
+a,
+button,
+.card,
+.cardButton,
+.chip,
+.segBtn,
+.detailDot,
+.modalClose{
+  touch-action:manipulation;
+}
+
+.modalOverlay{
+  overscroll-behavior:contain;
+}
+
+.modal{
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
