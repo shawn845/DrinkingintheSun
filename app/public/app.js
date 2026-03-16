@@ -376,57 +376,99 @@ function getWindowStats(pub, now) {
   return { activeWindow: active, nextWindow: next, latestRemainingEnd, latestRemainingWindow };
 }
 
-function weatherMood(code, wetValue = 0, cloudCover = null) {
+function weatherMood(code, wetValue = 0, cloudCover = null, isDay = true) {
   const rainyCodes = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99];
   const cloudyCodes = [2, 3, 45, 48];
   const sunnyCodes = [0, 1];
 
   if (rainyCodes.includes(code) || wetValue >= 0.1) {
-    return { icon: '🌧️', className: 'rainy' };
+    return {
+      icon: '🌧️',
+      className: isDay ? 'rainy' : 'night-rainy',
+      tone: 'rainy'
+    };
   }
 
   if (cloudyCodes.includes(code)) {
-    return { icon: '⛅', className: 'cloudy' };
+    return {
+      icon: isDay ? '⛅' : '☁️',
+      className: isDay ? 'cloudy' : 'night-cloudy',
+      tone: 'cloudy'
+    };
   }
 
   if (sunnyCodes.includes(code)) {
     if (cloudCover != null && cloudCover > 65) {
-      return { icon: '⛅', className: 'cloudy' };
+      return {
+        icon: isDay ? '⛅' : '☁️',
+        className: isDay ? 'cloudy' : 'night-cloudy',
+        tone: 'cloudy'
+      };
     }
-    return { icon: '☀️', className: 'sunny' };
+    return {
+      icon: isDay ? '☀️' : '🌙',
+      className: isDay ? 'sunny' : 'night-clear',
+      tone: isDay ? 'sunny' : 'cloudy'
+    };
   }
 
-  return { icon: '⛅', className: 'cloudy' };
+  return {
+    icon: isDay ? '⛅' : '☁️',
+    className: isDay ? 'cloudy' : 'night-cloudy',
+    tone: 'cloudy'
+  };
 }
 
-function currentWeatherLabel(currentObj) {
+function sunPhaseForWeather(currentObj, sunTimes = null, atTime = new Date()) {
+  if (sunTimes?.sunrise instanceof Date && sunTimes?.sunset instanceof Date && !Number.isNaN(sunTimes.sunrise.getTime()) && !Number.isNaN(sunTimes.sunset.getTime())) {
+    if (atTime < sunTimes.sunrise) return 'before-sunrise';
+    if (atTime >= sunTimes.sunset) return 'after-sunset';
+    return 'day';
+  }
+
+  return currentObj?.isDay ? 'day' : 'after-sunset';
+}
+
+function weatherTitleText(currentObj, sunTimes = null) {
+  const phase = sunPhaseForWeather(currentObj, sunTimes);
+  if (phase === 'before-sunrise') return 'Current conditions · before sunrise';
+  if (phase === 'after-sunset') return 'Current conditions · after sunset';
+  return 'Current conditions';
+}
+
+function currentWeatherLabel(currentObj, sunTimes = null) {
   if (!currentObj) return 'Weather unavailable';
 
+  const phase = sunPhaseForWeather(currentObj, sunTimes);
+  const isDay = phase === 'day';
   const code = currentObj.code;
+
   if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || currentObj.precip >= 0.1) {
-    return 'Rainy';
+    return isDay ? 'Rainy' : 'Rain tonight';
   }
-  if (code === 0) return currentObj.isDay ? 'Sunny' : 'Clear';
-  if (code === 1) return currentObj.isDay ? 'Mostly sunny' : 'Mostly clear';
+  if (code === 0) return isDay ? 'Sunny' : 'Clear';
+  if (code === 1) return isDay ? 'Mostly sunny' : 'Mostly clear';
   if (code === 2) return 'Partly cloudy';
   if (code === 3) return 'Cloudy';
   if ([45, 48].includes(code)) return 'Foggy';
-  return 'Cloudy';
+  return isDay ? 'Cloudy' : 'Mostly cloudy';
 }
 
 function nextHourLabel(nextObj) {
   if (!nextObj) return 'Unavailable';
 
   const code = nextObj.code;
+  const isDay = nextObj.isDay !== false;
+
   if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || nextObj.rain >= 50) {
-    return 'Rainy';
+    return isDay ? 'Rainy' : 'Rain tonight';
   }
-  if (code === 0) return 'Sunny';
-  if (code === 1) return 'Mostly sunny';
+  if (code === 0) return isDay ? 'Sunny' : 'Clear';
+  if (code === 1) return isDay ? 'Mostly sunny' : 'Mostly clear';
   if (code === 2) return 'Partly cloudy';
   if (code === 3) return 'Cloudy';
   if ([45, 48].includes(code)) return 'Foggy';
-  return 'Cloudy';
+  return isDay ? 'Cloudy' : 'Mostly cloudy';
 }
 
 function getWeatherTone() {
@@ -435,10 +477,11 @@ function getWeatherTone() {
   const mood = weatherMood(
     state.weather.current.code,
     state.weather.current.precip,
-    state.weather.current.cloudCover
+    state.weather.current.cloudCover,
+    state.weather.current.isDay
   );
 
-  return mood.className;
+  return mood.tone;
 }
 
 function getDisplayStatus(pub) {
@@ -981,13 +1024,14 @@ function closeModal(push = false) {
 
 async function refreshWeather(lat, lng) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,precipitation,weather_code,cloud_cover,is_day&hourly=temperature_2m,precipitation_probability,weather_code,cloud_cover&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,precipitation,weather_code,cloud_cover,is_day&hourly=temperature_2m,precipitation_probability,weather_code,cloud_cover,is_day&daily=sunrise,sunset&forecast_days=1&timezone=auto`;
     const res = await fetch(url);
     const data = await res.json();
 
     state.weather = {
       current: pickCurrent(data),
-      nextHour: pickNextHour(data)
+      nextHour: pickNextHour(data),
+      sunTimes: pickSunTimes(data)
     };
 
     renderWeatherBar();
@@ -1004,8 +1048,21 @@ function pickCurrent(data) {
     precip: data.current.precipitation ?? 0,
     code: data.current.weather_code,
     cloudCover: data.current.cloud_cover ?? null,
-    isDay: Boolean(data.current.is_day)
+    isDay: Boolean(data.current.is_day),
+    time: data.current.time ? new Date(data.current.time) : new Date()
   };
+}
+
+function pickSunTimes(data) {
+  const sunrise = data?.daily?.sunrise?.[0];
+  const sunset = data?.daily?.sunset?.[0];
+  if (!sunrise || !sunset) return null;
+
+  const sunriseDate = new Date(sunrise);
+  const sunsetDate = new Date(sunset);
+  if (Number.isNaN(sunriseDate.getTime()) || Number.isNaN(sunsetDate.getTime())) return null;
+
+  return { sunrise: sunriseDate, sunset: sunsetDate };
 }
 
 function pickNextHour(data) {
@@ -1021,7 +1078,8 @@ function pickNextHour(data) {
     temp: data.hourly.temperature_2m[idx],
     rain: data.hourly.precipitation_probability[idx] ?? 0,
     code: data.hourly.weather_code[idx],
-    cloudCover: data.hourly.cloud_cover?.[idx] ?? null
+    cloudCover: data.hourly.cloud_cover?.[idx] ?? null,
+    isDay: data.hourly.is_day?.[idx] != null ? Boolean(data.hourly.is_day[idx]) : true
   };
 }
 
@@ -1036,15 +1094,23 @@ function renderWeatherBar() {
 
   const current = state.weather.current;
   const next = state.weather.nextHour;
+  const sunTimes = state.weather.sunTimes || null;
 
-  const currentMood = weatherMood(current.code, current.precip, current.cloudCover);
-  const currentLabel = currentWeatherLabel(current);
+  const currentPhase = sunPhaseForWeather(current, sunTimes, current.time || new Date());
+  const currentMood = weatherMood(
+    current.code,
+    current.precip,
+    current.cloudCover,
+    currentPhase === 'day'
+  );
+
+  const currentLabel = currentWeatherLabel(current, sunTimes);
   const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
   const nextTemp = next ? `${Math.round(next.temp)}°C` : '—';
   const nextRain = next ? `${Math.round(next.rain)}% rain` : '—';
 
   els.weatherIcon.textContent = currentMood.icon;
-  if (els.weatherTitle) els.weatherTitle.textContent = 'Current conditions';
+  if (els.weatherTitle) els.weatherTitle.textContent = weatherTitleText(current, sunTimes);
   els.weatherBar.className = `weatherBar ${currentMood.className}`;
   els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · Next hour: ${nextLabel} · ${nextTemp} · ${nextRain}`;
 }
