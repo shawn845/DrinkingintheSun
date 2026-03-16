@@ -41,6 +41,23 @@ const els = {
   weatherTitle: document.querySelector('.weatherTitle')
 };
 
+
+let bodyScrollY = 0;
+
+function lockBodyScroll() {
+  bodyScrollY = window.scrollY || window.pageYOffset || 0;
+  document.documentElement.classList.add('modalOpen');
+  document.body.classList.add('modalOpen');
+  document.body.style.top = `-${bodyScrollY}px`;
+}
+
+function unlockBodyScroll() {
+  document.documentElement.classList.remove('modalOpen');
+  document.body.classList.remove('modalOpen');
+  document.body.style.top = '';
+  window.scrollTo(0, bodyScrollY || 0);
+}
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
