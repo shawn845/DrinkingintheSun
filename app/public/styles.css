@@ -593,3 +593,154 @@ img{display:block}
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
 }
+
+/* Header reset: remove logo/title clutter and keep controls only */
+.topbar{
+  padding:10px 12px;
+  gap:8px;
+  grid-template-columns:1fr auto;
+  align-items:center;
+}
+
+/* Hide common brand/title blocks if present in the header */
+.topbar .brand,
+.topbar .branding,
+.topbar .logo,
+.topbar .logoWrap,
+.topbar .logoMark,
+.topbar .logoBadge,
+.topbar .wordmark,
+.topbar .title,
+.topbar .appTitle,
+.topbar .siteTitle,
+.topbar .topbarTitle,
+.topbar .headerTitle,
+.topbar .headerText,
+.topbar .brandText,
+.topbar .brandLockup,
+.topbar .appName,
+.topbar .siteName,
+.topbar h1,
+.topbar h2,
+.topbar h3,
+.topbar p,
+.topbar img,
+.topbar svg{
+  display:none !important;
+}
+
+/* If there is a dedicated left block for branding, collapse it */
+.topbar .left,
+.topbar .leftCol,
+.topbar .topbarLeft,
+.topbar .brandCol,
+.topbar .headerLeft{
+  display:contents;
+}
+
+/* Keep the controls dominant */
+.topbar .toggle,
+.topbar .viewToggle,
+.topbar .segmented{
+  min-width:0;
+}
+
+.topbar .btnPrimary,
+.topbar #btnNearMe{
+  white-space:nowrap;
+}
+
+@media (max-width:640px){
+  .topbar{
+    padding:10px 12px;
+    gap:8px;
+  }
+
+  .toggleBtn{
+    padding:10px 12px;
+  }
+
+  .btnPrimary,
+  #btnNearMe{
+    padding:10px 12px;
+  }
+}
+
+
+/* Header remains trimmed: controls only */
+
+.detailGalleryWrap{
+  position:relative;
+}
+
+.detailGallery{
+  display:flex;
+  gap:0;
+  overflow-x:auto;
+  scroll-snap-type:x proximity;
+  overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  touch-action:pan-x pinch-zoom;
+}
+
+.detailGallery::-webkit-scrollbar{
+  display:none;
+}
+
+.detailSlide{
+  margin:0;
+  min-width:100%;
+  position:relative;
+  scroll-snap-align:start;
+}
+
+.detailGallerySingle{
+  position:relative;
+}
+
+.detailGalleryHint{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  max-width:calc(100% - 24px);
+  padding:7px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(0,0,0,.08);
+  color:#3e3e3e;
+  font-size:12px;
+  font-weight:800;
+  box-shadow:0 2px 10px rgba(0,0,0,.08);
+}
+
+.detailGalleryDots{
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:12px;
+  z-index:3;
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  pointer-events:none;
+}
+
+.detailDot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  border:0;
+  padding:0;
+  background:rgba(255,255,255,.58);
+  box-shadow:0 1px 5px rgba(0,0,0,.22);
+  pointer-events:auto;
+}
+
+.detailDot.isActive{
+  width:20px;
+  background:#fff;
+}
