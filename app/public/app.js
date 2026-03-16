@@ -1,18 +1,18 @@
-
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
 
 const state = {
   pubs: [],
   userLocation: null,
-  weather: null,
+  weather: null, // { current: {...}, nextHour: {...} }
   map: null,
   markerLayer: null,
   currentView: 'list',
   modalReturnView: 'list',
   userMarker: null,
   userAccuracyCircle: null,
-  weatherRefreshTimer: null
+  weatherRefreshTimer: null,
+  worthTripCycleOnly: false
 };
 
 const els = {
@@ -26,6 +26,10 @@ const els = {
   rowNearMeMeta: document.getElementById('rowNearMeMeta'),
   rowSunniest: document.getElementById('rowSunniest'),
   rowSunniestMeta: document.getElementById('rowSunniestMeta'),
+  rowWorthTripWrap: null,
+  rowWorthTrip: null,
+  rowWorthTripMeta: null,
+  btnWorthTripCycle: null,
   allList: document.getElementById('allList'),
   allMeta: document.getElementById('allMeta'),
   modalOverlay: document.getElementById('modalOverlay'),
@@ -41,6 +45,7 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   wireUi();
+  ensureWorthTripRow();
   state.pubs = (await loadPubs()).map(enrichPub);
   await refreshWeather(FALLBACK_LOCATION.lat, FALLBACK_LOCATION.lng);
   renderEverything();
@@ -134,7 +139,10 @@ function startWeatherRefresh() {
   if (state.weatherRefreshTimer) clearInterval(state.weatherRefreshTimer);
 
   state.weatherRefreshTimer = setInterval(async () => {
-    const loc = state.userLocation && !state.userLocation.fallback ? state.userLocation : FALLBACK_LOCATION;
+    const loc = state.userLocation && !state.userLocation.fallback
+      ? state.userLocation
+      : FALLBACK_LOCATION;
+
     await refreshWeather(loc.lat, loc.lng);
     renderEverything();
   }, 5 * 60 * 1000);
@@ -213,9 +221,9 @@ function normalizeRow(row) {
     spotBStart: pick('spot_b_sun_start'),
     spotBEnd: pick('spot_b_sun_end'),
     imageUrl: pick('image_url'),
-    spotAPhotoUrl: pick('spot_a_photo_url'),
-    spotBPhotoUrl: pick('spot_b_photo_url'),
-    notes: pick('notes')
+    notes: pick('notes'),
+    worthTheTrip: pick('worth_the_trip'),
+    cycleFriendly: pick('cycle_friendly')
   };
 }
 
@@ -371,11 +379,18 @@ function weatherMood(code, wetValue = 0, cloudCover = null) {
   const cloudyCodes = [2, 3, 45, 48];
   const sunnyCodes = [0, 1];
 
-  if (rainyCodes.includes(code) || wetValue >= 0.1) return { icon: '🌧️', className: 'rainy' };
-  if (cloudyCodes.includes(code)) return { icon: '⛅', className: 'cloudy' };
+  if (rainyCodes.includes(code) || wetValue >= 0.1) {
+    return { icon: '🌧️', className: 'rainy' };
+  }
+
+  if (cloudyCodes.includes(code)) {
+    return { icon: '⛅', className: 'cloudy' };
+  }
 
   if (sunnyCodes.includes(code)) {
-    if (cloudCover != null && cloudCover > 65) return { icon: '⛅', className: 'cloudy' };
+    if (cloudCover != null && cloudCover > 65) {
+      return { icon: '⛅', className: 'cloudy' };
+    }
     return { icon: '☀️', className: 'sunny' };
   }
 
@@ -384,9 +399,11 @@ function weatherMood(code, wetValue = 0, cloudCover = null) {
 
 function currentWeatherLabel(currentObj) {
   if (!currentObj) return 'Weather unavailable';
-  const code = currentObj.code;
 
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || currentObj.precip >= 0.1) return 'Rainy';
+  const code = currentObj.code;
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || currentObj.precip >= 0.1) {
+    return 'Rainy';
+  }
   if (code === 0) return currentObj.isDay ? 'Sunny' : 'Clear';
   if (code === 1) return currentObj.isDay ? 'Mostly sunny' : 'Mostly clear';
   if (code === 2) return 'Partly cloudy';
@@ -397,9 +414,11 @@ function currentWeatherLabel(currentObj) {
 
 function nextHourLabel(nextObj) {
   if (!nextObj) return 'Unavailable';
-  const code = nextObj.code;
 
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || nextObj.rain >= 50) return 'Rainy';
+  const code = nextObj.code;
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || nextObj.rain >= 50) {
+    return 'Rainy';
+  }
   if (code === 0) return 'Sunny';
   if (code === 1) return 'Mostly sunny';
   if (code === 2) return 'Partly cloudy';
@@ -410,7 +429,14 @@ function nextHourLabel(nextObj) {
 
 function getWeatherTone() {
   if (!state.weather || !state.weather.current) return 'cloudy';
-  return weatherMood(state.weather.current.code, state.weather.current.precip, state.weather.current.cloudCover).className;
+
+  const mood = weatherMood(
+    state.weather.current.code,
+    state.weather.current.precip,
+    state.weather.current.cloudCover
+  );
+
+  return mood.className;
 }
 
 function getDisplayStatus(pub) {
@@ -488,11 +514,164 @@ function chooseBestWindow(a, b, now) {
   return { state: 'none', line: 'No more sun today', window: null };
 }
 
+function yesFlag(value) {
+  return String(value || '').trim().toLowerCase() === 'yes';
+}
+
+function formatRideMinutes(minutes) {
+  if (!Number.isFinite(minutes)) return '';
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatRideMiles(miles) {
+  if (!Number.isFinite(miles)) return '';
+  return miles < 10 ? miles.toFixed(1) : String(Math.round(miles));
+}
+
+function getTodaySunInfo(pub, now = new Date()) {
+  const stats = getWindowStats(pub, now);
+  return {
+    nowSunny: Boolean(stats.activeWindow),
+    nextStart: stats.nextWindow ? stats.nextWindow.start : null,
+    latestEnd: stats.latestRemainingEnd || null
+  };
+}
+
+function getCycleEstimate(pub, origin = FALLBACK_LOCATION) {
+  if (!Number.isFinite(pub.lat) || !Number.isFinite(pub.lng)) return null;
+  const crowKm = haversineKm(origin.lat, origin.lng, pub.lat, pub.lng);
+  const routeKm = crowKm * 1.22;
+  const minutes = (routeKm / 17) * 60;
+  const miles = routeKm * 0.621371;
+
+  return {
+    km: routeKm,
+    miles,
+    minutes,
+    shortLabel: `🚲 ${formatRideMinutes(minutes)} · ${formatRideMiles(miles)} mi`
+  };
+}
+
+function getWorthTripArrivalSummary(pub, now = new Date()) {
+  const ride = getCycleEstimate(pub, FALLBACK_LOCATION);
+  if (!ride) return null;
+
+  const sun = getTodaySunInfo(pub, now);
+  const arrival = new Date(now.getTime() + (ride.minutes * 60000));
+  const latestEnd = sun.latestEnd instanceof Date ? sun.latestEnd : null;
+  const nextStart = sun.nextStart instanceof Date ? sun.nextStart : null;
+
+  let arrivalText = 'Probably shade by arrival';
+
+  if (latestEnd && arrival < latestEnd) {
+    const minsLeft = Math.round((latestEnd - arrival) / 60000);
+    if (sun.nowSunny) {
+      arrivalText = minsLeft >= 60 ? 'Sunny on arrival' : `${minsLeft} min sun left`;
+    } else if (nextStart && arrival < nextStart) {
+      arrivalText = 'Sun starts after arrival';
+    } else {
+      arrivalText = minsLeft >= 60 ? 'Sunny on arrival' : `${minsLeft} min sun left`;
+    }
+  } else if (nextStart && arrival < nextStart) {
+    arrivalText = 'Sun starts after arrival';
+  }
+
+  return {
+    ride,
+    arrival,
+    shortLabel: `${ride.shortLabel} · ${arrivalText}`,
+    detailLabel: `From city centre: about ${formatRideMinutes(ride.minutes)} by bike each way · arrive about ${fmtTime(arrival)} · ${arrivalText}`
+  };
+}
+
+function renderCycleBadge(pub) {
+  if (!yesFlag(pub.cycleFriendly)) return '';
+  return '<span class="miniBadge">🚲 Cycle</span>';
+}
+
+function ensureWorthTripRow() {
+  if (els.rowWorthTripWrap) return;
+  const anchorWrap = els.rowSunniest ? els.rowSunniest.closest('.rowWrap') : null;
+  if (!anchorWrap || !anchorWrap.parentNode) return;
+
+  const wrap = document.createElement('section');
+  wrap.className = 'rowWrap isHidden';
+  wrap.id = 'rowWorthTripWrap';
+  wrap.innerHTML = `
+    <div class="rowHeader">
+      <h2 class="rowTitle">Worth the trip</h2>
+      <div class="rowHeaderActions">
+        <div class="rowMeta" id="rowWorthTripMeta">From city centre</div>
+        <button class="filterChip" id="btnWorthTripCycle" type="button" aria-pressed="false">🚲 Cycle</button>
+      </div>
+    </div>
+    <div class="hScroll" id="rowWorthTrip"></div>
+  `;
+
+  anchorWrap.insertAdjacentElement('afterend', wrap);
+  els.rowWorthTripWrap = wrap;
+  els.rowWorthTrip = wrap.querySelector('#rowWorthTrip');
+  els.rowWorthTripMeta = wrap.querySelector('#rowWorthTripMeta');
+  els.btnWorthTripCycle = wrap.querySelector('#btnWorthTripCycle');
+
+  els.btnWorthTripCycle.addEventListener('click', () => {
+    state.worthTripCycleOnly = !state.worthTripCycleOnly;
+    els.btnWorthTripCycle.classList.toggle('isActive', state.worthTripCycleOnly);
+    els.btnWorthTripCycle.setAttribute('aria-pressed', String(state.worthTripCycleOnly));
+    if (navigator.vibrate) {
+      try { navigator.vibrate(10); } catch {}
+    }
+    renderWorthTripRow();
+  });
+}
+
+function renderWorthTripRow() {
+  if (!els.rowWorthTripWrap || !els.rowWorthTrip || !els.rowWorthTripMeta || !els.btnWorthTripCycle) return;
+
+  const allWorthTrip = state.pubs.filter(pub => yesFlag(pub.worthTheTrip));
+  if (!allWorthTrip.length) {
+    els.rowWorthTripWrap.classList.add('isHidden');
+    return;
+  }
+
+  els.rowWorthTripWrap.classList.remove('isHidden');
+  els.btnWorthTripCycle.classList.toggle('isActive', state.worthTripCycleOnly);
+  els.btnWorthTripCycle.setAttribute('aria-pressed', String(state.worthTripCycleOnly));
+
+  const pubs = allWorthTrip
+    .filter(pub => !state.worthTripCycleOnly || yesFlag(pub.cycleFriendly))
+    .map(pub => ({ pub, estimate: getCycleEstimate(pub, FALLBACK_LOCATION) }))
+    .sort((a, b) => (a.estimate?.minutes ?? Infinity) - (b.estimate?.minutes ?? Infinity))
+    .slice(0, 10);
+
+  els.rowWorthTrip.innerHTML = '';
+
+  if (!pubs.length) {
+    els.rowWorthTrip.innerHTML = '<div class="emptyState">No worth-the-trip pubs match the cycle filter yet.</div>';
+    els.rowWorthTripMeta.textContent = 'Cycle-friendly only';
+    return;
+  }
+
+  pubs.forEach(({ pub }) => {
+    const arrivalInfo = getWorthTripArrivalSummary(pub);
+    els.rowWorthTrip.appendChild(createCard(pub, true, {
+      extraBadgesHtml: renderCycleBadge(pub),
+      extraMetaHtml: arrivalInfo ? escapeHtml(arrivalInfo.shortLabel) : ''
+    }));
+  });
+
+  els.rowWorthTripMeta.textContent = state.worthTripCycleOnly ? 'Cycle-friendly only · from city centre' : 'From city centre';
+}
+
 function renderEverything() {
   reEnrichAll();
   setRowTitles();
   renderSunniestNearMeRow();
   renderLatestSunTodayRow();
+  renderWorthTripRow();
   renderAllList();
   renderMapMarkers();
 }
@@ -505,6 +684,9 @@ function setRowTitles() {
     const latestWrap = els.rowSunniest.closest('.rowWrap');
     const latestTitle = latestWrap ? latestWrap.querySelector('.rowTitle') : null;
     if (latestTitle) latestTitle.textContent = 'Latest sun today';
+
+    const worthTitle = els.rowWorthTripWrap ? els.rowWorthTripWrap.querySelector('.rowTitle') : null;
+    if (worthTitle) worthTitle.textContent = 'Worth the trip';
   } catch {}
 }
 
@@ -591,7 +773,7 @@ function compareForMainList(a, b) {
   return a.name.localeCompare(b.name);
 }
 
-function createCard(pub, small = false) {
+function createCard(pub, small = false, options = {}) {
   const wrap = document.createElement('div');
   wrap.className = `card ${small ? 'cardSmall' : ''}`;
 
@@ -600,10 +782,14 @@ function createCard(pub, small = false) {
     ? `${(pub.distanceKm ?? haversineKm(state.userLocation.lat, state.userLocation.lng, pub.lat, pub.lng)).toFixed(1)} km`
     : '';
 
+  const extraBadgesHtml = options.extraBadgesHtml || '';
+  const extraMetaHtml = options.extraMetaHtml || '';
+
   wrap.innerHTML = `
     <button class="cardButton" type="button" aria-label="Open ${escapeHtml(pub.name)} details">
       <img class="cardImg" loading="lazy" src="${escapeAttr(pub.imageUrl || '')}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
       <div class="cardBody">
+        ${extraBadgesHtml ? `<div class="cardBadges">${extraBadgesHtml}</div>` : ''}
         <h3 class="cardTitle">${escapeHtml(pub.name)}</h3>
         <div class="cardMeta">
           <div class="${display.cls}">
@@ -612,6 +798,7 @@ function createCard(pub, small = false) {
           </div>
           ${state.userLocation ? `<div class="dist">${distanceText}</div>` : ''}
         </div>
+        ${extraMetaHtml ? `<div class="rideLine">${extraMetaHtml}</div>` : ''}
       </div>
     </button>
   `;
@@ -630,24 +817,27 @@ function openDetail(pubId, sourceView = 'list') {
   const now = new Date();
   const aState = buildSpotStateWeatherAware(pub.spotAToday, now);
   const bState = pub.spotB && pub.spotBToday ? buildSpotStateWeatherAware(pub.spotBToday, now) : null;
-
-  const mainPhoto = pub.imageUrl || '';
-  const spotAPhoto = pub.spotAPhotoUrl || '';
-  const spotBPhoto = pub.spotBPhotoUrl || '';
+  const detailBadges = [];
+  if (yesFlag(pub.worthTheTrip)) detailBadges.push('<span class="detailBadge">Worth the trip</span>');
+  if (yesFlag(pub.cycleFriendly)) detailBadges.push('<span class="detailBadge">🚲 Cycle-friendly</span>');
+  const worthTripInfo = yesFlag(pub.worthTheTrip) ? getWorthTripArrivalSummary(pub, now) : null;
 
   els.modalContent.innerHTML = `
-    <img class="heroImg" src="${escapeAttr(mainPhoto)}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
+    <img class="heroImg" src="${escapeAttr(pub.imageUrl || '')}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
     <div class="detailBody">
       <h2 class="detailTitle">${escapeHtml(pub.name)}</h2>
       <div class="detailAddress">${escapeHtml(pub.address || '')}</div>
+      ${detailBadges.length ? `<div class="detailBadges">${detailBadges.join('')}</div>` : ''}
+      ${worthTripInfo ? `<div class="detailTravel">${escapeHtml(worthTripInfo.detailLabel)}</div>` : ''}
       ${pub.notes ? `<div class="detailNotes">${escapeHtml(pub.notes)}</div>` : ''}
       <div class="detailActions">
         <a class="pillBtn" href="${mapsHref(pub.lat, pub.lng, pub.name)}" target="_blank" rel="noopener">Directions</a>
+        ${yesFlag(pub.cycleFriendly) ? `<a class="pillBtn" href="${mapsCycleHref(pub.lat, pub.lng)}" target="_blank" rel="noopener">Cycle there</a>` : ''}
       </div>
     </div>
     <div class="spotList">
-      ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState, spotAPhoto)}
-      ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState, spotBPhoto) : ''}
+      ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState)}
+      ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState) : ''}
     </div>
   `;
 
@@ -655,32 +845,7 @@ function openDetail(pubId, sourceView = 'list') {
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
 }
 
-function renderSpotPhoto(url, altText) {
-  const src = String(url || '').trim();
-  if (!src) return '';
-
-  return `
-    <div style="margin:0 0 12px 0; border-radius:14px; overflow:hidden; line-height:0;">
-      <img
-        src="${escapeAttr(src)}"
-        alt="${escapeAttr(altText || '')}"
-        loading="lazy"
-        onerror="this.style.display='none'; this.parentNode.style.display='none';"
-        style="
-          display:block;
-          width:100%;
-          max-width:100%;
-          height:auto;
-          aspect-ratio:4 / 3;
-          object-fit:cover;
-          border-radius:14px;
-        "
-      />
-    </div>
-  `;
-}
-
-function renderSpotCard(kicker, name, windowObj, stateObj, photoUrl = '') {
+function renderSpotCard(kicker, name, windowObj, stateObj) {
   const todayStart = new Date(windowObj.start);
   todayStart.setHours(7, 0, 0, 0);
 
@@ -694,7 +859,6 @@ function renderSpotCard(kicker, name, windowObj, stateObj, photoUrl = '') {
 
   return `
     <section class="spotCard">
-      ${renderSpotPhoto(photoUrl, `${name} photo`)}
       <div class="spotHead">
         <div>
           <div class="spotKicker">${escapeHtml(kicker)}</div>
@@ -737,7 +901,11 @@ async function refreshWeather(lat, lng) {
     const res = await fetch(url);
     const data = await res.json();
 
-    state.weather = { current: pickCurrent(data), nextHour: pickNextHour(data) };
+    state.weather = {
+      current: pickCurrent(data),
+      nextHour: pickNextHour(data)
+    };
+
     renderWeatherBar();
   } catch {
     state.weather = null;
@@ -784,6 +952,7 @@ function renderWeatherBar() {
 
   const current = state.weather.current;
   const next = state.weather.nextHour;
+
   const currentMood = weatherMood(current.code, current.precip, current.cloudCover);
   const currentLabel = currentWeatherLabel(current);
   const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
@@ -803,28 +972,9 @@ function initMap() {
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(state.map);
 
-  state.markerLayer = L.markerClusterGroup({
-    showCoverageOnHover: false,
-    spiderfyOnMaxZoom: true,
-    disableClusteringAtZoom: 16,
-    maxClusterRadius: 40
-  });
-  state.map.addLayer(state.markerLayer);
-
+  state.markerLayer = L.layerGroup().addTo(state.map);
   renderMapMarkers();
   updateUserLocationMarker();
-}
-
-function makePubMarker(pub) {
-  const display = getDisplayStatus(pub);
-  const icon = L.divIcon({
-    className: 'pub-pin-wrap',
-    html: `<div class="pub-pin" style="background:${display.pin};"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
-  });
-
-  return L.marker([pub.lat, pub.lng], { icon });
 }
 
 function renderMapMarkers() {
@@ -832,10 +982,18 @@ function renderMapMarkers() {
   state.markerLayer.clearLayers();
 
   state.pubs.forEach(pub => {
-    const marker = makePubMarker(pub);
+    const display = getDisplayStatus(pub);
+    const marker = L.circleMarker([pub.lat, pub.lng], {
+      radius: 9,
+      color: '#555',
+      weight: 1,
+      fillColor: display.pin,
+      fillOpacity: 0.95
+    });
+
     marker.on('click', () => openDetail(pub.id, 'map'));
     marker.bindTooltip(pub.name, { direction: 'top', offset: [0, -6] });
-    state.markerLayer.addLayer(marker);
+    marker.addTo(state.markerLayer);
   });
 }
 
@@ -879,13 +1037,23 @@ function updateUserLocationMarker() {
 }
 
 function clearUserLocationMarker() {
-  if (state.userMarker) { state.userMarker.remove(); state.userMarker = null; }
-  if (state.userAccuracyCircle) { state.userAccuracyCircle.remove(); state.userAccuracyCircle = null; }
+  if (state.userMarker) {
+    state.userMarker.remove();
+    state.userMarker = null;
+  }
+  if (state.userAccuracyCircle) {
+    state.userAccuracyCircle.remove();
+    state.userAccuracyCircle = null;
+  }
 }
 
 function mapsHref(lat, lng, name) {
   const q = encodeURIComponent(name || `${lat},${lng}`);
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}(${q})`;
+}
+
+function mapsCycleHref(lat, lng) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=bicycling`;
 }
 
 function parseISODate(str) {
