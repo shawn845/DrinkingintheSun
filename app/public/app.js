@@ -221,6 +221,8 @@ function normalizeRow(row) {
     spotBStart: pick('spot_b_sun_start'),
     spotBEnd: pick('spot_b_sun_end'),
     imageUrl: pick('image_url'),
+    spotAPhotoUrl: pick('spot_a_photo_url', 'spot_a_photo', 'spot_a_image_url'),
+    spotBPhotoUrl: pick('spot_b_photo_url', 'spot_b_photo', 'spot_b_image_url'),
     notes: pick('notes'),
     worthTheTrip: pick('worth_the_trip'),
     cycleFriendly: pick('cycle_friendly')
@@ -807,6 +809,99 @@ function createCard(pub, small = false, options = {}) {
   return wrap;
 }
 
+
+function getDetailGalleryItems(pub) {
+  const items = [];
+  const seen = new Set();
+
+  const pushItem = (url, kind, label) => {
+    const cleanUrl = String(url || '').trim();
+    if (!cleanUrl || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    items.push({ url: cleanUrl, kind, label });
+  };
+
+  pushItem(pub.imageUrl, 'pub', pub.name);
+  pushItem(pub.spotAPhotoUrl, 'spot', pub.spotA || 'Spot A');
+  pushItem(pub.spotBPhotoUrl, 'spot', pub.spotB || 'Spot B');
+
+  return items;
+}
+
+function renderDetailGallery(pub) {
+  const items = getDetailGalleryItems(pub);
+  if (!items.length) return '';
+
+  if (items.length === 1) {
+    const item = items[0];
+    return `
+      <div class="detailGallery detailGallerySingle">
+        <img class="heroImg" src="${escapeAttr(item.url)}" alt="${escapeAttr(item.label || pub.name)}" onerror="this.style.display='none';" />
+        ${item.kind === 'spot' ? `<div class="detailGalleryHint">${escapeHtml(item.label || '')}</div>` : ''}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="detailGalleryWrap">
+      <div class="detailGallery" id="detailGallery">
+        ${items.map((item, index) => `
+          <figure class="detailSlide" data-index="${index}">
+            <img class="heroImg" src="${escapeAttr(item.url)}" alt="${escapeAttr(item.label || pub.name)}" loading="${index === 0 ? 'eager' : 'lazy'}" onerror="this.closest('.detailSlide').style.display='none';" />
+            ${item.kind === 'spot' ? `<figcaption class="detailGalleryHint">${escapeHtml(item.label || '')}</figcaption>` : ''}
+          </figure>
+        `).join('')}
+      </div>
+      <div class="detailGalleryDots" role="tablist" aria-label="Pub photo gallery">
+        ${items.map((item, index) => `<button class="detailDot ${index === 0 ? 'isActive' : ''}" type="button" data-gallery-index="${index}" aria-label="Show photo ${index + 1}"></button>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function bindDetailGallery() {
+  const gallery = els.modalContent.querySelector('#detailGallery');
+  if (!gallery) return;
+
+  const dots = [...els.modalContent.querySelectorAll('.detailDot')];
+  const slides = [...gallery.querySelectorAll('.detailSlide')].filter(el => getComputedStyle(el).display !== 'none');
+  if (!slides.length) return;
+
+  const setActive = (index) => {
+    dots.forEach((dot, i) => dot.classList.toggle('isActive', i === index));
+  };
+
+  dots.forEach((dot, index) => {
+    dot.addEventListener('click', () => {
+      const target = slides[index];
+      if (!target) return;
+      gallery.scrollTo({ left: target.offsetLeft, behavior: 'smooth' });
+      setActive(index);
+    });
+  });
+
+  let ticking = false;
+  gallery.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const galleryMid = gallery.scrollLeft + (gallery.clientWidth / 2);
+      let activeIndex = 0;
+      let bestDistance = Infinity;
+      slides.forEach((slide, index) => {
+        const mid = slide.offsetLeft + (slide.clientWidth / 2);
+        const dist = Math.abs(mid - galleryMid);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          activeIndex = index;
+        }
+      });
+      setActive(activeIndex);
+      ticking = false;
+    });
+  }, { passive: true });
+}
+
 function openDetail(pubId, sourceView = 'list') {
   state.modalReturnView = sourceView || state.currentView;
   if (state.currentView === 'map') setView('list', false);
@@ -823,7 +918,7 @@ function openDetail(pubId, sourceView = 'list') {
   const worthTripInfo = yesFlag(pub.worthTheTrip) ? getWorthTripArrivalSummary(pub, now) : null;
 
   els.modalContent.innerHTML = `
-    <img class="heroImg" src="${escapeAttr(pub.imageUrl || '')}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
+    ${renderDetailGallery(pub)}
     <div class="detailBody">
       <h2 class="detailTitle">${escapeHtml(pub.name)}</h2>
       <div class="detailAddress">${escapeHtml(pub.address || '')}</div>
@@ -841,6 +936,7 @@ function openDetail(pubId, sourceView = 'list') {
     </div>
   `;
 
+  bindDetailGallery();
   els.modalOverlay.classList.remove('isHidden');
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
 }
