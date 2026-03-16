@@ -933,6 +933,7 @@ function openDetail(pubId, sourceView = 'list') {
     </div>
   `;
 
+  lockBodyScroll();
   els.modalOverlay.classList.remove('isHidden');
   bindDetailGalleryDots();
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
@@ -1014,6 +1015,7 @@ function bindDetailGalleryDots() {
 function closeModal(push = false) {
   els.modalOverlay.classList.add('isHidden');
   els.modalContent.innerHTML = '';
+  unlockBodyScroll();
 
   const ret = state.modalReturnView || 'list';
   state.modalReturnView = 'list';
