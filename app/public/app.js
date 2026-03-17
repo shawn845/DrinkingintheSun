@@ -1,5 +1,8 @@
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
+const WEATHER_REFRESH_MS = 5 * 60 * 1000;
+const WEATHERAPI_KEY = (window.WEATHERAPI_KEY || '').trim() || '07879d3f63ed420c805115827261703';
+const WEATHERAPI_BASE = 'https://api.weatherapi.com/v1';
 
 const state = {
   pubs: [],
@@ -162,7 +165,7 @@ function startWeatherRefresh() {
 
     await refreshWeather(loc.lat, loc.lng);
     renderEverything();
-  }, 5 * 60 * 1000);
+  }, WEATHER_REFRESH_MS);
 }
 
 async function loadPubs() {
@@ -393,47 +396,49 @@ function getWindowStats(pub, now) {
   return { activeWindow: active, nextWindow: next, latestRemainingEnd, latestRemainingWindow };
 }
 
-function weatherMood(code, wetValue = 0, cloudCover = null, isDay = true) {
-  const rainyCodes = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99];
-  const cloudyCodes = [2, 3, 45, 48];
-  const sunnyCodes = [0, 1];
+function hasRainWords(text = '') {
+  return /(rain|drizzle|shower|sleet|snow|hail|thunder)/i.test(String(text || ''));
+}
 
-  if (rainyCodes.includes(code) || wetValue >= 0.1) {
-    return {
-      icon: '🌧️',
-      className: isDay ? 'rainy' : 'night-rainy',
-      tone: 'rainy'
-    };
-  }
+function hasFogWords(text = '') {
+  return /(fog|mist|overcast|freezing fog)/i.test(String(text || ''));
+}
 
-  if (cloudyCodes.includes(code)) {
-    return {
-      icon: isDay ? '⛅' : '☁️',
-      className: isDay ? 'cloudy' : 'night-cloudy',
-      tone: 'cloudy'
-    };
-  }
+function weatherMood(currentObj = null, nextObj = null, sunTimes = null, atTime = null) {
+  const referenceTime = atTime || currentObj?.time || new Date();
+  const phase = sunPhaseForWeather(currentObj, sunTimes, referenceTime);
+  const isDay = phase === 'day';
 
-  if (sunnyCodes.includes(code)) {
-    if (cloudCover != null && cloudCover > 65) {
-      return {
-        icon: isDay ? '⛅' : '☁️',
-        className: isDay ? 'cloudy' : 'night-cloudy',
-        tone: 'cloudy'
-      };
+  const currentText = String(currentObj?.conditionText || '').trim();
+  const nextText = String(nextObj?.conditionText || '').trim();
+  const combinedText = `${currentText} ${nextText}`.trim();
+
+  const precipNow = Number(currentObj?.precip ?? 0);
+  const rainChance = Number(nextObj?.rain ?? 0);
+  const cloudNow = Number(currentObj?.cloudCover ?? 0);
+  const cloudNext = Number(nextObj?.cloudCover ?? cloudNow);
+
+  if (!isDay) {
+    if (precipNow >= 0.1 || hasRainWords(combinedText) || rainChance >= 65) {
+      return { icon: '🌧️', className: 'night-rainy', tone: 'rainy' };
     }
-    return {
-      icon: isDay ? '☀️' : '🌙',
-      className: isDay ? 'sunny' : 'night-clear',
-      tone: isDay ? 'sunny' : 'cloudy'
-    };
+
+    if (cloudNow <= 35 && !hasFogWords(combinedText)) {
+      return { icon: '🌙', className: 'night-clear', tone: 'cloudy' };
+    }
+
+    return { icon: '☁️', className: 'night-cloudy', tone: 'cloudy' };
   }
 
-  return {
-    icon: isDay ? '⛅' : '☁️',
-    className: isDay ? 'cloudy' : 'night-cloudy',
-    tone: 'cloudy'
-  };
+  if (precipNow >= 0.1 || hasRainWords(combinedText) || rainChance >= 65) {
+    return { icon: '🌧️', className: 'rainy', tone: 'rainy' };
+  }
+
+  if (!hasFogWords(combinedText) && (/(sunny|clear)/i.test(combinedText) || (cloudNow <= 35 && cloudNext <= 55))) {
+    return { icon: '☀️', className: 'sunny', tone: 'sunny' };
+  }
+
+  return { icon: '⛅', className: 'cloudy', tone: 'cloudy' };
 }
 
 function sunPhaseForWeather(currentObj, sunTimes = null, atTime = new Date()) {
@@ -447,55 +452,68 @@ function sunPhaseForWeather(currentObj, sunTimes = null, atTime = new Date()) {
 }
 
 function weatherTitleText(currentObj, sunTimes = null) {
-  const phase = sunPhaseForWeather(currentObj, sunTimes);
+  const phase = sunPhaseForWeather(currentObj, sunTimes, currentObj?.time || new Date());
   if (phase === 'before-sunrise') return 'Current conditions · before sunrise';
   if (phase === 'after-sunset') return 'Current conditions · after sunset';
   return 'Current conditions';
 }
 
-function currentWeatherLabel(currentObj, sunTimes = null) {
+function describeWeather(currentObj, nextObj = null, sunTimes = null) {
   if (!currentObj) return 'Weather unavailable';
 
-  const phase = sunPhaseForWeather(currentObj, sunTimes);
-  const isDay = phase === 'day';
-  const code = currentObj.code;
+  const phase = sunPhaseForWeather(currentObj, sunTimes, currentObj.time || new Date());
+  const mood = weatherMood(currentObj, nextObj, sunTimes, currentObj.time || new Date());
+  const text = String(currentObj.conditionText || '').trim();
 
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || currentObj.precip >= 0.1) {
-    return isDay ? 'Rainy' : 'Rain tonight';
+  if (phase === 'after-sunset') {
+    if (mood.tone === 'rainy') return 'Rain tonight';
+    if (/(clear)/i.test(text)) return 'Clear';
+    if (/(partly cloudy|cloudy)/i.test(text)) return 'Cloudy';
+    return text || 'Cloudy';
   }
-  if (code === 0) return isDay ? 'Sunny' : 'Clear';
-  if (code === 1) return isDay ? 'Mostly sunny' : 'Mostly clear';
-  if (code === 2) return 'Partly cloudy';
-  if (code === 3) return 'Cloudy';
-  if ([45, 48].includes(code)) return 'Foggy';
-  return isDay ? 'Cloudy' : 'Mostly cloudy';
+
+  if (phase === 'before-sunrise') {
+    if (mood.tone === 'rainy') return 'Rain before sunrise';
+    return text || 'Before sunrise';
+  }
+
+  if (mood.tone === 'sunny') return 'Sunny';
+  if (mood.tone === 'rainy') return 'Rainy';
+
+  if (/(partly cloudy)/i.test(text)) return 'Partly cloudy';
+  if (/(cloudy|overcast)/i.test(text)) return 'Cloudy';
+  if (/(mist|fog)/i.test(text)) return 'Foggy';
+  return text || 'Cloudy';
+}
+
+function currentWeatherLabel(currentObj, sunTimes = null, nextObj = null) {
+  return describeWeather(currentObj, nextObj, sunTimes);
 }
 
 function nextHourLabel(nextObj) {
   if (!nextObj) return 'Unavailable';
 
-  const code = nextObj.code;
+  const text = String(nextObj.conditionText || '').trim();
+  const precipChance = Number(nextObj.rain ?? 0);
   const isDay = nextObj.isDay !== false;
 
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || nextObj.rain >= 50) {
-    return isDay ? 'Rainy' : 'Rain tonight';
-  }
-  if (code === 0) return isDay ? 'Sunny' : 'Clear';
-  if (code === 1) return isDay ? 'Mostly sunny' : 'Mostly clear';
-  if (code === 2) return 'Partly cloudy';
-  if (code === 3) return 'Cloudy';
-  if ([45, 48].includes(code)) return 'Foggy';
-  return isDay ? 'Cloudy' : 'Mostly cloudy';
+  if (precipChance >= 65 || hasRainWords(text)) return isDay ? 'Rainy' : 'Rain tonight';
+  if (!isDay && /(clear)/i.test(text)) return 'Clear';
+  if (/(sunny|clear)/i.test(text) && isDay) return 'Sunny';
+  if (/(partly cloudy)/i.test(text)) return 'Partly cloudy';
+  if (/(cloudy|overcast)/i.test(text)) return 'Cloudy';
+  if (/(mist|fog)/i.test(text)) return 'Foggy';
+  return text || 'Unavailable';
 }
 
 function getWeatherTone() {
   if (!state.weather || !state.weather.current) return 'cloudy';
 
   const mood = weatherMood(
-    state.weather.current.code,
-    state.weather.current.precip,
-    state.weather.current.cloudCover,
-    state.weather.current.isDay
+    state.weather.current,
+    state.weather.nextHour,
+    state.weather.sunTimes,
+    state.weather.current.time || new Date()
   );
 
   return mood.tone;
@@ -1043,70 +1061,110 @@ function closeModal(push = false) {
 
 async function refreshWeather(lat, lng) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,precipitation,weather_code,cloud_cover,is_day&hourly=temperature_2m,precipitation_probability,weather_code,cloud_cover,is_day&daily=sunrise,sunset&forecast_days=1&timezone=auto`;
-    const res = await fetch(url);
+    if (!WEATHERAPI_KEY || WEATHERAPI_KEY === 'PUT_YOUR_WEATHERAPI_KEY_HERE') {
+      throw new Error('Add your WeatherAPI key in app.js.');
+    }
+
+    const q = `${lat},${lng}`;
+    const url = `${WEATHERAPI_BASE}/forecast.json?key=${encodeURIComponent(WEATHERAPI_KEY)}&q=${encodeURIComponent(q)}&days=2&aqi=no&alerts=no`;
+    const res = await fetch(url, { cache: 'no-store' });
     const data = await res.json();
+
+    if (!res.ok || data?.error) {
+      throw new Error(data?.error?.message || 'Weather request failed.');
+    }
 
     state.weather = {
       current: pickCurrent(data),
       nextHour: pickNextHour(data),
-      sunTimes: pickSunTimes(data)
+      sunTimes: pickSunTimes(data),
+      locationName: data?.location?.name || '',
+      lastUpdated: data?.current?.last_updated || ''
     };
 
     renderWeatherBar();
-  } catch {
+  } catch (err) {
+    console.error('Weather refresh failed:', err);
     state.weather = null;
-    renderWeatherBar();
+    renderWeatherBar(err?.message || 'Weather unavailable');
   }
 }
 
 function pickCurrent(data) {
-  if (!data || !data.current) return null;
+  const current = data?.current;
+  if (!current) return null;
+
   return {
-    temp: data.current.temperature_2m,
-    precip: data.current.precipitation ?? 0,
-    code: data.current.weather_code,
-    cloudCover: data.current.cloud_cover ?? null,
-    isDay: Boolean(data.current.is_day),
-    time: data.current.time ? new Date(data.current.time) : new Date()
+    temp: Number(current.temp_c),
+    precip: Number(current.precip_mm ?? 0),
+    cloudCover: Number(current.cloud ?? 0),
+    isDay: Number(current.is_day) === 1,
+    time: current.last_updated_epoch ? new Date(current.last_updated_epoch * 1000) : new Date(),
+    windKph: Number(current.wind_kph ?? 0),
+    conditionText: String(current?.condition?.text || '').trim(),
+    iconUrl: current?.condition?.icon ? (String(current.condition.icon).startsWith('//') ? `https:${current.condition.icon}` : current.condition.icon) : ''
   };
 }
 
 function pickSunTimes(data) {
-  const sunrise = data?.daily?.sunrise?.[0];
-  const sunset = data?.daily?.sunset?.[0];
-  if (!sunrise || !sunset) return null;
+  const astro = data?.forecast?.forecastday?.[0]?.astro;
+  const currentTime = data?.current?.last_updated_epoch ? new Date(data.current.last_updated_epoch * 1000) : new Date();
+  if (!astro?.sunrise || !astro?.sunset) return null;
 
-  const sunriseDate = new Date(sunrise);
-  const sunsetDate = new Date(sunset);
-  if (Number.isNaN(sunriseDate.getTime()) || Number.isNaN(sunsetDate.getTime())) return null;
+  const sunriseDate = parseAstroTime(astro.sunrise, currentTime);
+  const sunsetDate = parseAstroTime(astro.sunset, currentTime);
+  if (!sunriseDate || !sunsetDate) return null;
 
   return { sunrise: sunriseDate, sunset: sunsetDate };
 }
 
 function pickNextHour(data) {
-  if (!data || !data.hourly || !data.hourly.time?.length) return null;
+  const hours = (data?.forecast?.forecastday || []).flatMap(day => day?.hour || []);
+  if (!hours.length) return null;
 
-  const now = new Date();
-  const times = data.hourly.time.map(t => new Date(t));
-  let idx = times.findIndex(t => t > now);
-  if (idx === -1) idx = 0;
+  const nowEpoch = Number(data?.current?.last_updated_epoch || Math.floor(Date.now() / 1000));
+  const next = hours.find(hour => Number(hour?.time_epoch) > nowEpoch) || hours[0];
+  if (!next) return null;
 
   return {
-    time: times[idx],
-    temp: data.hourly.temperature_2m[idx],
-    rain: data.hourly.precipitation_probability[idx] ?? 0,
-    code: data.hourly.weather_code[idx],
-    cloudCover: data.hourly.cloud_cover?.[idx] ?? null,
-    isDay: data.hourly.is_day?.[idx] != null ? Boolean(data.hourly.is_day[idx]) : true
+    time: next.time_epoch ? new Date(next.time_epoch * 1000) : new Date(),
+    temp: Number(next.temp_c),
+    rain: Number(next.chance_of_rain ?? 0),
+    precip: Number(next.precip_mm ?? 0),
+    cloudCover: Number(next.cloud ?? 0),
+    isDay: Number(next.is_day) === 1,
+    windKph: Number(next.wind_kph ?? 0),
+    conditionText: String(next?.condition?.text || '').trim()
   };
 }
 
-function renderWeatherBar() {
+function parseAstroTime(timeText, referenceDate) {
+  const match = String(timeText || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match || !(referenceDate instanceof Date) || Number.isNaN(referenceDate.getTime())) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3].toUpperCase();
+
+  if (meridiem === 'PM' && hours !== 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+
+  return new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+    hours,
+    minutes,
+    0,
+    0
+  );
+}
+
+function renderWeatherBar(errorMessage = '') {
   if (!state.weather || !state.weather.current) {
     els.weatherIcon.textContent = '⛅';
     if (els.weatherTitle) els.weatherTitle.textContent = 'Current conditions';
-    els.weatherLine.textContent = 'Weather unavailable';
+    els.weatherLine.textContent = errorMessage || 'Weather unavailable';
     els.weatherBar.className = 'weatherBar cloudy';
     return;
   }
@@ -1115,18 +1173,11 @@ function renderWeatherBar() {
   const next = state.weather.nextHour;
   const sunTimes = state.weather.sunTimes || null;
 
-  const currentPhase = sunPhaseForWeather(current, sunTimes, current.time || new Date());
-  const currentMood = weatherMood(
-    current.code,
-    current.precip,
-    current.cloudCover,
-    currentPhase === 'day'
-  );
-
-  const currentLabel = currentWeatherLabel(current, sunTimes);
+  const currentMood = weatherMood(current, next, sunTimes, current.time || new Date());
+  const currentLabel = currentWeatherLabel(current, sunTimes, next);
   const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
-  const nextTemp = next ? `${Math.round(next.temp)}°C` : '—';
-  const nextRain = next ? `${Math.round(next.rain)}% rain` : '—';
+  const nextTemp = next && Number.isFinite(next.temp) ? `${Math.round(next.temp)}°C` : '—';
+  const nextRain = next && Number.isFinite(next.rain) ? `${Math.round(next.rain)}% rain` : '—';
 
   els.weatherIcon.textContent = currentMood.icon;
   if (els.weatherTitle) els.weatherTitle.textContent = weatherTitleText(current, sunTimes);
