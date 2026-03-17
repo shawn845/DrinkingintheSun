@@ -869,11 +869,16 @@ function createCard(pub, small = false, options = {}) {
         ${extraBadgesHtml ? `<div class="cardBadges">${extraBadgesHtml}</div>` : ''}
         <h3 class="cardTitle">${escapeHtml(pub.name)}</h3>
         <div class="cardMeta">
-          <div class="${display.cls}">
-            <div class="statusTop">${escapeHtml(display.top)}</div>
+          <div class="statusBlock">
             <div class="statusLine">${escapeHtml(display.line)}</div>
           </div>
-          ${state.userLocation ? `<div class="dist">${distanceText}</div>` : ''}
+
+          <div class="metaRight">
+            <div class="${display.cls}">
+              <div class="statusTop">${escapeHtml(display.top)}</div>
+            </div>
+            ${state.userLocation ? `<div class="dist">${distanceText}</div>` : ''}
+          </div>
         </div>
         ${extraMetaHtml ? `<div class="rideLine">${extraMetaHtml}</div>` : ''}
       </div>
