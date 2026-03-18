@@ -49,7 +49,11 @@ const state = {
   detailRouteLayer: null,
   detailRouteUserMarker: null,
   detailRouteUserAccuracyCircle: null,
-  detailRouteWatchId: null
+  detailRouteWatchId: null,
+  fullscreenRouteMap: null,
+  fullscreenRouteLayer: null,
+  fullscreenRouteUserMarker: null,
+  fullscreenRouteUserAccuracyCircle: null
 };
 
 const els = {
@@ -119,8 +123,25 @@ function wireUi() {
     if (e.target === els.modalOverlay) closeModal(true);
   });
 
+  document.addEventListener('click', (e) => {
+    if (e.target?.id === 'btnCloseRouteMap') {
+      closeExpandedRouteMap();
+      return;
+    }
+
+    if (e.target?.id === 'routeMapOverlay') {
+      closeExpandedRouteMap();
+    }
+  });
+
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal(true);
+    if (e.key === 'Escape') {
+      if (isExpandedRouteMapOpen()) {
+        closeExpandedRouteMap();
+        return;
+      }
+      closeModal(true);
+    }
   });
 
   window.addEventListener('popstate', () => {
@@ -1127,6 +1148,20 @@ function renderCuratedRideCard(pub, route) {
 
       <div class="routeNote">This is your hand-picked ride line for ${escapeHtml(pub.name)}. It previews the route inside the app rather than recalculating a generic bike route.</div>
       <div class="routeMap" id="curatedRideMap" aria-label="Recommended ride map"></div>
+      <div class="routeMapActions">
+        <button class="pillBtn" type="button" id="btnExpandRouteMap">Expand map</button>
+      </div>
+
+      <div class="routeMapOverlay isHidden" id="routeMapOverlay" aria-hidden="true">
+        <div class="routeMapOverlayPanel" role="dialog" aria-modal="true" aria-label="Recommended ride map">
+          <button class="routeMapClose" type="button" id="btnCloseRouteMap" aria-label="Close expanded map">×</button>
+          <div class="routeMapOverlayHead">
+            <div class="routeMapOverlayKicker">Recommended ride</div>
+            <div class="routeMapOverlayTitle">${escapeHtml(pub.name)}</div>
+          </div>
+          <div class="routeMapOverlayMap" id="curatedRideMapFullscreen" aria-label="Expanded recommended ride map"></div>
+        </div>
+      </div>
     </section>
   `;
 }
@@ -1143,6 +1178,7 @@ function bindCuratedRide(pub, route) {
     card.classList.toggle('isHidden');
 
     if (!willShow) {
+      closeExpandedRouteMap();
       stopDetailRouteLocationWatch();
       return;
     }
@@ -1153,6 +1189,13 @@ function bindCuratedRide(pub, route) {
       card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
+
+  const expandBtn = document.getElementById('btnExpandRouteMap');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      openExpandedRouteMap(pub, route);
+    });
+  }
 }
 
 function initCuratedRideMap(pub, route) {
@@ -1216,6 +1259,100 @@ function initCuratedRideMap(pub, route) {
   setTimeout(() => state.detailRouteMap && state.detailRouteMap.invalidateSize(), 120);
 }
 
+function openExpandedRouteMap(pub, route) {
+  const overlay = document.getElementById('routeMapOverlay');
+  const mapEl = document.getElementById('curatedRideMapFullscreen');
+  if (!overlay || !mapEl || !route?.map?.encodedPolyline5) return;
+
+  overlay.classList.remove('isHidden');
+  overlay.setAttribute('aria-hidden', 'false');
+
+  requestAnimationFrame(() => {
+    initExpandedRouteMap(pub, route);
+    startDetailRouteLocationWatch();
+  });
+}
+
+function closeExpandedRouteMap() {
+  const overlay = document.getElementById('routeMapOverlay');
+  if (overlay) {
+    overlay.classList.add('isHidden');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  if (state.fullscreenRouteMap) {
+    state.fullscreenRouteMap.remove();
+    state.fullscreenRouteMap = null;
+    state.fullscreenRouteLayer = null;
+    state.fullscreenRouteUserMarker = null;
+    state.fullscreenRouteUserAccuracyCircle = null;
+  }
+}
+
+function isExpandedRouteMapOpen() {
+  const overlay = document.getElementById('routeMapOverlay');
+  return !!overlay && !overlay.classList.contains('isHidden');
+}
+
+function initExpandedRouteMap(pub, route) {
+  const mapEl = document.getElementById('curatedRideMapFullscreen');
+  if (!mapEl || !route?.map?.encodedPolyline5) return;
+
+  if (state.fullscreenRouteMap) {
+    state.fullscreenRouteMap.remove();
+    state.fullscreenRouteMap = null;
+    state.fullscreenRouteLayer = null;
+    state.fullscreenRouteUserMarker = null;
+    state.fullscreenRouteUserAccuracyCircle = null;
+  }
+
+  const routePoints = decodePolyline5(route.map.encodedPolyline5);
+
+  state.fullscreenRouteMap = L.map(mapEl, {
+    zoomControl: true,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    touchZoom: true
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(state.fullscreenRouteMap);
+
+  state.fullscreenRouteLayer = L.polyline(routePoints, {
+    color: '#d6b24a',
+    weight: 6,
+    opacity: 0.97
+  }).addTo(state.fullscreenRouteMap);
+
+  L.circleMarker([route.start.lat, route.start.lng], {
+    radius: 7,
+    color: '#2f2f2f',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(state.fullscreenRouteMap).bindTooltip(route.start.label, { direction: 'top' });
+
+  L.circleMarker([pub.lat, pub.lng], {
+    radius: 8,
+    color: '#2f2f2f',
+    weight: 2,
+    fillColor: '#f5c542',
+    fillOpacity: 1
+  }).addTo(state.fullscreenRouteMap).bindTooltip(pub.name, { direction: 'top' });
+
+  const bounds = state.fullscreenRouteLayer.getBounds();
+  if (state.userLocation && !state.userLocation.fallback) {
+    bounds.extend([state.userLocation.lat, state.userLocation.lng]);
+  }
+
+  state.fullscreenRouteMap.fitBounds(bounds, { padding: [26, 26] });
+  updateFullscreenRouteUserMarker();
+  setTimeout(() => state.fullscreenRouteMap && state.fullscreenRouteMap.invalidateSize(), 120);
+}
+
 function startDetailRouteLocationWatch() {
   if (!navigator.geolocation || state.detailRouteWatchId != null) {
     updateDetailRouteUserMarker();
@@ -1254,46 +1391,51 @@ function stopDetailRouteLocationWatch(clearMarkers = true) {
 }
 
 function updateDetailRouteUserMarker() {
-  if (!state.detailRouteMap) return;
+  if (!state.detailRouteMap && !state.fullscreenRouteMap) return;
 
   if (!state.userLocation || state.userLocation.fallback) {
     clearDetailRouteUserMarker();
+    clearFullscreenRouteUserMarker();
     return;
   }
 
   const latlng = [state.userLocation.lat, state.userLocation.lng];
 
-  if (!state.detailRouteUserMarker) {
-    state.detailRouteUserMarker = L.circleMarker(latlng, {
-      radius: 8,
-      color: '#1a73e8',
-      weight: 2,
-      fillColor: '#1a73e8',
-      fillOpacity: 0.9
-    }).addTo(state.detailRouteMap).bindTooltip('Your location', { direction: 'top' });
-  } else {
-    state.detailRouteUserMarker.setLatLng(latlng);
-  }
-
-  const acc = state.userLocation.accuracy;
-  if (Number.isFinite(acc) && acc > 0) {
-    if (!state.detailRouteUserAccuracyCircle) {
-      state.detailRouteUserAccuracyCircle = L.circle(latlng, {
-        radius: acc,
+  if (state.detailRouteMap) {
+    if (!state.detailRouteUserMarker) {
+      state.detailRouteUserMarker = L.circleMarker(latlng, {
+        radius: 8,
         color: '#1a73e8',
-        weight: 1,
+        weight: 2,
         fillColor: '#1a73e8',
-        fillOpacity: 0.08
-      }).addTo(state.detailRouteMap);
+        fillOpacity: 0.9
+      }).addTo(state.detailRouteMap).bindTooltip('Your location', { direction: 'top' });
     } else {
-      state.detailRouteUserAccuracyCircle.setLatLng(latlng);
-      state.detailRouteUserAccuracyCircle.setRadius(acc);
+      state.detailRouteUserMarker.setLatLng(latlng);
+    }
+
+    const acc = state.userLocation.accuracy;
+    if (Number.isFinite(acc) && acc > 0) {
+      if (!state.detailRouteUserAccuracyCircle) {
+        state.detailRouteUserAccuracyCircle = L.circle(latlng, {
+          radius: acc,
+          color: '#1a73e8',
+          weight: 1,
+          fillColor: '#1a73e8',
+          fillOpacity: 0.08
+        }).addTo(state.detailRouteMap);
+      } else {
+        state.detailRouteUserAccuracyCircle.setLatLng(latlng);
+        state.detailRouteUserAccuracyCircle.setRadius(acc);
+      }
+    }
+
+    if (!state.detailRouteMap.getBounds().pad(-0.08).contains(latlng)) {
+      state.detailRouteMap.panTo(latlng, { animate: true, duration: 0.5 });
     }
   }
 
-  if (!state.detailRouteMap.getBounds().pad(-0.08).contains(latlng)) {
-    state.detailRouteMap.panTo(latlng, { animate: true, duration: 0.5 });
-  }
+  updateFullscreenRouteUserMarker();
 }
 
 function clearDetailRouteUserMarker() {
@@ -1305,6 +1447,61 @@ function clearDetailRouteUserMarker() {
   if (state.detailRouteUserAccuracyCircle) {
     state.detailRouteUserAccuracyCircle.remove();
     state.detailRouteUserAccuracyCircle = null;
+  }
+}
+
+function updateFullscreenRouteUserMarker() {
+  if (!state.fullscreenRouteMap) return;
+
+  if (!state.userLocation || state.userLocation.fallback) {
+    clearFullscreenRouteUserMarker();
+    return;
+  }
+
+  const latlng = [state.userLocation.lat, state.userLocation.lng];
+
+  if (!state.fullscreenRouteUserMarker) {
+    state.fullscreenRouteUserMarker = L.circleMarker(latlng, {
+      radius: 8,
+      color: '#1a73e8',
+      weight: 2,
+      fillColor: '#1a73e8',
+      fillOpacity: 0.9
+    }).addTo(state.fullscreenRouteMap).bindTooltip('Your location', { direction: 'top' });
+  } else {
+    state.fullscreenRouteUserMarker.setLatLng(latlng);
+  }
+
+  const acc = state.userLocation.accuracy;
+  if (Number.isFinite(acc) && acc > 0) {
+    if (!state.fullscreenRouteUserAccuracyCircle) {
+      state.fullscreenRouteUserAccuracyCircle = L.circle(latlng, {
+        radius: acc,
+        color: '#1a73e8',
+        weight: 1,
+        fillColor: '#1a73e8',
+        fillOpacity: 0.08
+      }).addTo(state.fullscreenRouteMap);
+    } else {
+      state.fullscreenRouteUserAccuracyCircle.setLatLng(latlng);
+      state.fullscreenRouteUserAccuracyCircle.setRadius(acc);
+    }
+  }
+
+  if (!state.fullscreenRouteMap.getBounds().pad(-0.08).contains(latlng)) {
+    state.fullscreenRouteMap.panTo(latlng, { animate: true, duration: 0.5 });
+  }
+}
+
+function clearFullscreenRouteUserMarker() {
+  if (state.fullscreenRouteUserMarker) {
+    state.fullscreenRouteUserMarker.remove();
+    state.fullscreenRouteUserMarker = null;
+  }
+
+  if (state.fullscreenRouteUserAccuracyCircle) {
+    state.fullscreenRouteUserAccuracyCircle.remove();
+    state.fullscreenRouteUserAccuracyCircle = null;
   }
 }
 
@@ -1381,6 +1578,7 @@ function bindDetailGalleryDots() {
 }
 
 function closeModal(push = false) {
+  closeExpandedRouteMap();
   stopDetailRouteLocationWatch();
 
   if (state.detailRouteMap) {
