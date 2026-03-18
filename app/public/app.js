@@ -46,7 +46,10 @@ const state = {
   weatherRefreshTimer: null,
   worthTripCycleOnly: false,
   detailRouteMap: null,
-  detailRouteLayer: null
+  detailRouteLayer: null,
+  detailRouteUserMarker: null,
+  detailRouteUserAccuracyCircle: null,
+  detailRouteWatchId: null
 };
 
 const els = {
@@ -1089,7 +1092,12 @@ function renderSpotCard(kicker, name, windowObj, stateObj) {
 
 
 function renderCuratedRideCard(pub, route) {
-  const ride = getRideEstimate(pub, FALLBACK_LOCATION);
+  const ride = route?.stats
+    ? {
+        km: Number(route.stats.distanceKm) || null,
+        minutes: Number(route.stats.minutesAt18kph) || Number(route.stats.minutesAt15kph) || null
+      }
+    : getRideEstimate(pub, FALLBACK_LOCATION);
   const mapLabel = route?.start?.label ? `From ${route.start.label}` : 'From Nottingham city centre';
 
   return `
@@ -1134,10 +1142,14 @@ function bindCuratedRide(pub, route) {
     const willShow = card.classList.contains('isHidden');
     card.classList.toggle('isHidden');
 
-    if (!willShow) return;
+    if (!willShow) {
+      stopDetailRouteLocationWatch();
+      return;
+    }
 
     requestAnimationFrame(() => {
       initCuratedRideMap(pub, route);
+      startDetailRouteLocationWatch();
       card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
@@ -1147,10 +1159,14 @@ function initCuratedRideMap(pub, route) {
   const mapEl = document.getElementById('curatedRideMap');
   if (!mapEl || !route?.map?.encodedPolyline5) return;
 
+  stopDetailRouteLocationWatch();
+
   if (state.detailRouteMap) {
     state.detailRouteMap.remove();
     state.detailRouteMap = null;
     state.detailRouteLayer = null;
+    state.detailRouteUserMarker = null;
+    state.detailRouteUserAccuracyCircle = null;
   }
 
   const routePoints = decodePolyline5(route.map.encodedPolyline5);
@@ -1190,8 +1206,106 @@ function initCuratedRideMap(pub, route) {
     fillOpacity: 1
   }).addTo(state.detailRouteMap).bindTooltip(pub.name, { direction: 'top' });
 
-  state.detailRouteMap.fitBounds(state.detailRouteLayer.getBounds(), { padding: [18, 18] });
+  const bounds = state.detailRouteLayer.getBounds();
+  if (state.userLocation && !state.userLocation.fallback) {
+    bounds.extend([state.userLocation.lat, state.userLocation.lng]);
+  }
+
+  state.detailRouteMap.fitBounds(bounds, { padding: [18, 18] });
+  updateDetailRouteUserMarker();
   setTimeout(() => state.detailRouteMap && state.detailRouteMap.invalidateSize(), 120);
+}
+
+function startDetailRouteLocationWatch() {
+  if (!navigator.geolocation || state.detailRouteWatchId != null) {
+    updateDetailRouteUserMarker();
+    return;
+  }
+
+  state.detailRouteWatchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      state.userLocation = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        name: 'Your location',
+        fallback: false
+      };
+
+      updateUserLocationMarker();
+      updateDetailRouteUserMarker();
+    },
+    () => {
+      stopDetailRouteLocationWatch(false);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+  );
+}
+
+function stopDetailRouteLocationWatch(clearMarkers = true) {
+  if (state.detailRouteWatchId != null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(state.detailRouteWatchId);
+  }
+  state.detailRouteWatchId = null;
+
+  if (clearMarkers) {
+    clearDetailRouteUserMarker();
+  }
+}
+
+function updateDetailRouteUserMarker() {
+  if (!state.detailRouteMap) return;
+
+  if (!state.userLocation || state.userLocation.fallback) {
+    clearDetailRouteUserMarker();
+    return;
+  }
+
+  const latlng = [state.userLocation.lat, state.userLocation.lng];
+
+  if (!state.detailRouteUserMarker) {
+    state.detailRouteUserMarker = L.circleMarker(latlng, {
+      radius: 8,
+      color: '#1a73e8',
+      weight: 2,
+      fillColor: '#1a73e8',
+      fillOpacity: 0.9
+    }).addTo(state.detailRouteMap).bindTooltip('Your location', { direction: 'top' });
+  } else {
+    state.detailRouteUserMarker.setLatLng(latlng);
+  }
+
+  const acc = state.userLocation.accuracy;
+  if (Number.isFinite(acc) && acc > 0) {
+    if (!state.detailRouteUserAccuracyCircle) {
+      state.detailRouteUserAccuracyCircle = L.circle(latlng, {
+        radius: acc,
+        color: '#1a73e8',
+        weight: 1,
+        fillColor: '#1a73e8',
+        fillOpacity: 0.08
+      }).addTo(state.detailRouteMap);
+    } else {
+      state.detailRouteUserAccuracyCircle.setLatLng(latlng);
+      state.detailRouteUserAccuracyCircle.setRadius(acc);
+    }
+  }
+
+  if (!state.detailRouteMap.getBounds().pad(-0.08).contains(latlng)) {
+    state.detailRouteMap.panTo(latlng, { animate: true, duration: 0.5 });
+  }
+}
+
+function clearDetailRouteUserMarker() {
+  if (state.detailRouteUserMarker) {
+    state.detailRouteUserMarker.remove();
+    state.detailRouteUserMarker = null;
+  }
+
+  if (state.detailRouteUserAccuracyCircle) {
+    state.detailRouteUserAccuracyCircle.remove();
+    state.detailRouteUserAccuracyCircle = null;
+  }
 }
 
 function decodePolyline5(str) {
@@ -1267,10 +1381,14 @@ function bindDetailGalleryDots() {
 }
 
 function closeModal(push = false) {
+  stopDetailRouteLocationWatch();
+
   if (state.detailRouteMap) {
     state.detailRouteMap.remove();
     state.detailRouteMap = null;
     state.detailRouteLayer = null;
+    state.detailRouteUserMarker = null;
+    state.detailRouteUserAccuracyCircle = null;
   }
 
   els.modalOverlay.classList.add('isHidden');
