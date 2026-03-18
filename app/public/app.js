@@ -4,6 +4,35 @@ const WEATHER_REFRESH_MS = 5 * 60 * 1000;
 const WEATHERAPI_KEY = (window.WEATHERAPI_KEY || '').trim() || '07879d3f63ed420c805115827261703';
 const WEATHERAPI_BASE = 'https://api.weatherapi.com/v1';
 
+const CURATED_ROUTES = {
+  the_martin: {
+    id: 'the_martin',
+    pubName: 'The Martin',
+    start: {
+      label: 'Near Nottingham city centre',
+      lat: 52.947074,
+      lng: -1.147203
+    },
+    end: {
+      label: 'The Martin',
+      lat: 52.891962,
+      lng: -0.956514
+    },
+    stats: {
+      routePoints: 442,
+      distanceKm: 22.77,
+      minutesAt15kph: 91,
+      minutesAt18kph: 76
+    },
+    map: {
+      bbox: [-1.147386, 52.891962, -0.956514, 52.948391],
+      encodedPolyline5:
+        'efdbI~`_FiAd@OcBSqEKoCKoCIqCMeCIyCOaDIqCAY@QBQFMEO[?KWIO?c@K]MXp@B^Op@KpBI|@Af@ARJb@A|@Bf@?fA?fAErAIdA]x@OxABrAAhA?bACpACnAEjAKnAu@RGP_@\\_A^qATgALoA?w@[kBi@yCHa@\\FVTxBfBfA`AzA`Bi@pADJx@cCzAkGDK@_@m@HeBeAsBsAeAkAiC}AiBkB_CiCSu@_BgFcAaE[iDG_D?eBNuPv@eIZaBJw@RsC?wEQaFa@{E_@oC[{DoB_Jg@sCc@sB{@qHEcAAiCJ}C`A}IrAyDbAyDt@eC~@eDRy@lBwLFkA^}H?m@Kk@DW?oASmDO_@_AgEUs@wBkFm@e@w@u@U]yAaBuC{FHSp@{AVAUo@He@Sa@Bq@Bk@KwA^_@RE|ArA@mCD_@~HpQhCr@l@XFLvByDaF_MyCwGTe@Ne@`@Ij@DTJNR\\cAoAqCkAmCi@mAa@sAq@{Dm@mDs@kCw@kB}@aB}@yAy@uAk@sAQi@a@sAc@cBSuAOeBK{AEmAAqA?mA@wAF{@Fs@JaAPkARoARmAPyAHeANiADw@@s@@]CcAG{AIwAGcAOmBGwAMsBM}BEu@IsAsBgZYiESgCc@uEU{B_@{B]cBw@oBIw@Eu@IsBYoKM{DGmEEiGCsECeCPTd@dAb@dAHZlAtBbC`EfA~AdAxA|AdBpApAjB|AxA~@|AdAfBj@fCp@dBb@lBNzDTvBK~AOhAKfAQnBi@bBo@zAi@t@c@fBkAbB{AlCgC~AaBtBuB`BaB|A}A`BgB`DcDrBqBtAwA~AaBzBqCfBcCnBsCnAmB`CwDzAaCnBwDbBiE~@{CNcAUiABuBX_DL]X]b@Un@Kd@Cf@c@TYf@qAz@wBp@iBj@{AdAkCt@kBbAkCJId@u@j@uAz@gBX[z@mAd@u@lEqDNNN?~AeBrBm@vAc@j@]lAeBb@kBR_ALu@?yACo@Ko@BSMqBZmBb@i@dAV?cA@eBCqESkCMwCAaBQeAgAwDe@}A]qBSaBG{@BwDAeCAkDCgCIqBGiBEgCNqBJmABwBCoAGs@WeAc@u@}A_Bk@kAm@mAwCkGi@wAWg@mA{BoAeCsAgCeAkBkBmCiAcBmAaB}AgBcAoAeAcBgAqBw@qBmAcD]sBYy@?oAJuBX{EJwAf@eCz@sC~@_Dv@aB|@{@hAKhAFdADn@Cx@Sp@IxAkAzAiBj@iAx@gBfA{DXkA^cAf@u@hA_A|@k@dBeAzA}@nAw@tA}@lAc@dBE~@JvAj@`Ab@pAr@t@d@h@^f@NLBL?D?lAkJd@kD^uDBm@?eF@uCBo@EeA@qAAYCU_@oJl@qGIaYkCsHy@yUDgQl@mTzCaOpB_JzBuLtBiJvB?tD`C~CdB~CnBzCfB|@`@dBeAdElAxDbAnDlApBr@jC`GjBdFtCrGrA{@~BaCrAaDtBeEjCj@rA?`BQbA_C\\uDl@uE|@mI`CYjCh@r@nBb@qCx@qCzBoB`BgCjCaC'
+    }
+  }
+};
+
+
 const state = {
   pubs: [],
   userLocation: null,
@@ -15,7 +44,9 @@ const state = {
   userMarker: null,
   userAccuracyCircle: null,
   weatherRefreshTimer: null,
-  worthTripCycleOnly: false
+  worthTripCycleOnly: false,
+  detailRouteMap: null,
+  detailRouteLayer: null
 };
 
 const els = {
@@ -245,7 +276,8 @@ function normalizeRow(row) {
     spotBPhotoUrl: pick('spot_b_photo_url', 'spot_b_photo', 'spot_b_image_url'),
     notes: pick('notes'),
     worthTheTrip: pick('worth_the_trip'),
-    cycleFriendly: pick('cycle_friendly')
+    cycleFriendly: pick('cycle_friendly'),
+    curatedRouteId: pick('curated_route_id')
   };
 }
 
@@ -598,6 +630,47 @@ function yesFlag(value) {
   return String(value || '').trim().toLowerCase() === 'yes';
 }
 
+function getCuratedRouteForPub(pub) {
+  if (!pub) return null;
+  return CURATED_ROUTES[pub.curatedRouteId] || CURATED_ROUTES[pub.id] || null;
+}
+
+function getRideEstimate(pub, origin = FALLBACK_LOCATION) {
+  const curated = getCuratedRouteForPub(pub);
+
+  if (
+    curated &&
+    origin &&
+    Math.abs(origin.lat - FALLBACK_LOCATION.lat) < 0.0001 &&
+    Math.abs(origin.lng - FALLBACK_LOCATION.lng) < 0.0001
+  ) {
+    return {
+      km: curated.stats.distanceKm,
+      miles: curated.stats.distanceKm * 0.621371,
+      minutes: curated.stats.minutesAt18kph,
+      shortLabel: `🚲 ${formatRideMinutes(curated.stats.minutesAt18kph)} · ${formatRideMiles(curated.stats.distanceKm * 0.621371)} mi`,
+      isCurated: true,
+      route: curated
+    };
+  }
+
+  if (!Number.isFinite(pub.lat) || !Number.isFinite(pub.lng)) return null;
+  const crowKm = haversineKm(origin.lat, origin.lng, pub.lat, pub.lng);
+  const routeKm = crowKm * 1.22;
+  const minutes = (routeKm / 17) * 60;
+  const miles = routeKm * 0.621371;
+
+  return {
+    km: routeKm,
+    miles,
+    minutes,
+    shortLabel: `🚲 ${formatRideMinutes(minutes)} · ${formatRideMiles(miles)} mi`,
+    isCurated: false,
+    route: curated
+  };
+}
+
+
 function formatRideMinutes(minutes) {
   if (!Number.isFinite(minutes)) return '';
   if (minutes < 60) return `${Math.round(minutes)} min`;
@@ -621,22 +694,11 @@ function getTodaySunInfo(pub, now = new Date()) {
 }
 
 function getCycleEstimate(pub, origin = FALLBACK_LOCATION) {
-  if (!Number.isFinite(pub.lat) || !Number.isFinite(pub.lng)) return null;
-  const crowKm = haversineKm(origin.lat, origin.lng, pub.lat, pub.lng);
-  const routeKm = crowKm * 1.22;
-  const minutes = (routeKm / 17) * 60;
-  const miles = routeKm * 0.621371;
-
-  return {
-    km: routeKm,
-    miles,
-    minutes,
-    shortLabel: `🚲 ${formatRideMinutes(minutes)} · ${formatRideMiles(miles)} mi`
-  };
+  return getRideEstimate(pub, origin);
 }
 
 function getWorthTripArrivalSummary(pub, now = new Date()) {
-  const ride = getCycleEstimate(pub, FALLBACK_LOCATION);
+  const ride = getRideEstimate(pub, FALLBACK_LOCATION);
   if (!ride) return null;
 
   const sun = getTodaySunInfo(pub, now);
@@ -947,6 +1009,7 @@ function openDetail(pubId, sourceView = 'list') {
   if (!pub) return;
 
   const now = new Date();
+  const curatedRoute = getCuratedRouteForPub(pub);
   const aState = buildSpotStateWeatherAware(pub.spotAToday, now);
   const bState = pub.spotB && pub.spotBToday ? buildSpotStateWeatherAware(pub.spotBToday, now) : null;
   const detailBadges = [];
@@ -964,9 +1027,14 @@ function openDetail(pubId, sourceView = 'list') {
       ${pub.notes ? `<div class="detailNotes">${escapeHtml(pub.notes)}</div>` : ''}
       <div class="detailActions">
         <a class="pillBtn" href="${mapsHref(pub.lat, pub.lng, pub.name)}" target="_blank" rel="noopener">Directions</a>
-        ${yesFlag(pub.cycleFriendly) ? `<a class="pillBtn" href="${mapsCycleHref(pub.lat, pub.lng)}" target="_blank" rel="noopener">Cycle there</a>` : ''}
+        ${curatedRoute
+          ? `<button class="pillBtn" type="button" id="btnRecommendedRide">Recommended ride</button>`
+          : yesFlag(pub.cycleFriendly)
+            ? `<a class="pillBtn" href="${mapsCycleHref(pub.lat, pub.lng)}" target="_blank" rel="noopener">Cycle there</a>`
+            : ''}
       </div>
     </div>
+    ${curatedRoute ? renderCuratedRideCard(pub, curatedRoute) : ''}
     <div class="spotList">
       ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState)}
       ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState) : ''}
@@ -976,6 +1044,7 @@ function openDetail(pubId, sourceView = 'list') {
   lockBodyScroll();
   els.modalOverlay.classList.remove('isHidden');
   bindDetailGalleryDots();
+  bindCuratedRide(pub, curatedRoute);
   history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
 }
 
@@ -1019,6 +1088,151 @@ function renderSpotCard(kicker, name, windowObj, stateObj) {
 }
 
 
+function renderCuratedRideCard(pub, route) {
+  const ride = getRideEstimate(pub, FALLBACK_LOCATION);
+  const mapLabel = route?.start?.label ? `From ${route.start.label}` : 'From Nottingham city centre';
+
+  return `
+    <section class="routeCard isHidden" id="curatedRideCard">
+      <div class="routeCardHead">
+        <div>
+          <div class="routeCardKicker">Recommended ride</div>
+          <h3 class="routeCardTitle">${escapeHtml(mapLabel)}</h3>
+        </div>
+        <div class="routeCardBadge">Curated</div>
+      </div>
+
+      <div class="routeStats">
+        <div class="routeStat">
+          <div class="routeStatLabel">Distance</div>
+          <div class="routeStatValue">${ride ? `${ride.km.toFixed(1)} km` : '—'}</div>
+        </div>
+        <div class="routeStat">
+          <div class="routeStatLabel">Ride time</div>
+          <div class="routeStatValue">${ride ? formatRideMinutes(ride.minutes) : '—'}</div>
+        </div>
+        <div class="routeStat">
+          <div class="routeStatLabel">Start</div>
+          <div class="routeStatValue">${escapeHtml(route.start.label)}</div>
+        </div>
+      </div>
+
+      <div class="routeNote">This is your hand-picked ride line for ${escapeHtml(pub.name)}. It previews the route inside the app rather than recalculating a generic bike route.</div>
+      <div class="routeMap" id="curatedRideMap" aria-label="Recommended ride map"></div>
+    </section>
+  `;
+}
+
+function bindCuratedRide(pub, route) {
+  if (!route) return;
+
+  const btn = document.getElementById('btnRecommendedRide');
+  const card = document.getElementById('curatedRideCard');
+  if (!btn || !card) return;
+
+  btn.addEventListener('click', () => {
+    const willShow = card.classList.contains('isHidden');
+    card.classList.toggle('isHidden');
+
+    if (!willShow) return;
+
+    requestAnimationFrame(() => {
+      initCuratedRideMap(pub, route);
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function initCuratedRideMap(pub, route) {
+  const mapEl = document.getElementById('curatedRideMap');
+  if (!mapEl || !route?.map?.encodedPolyline5) return;
+
+  if (state.detailRouteMap) {
+    state.detailRouteMap.remove();
+    state.detailRouteMap = null;
+    state.detailRouteLayer = null;
+  }
+
+  const routePoints = decodePolyline5(route.map.encodedPolyline5);
+
+  state.detailRouteMap = L.map(mapEl, {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    touchZoom: true
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(state.detailRouteMap);
+
+  state.detailRouteLayer = L.polyline(routePoints, {
+    color: '#d6b24a',
+    weight: 5,
+    opacity: 0.95
+  }).addTo(state.detailRouteMap);
+
+  L.circleMarker([route.start.lat, route.start.lng], {
+    radius: 7,
+    color: '#2f2f2f',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(state.detailRouteMap).bindTooltip(route.start.label, { direction: 'top' });
+
+  L.circleMarker([pub.lat, pub.lng], {
+    radius: 8,
+    color: '#2f2f2f',
+    weight: 2,
+    fillColor: '#f5c542',
+    fillOpacity: 1
+  }).addTo(state.detailRouteMap).bindTooltip(pub.name, { direction: 'top' });
+
+  state.detailRouteMap.fitBounds(state.detailRouteLayer.getBounds(), { padding: [18, 18] });
+  setTimeout(() => state.detailRouteMap && state.detailRouteMap.invalidateSize(), 120);
+}
+
+function decodePolyline5(str) {
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  const coordinates = [];
+
+  while (index < str.length) {
+    let result = 0;
+    let shift = 0;
+    let byte = null;
+
+    do {
+      byte = str.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lat += deltaLat;
+
+    result = 0;
+    shift = 0;
+
+    do {
+      byte = str.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lng += deltaLng;
+
+    coordinates.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return coordinates;
+}
+
+
 function bindDetailGalleryDots() {
   const gallery = els.modalContent.querySelector('.detailGallery');
   if (!gallery) return;
@@ -1053,6 +1267,12 @@ function bindDetailGalleryDots() {
 }
 
 function closeModal(push = false) {
+  if (state.detailRouteMap) {
+    state.detailRouteMap.remove();
+    state.detailRouteMap = null;
+    state.detailRouteLayer = null;
+  }
+
   els.modalOverlay.classList.add('isHidden');
   els.modalContent.innerHTML = '';
   unlockBodyScroll();
