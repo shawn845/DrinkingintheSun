@@ -1172,10 +1172,6 @@ function ensureExpandedRouteMapOverlay() {
     overlay.innerHTML = `
       <div class="routeMapOverlayPanel" role="dialog" aria-modal="true" aria-label="Recommended ride map">
         <button class="routeMapClose" type="button" id="btnCloseRouteMap" aria-label="Close expanded map">×</button>
-        <div class="routeMapOverlayHead">
-          <div class="routeMapOverlayKicker">Recommended ride</div>
-          <div class="routeMapOverlayTitle" id="routeMapOverlayTitle"></div>
-        </div>
         <div class="routeMapOverlayMap" id="curatedRideMapFullscreen" aria-label="Expanded recommended ride map"></div>
       </div>
     `;
@@ -1285,10 +1281,7 @@ function initCuratedRideMap(pub, route) {
 function openExpandedRouteMap(pub, route) {
   const overlay = ensureExpandedRouteMapOverlay();
   const mapEl = overlay.querySelector('#curatedRideMapFullscreen');
-  const titleEl = overlay.querySelector('#routeMapOverlayTitle');
   if (!overlay || !mapEl || !route?.map?.encodedPolyline5) return;
-
-  if (titleEl) titleEl.textContent = pub.name || 'Recommended ride';
   overlay.classList.remove('isHidden');
   overlay.setAttribute('aria-hidden', 'false');
 
