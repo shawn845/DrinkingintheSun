@@ -1513,9 +1513,6 @@ function updateFullscreenRouteUserMarker() {
     }
   }
 
-  if (!state.fullscreenRouteMap.getBounds().pad(-0.08).contains(latlng)) {
-    state.fullscreenRouteMap.panTo(latlng, { animate: true, duration: 0.5 });
-  }
 }
 
 function clearFullscreenRouteUserMarker() {
