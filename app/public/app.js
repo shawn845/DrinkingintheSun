@@ -1150,7 +1150,11 @@ function renderCuratedRideCard(pub, route) {
         minutes: Number(route.stats.minutesAt18kph) || Number(route.stats.minutesAt15kph) || null
       }
     : getRideEstimate(pub, FALLBACK_LOCATION);
-  const mapLabel = route?.start?.label ? `From ${route.start.label}` : 'From Nottingham city centre';
+  const startLabelRaw = route?.start?.label || 'Nottingham city centre';
+  const mapLabel = `From ${startLabelRaw}`;
+  const compactStartLabel = /nottingham city centre/i.test(startLabelRaw)
+    ? 'From city centre'
+    : `From ${startLabelRaw.replace(/^near\s+/i, '')}`;
 
   return `
     <section class="routeCard isHidden" id="curatedRideCard">
@@ -1162,25 +1166,18 @@ function renderCuratedRideCard(pub, route) {
         <div class="routeCardBadge">Curated</div>
       </div>
 
-      <div class="routeStats">
-        <div class="routeStat">
-          <div class="routeStatLabel">Distance</div>
-          <div class="routeStatValue">${ride ? `${ride.km.toFixed(1)} km` : '—'}</div>
-        </div>
-        <div class="routeStat">
-          <div class="routeStatLabel">Ride time</div>
-          <div class="routeStatValue">${ride ? formatRideMinutes(ride.minutes) : '—'}</div>
-        </div>
-        <div class="routeStat">
-          <div class="routeStatLabel">Start</div>
-          <div class="routeStatValue">${escapeHtml(route.start.label)}</div>
-        </div>
+      <div class="routeMetaRow" aria-label="Recommended ride summary">
+        <span class="routeMetaItem routeMetaStrong">${ride ? `${ride.km.toFixed(1)} km` : '—'}</span>
+        <span class="routeMetaSeparator" aria-hidden="true">•</span>
+        <span class="routeMetaItem routeMetaStrong">${ride ? formatRideMinutes(ride.minutes) : '—'}</span>
+        <span class="routeMetaSeparator" aria-hidden="true">•</span>
+        <span class="routeMetaItem">${escapeHtml(compactStartLabel)}</span>
       </div>
 
       <div class="routeNote">This is your hand-picked ride line for ${escapeHtml(pub.name)}. It previews the route inside the app rather than recalculating a generic bike route.</div>
       <div class="routeMap" id="curatedRideMap" aria-label="Recommended ride map"></div>
       <div class="routeMapActions">
-        <button class="pillBtn" type="button" id="btnExpandRouteMap">Expand map</button>
+        <button class="pillBtn" type="button" id="btnExpandRouteMap">Open route</button>
       </div>
 
     </section>
