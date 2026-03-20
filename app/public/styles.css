@@ -836,34 +836,33 @@ button,
   color:#5a4a14;
 }
 
-.routeStats{
+.routeMetaRow{
   margin-top:12px;
-  display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:10px;
-}
-
-.routeStat{
-  background:#faf9f4;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:6px;
+  padding:10px 12px;
   border:1px solid var(--line);
   border-radius:14px;
-  padding:10px;
+  background:#faf9f4;
+  color:#4d4d4d;
+  font-size:13px;
+  line-height:1.3;
 }
 
-.routeStatLabel{
-  font-size:11px;
-  color:var(--muted);
-  font-weight:800;
-  text-transform:uppercase;
-  letter-spacing:.2px;
+.routeMetaItem{
+  font-weight:700;
 }
 
-.routeStatValue{
-  margin-top:4px;
-  font-size:14px;
-  font-weight:850;
+.routeMetaStrong{
   color:#2f2f2f;
-  line-height:1.2;
+  font-weight:850;
+}
+
+.routeMetaSeparator{
+  color:#9a8f6a;
+  font-weight:850;
 }
 
 .routeNote{
@@ -980,14 +979,10 @@ button,
     right:12px;
   }
 
-  .routeStats{
-    grid-template-columns:1fr;
-  }
-}
-
-@media (max-width:560px){
-  .routeStats{
-    grid-template-columns:1fr;
+  .routeMetaRow{
+    gap:5px;
+    padding:9px 11px;
+    font-size:12px;
   }
 }
 
