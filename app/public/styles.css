@@ -1053,14 +1053,14 @@ button,
 
 .routeNavBanner{
   position:absolute;
-  top:max(12px, calc(env(safe-area-inset-top, 0px) + 10px));
   left:12px;
-  right:86px;
+  right:12px;
+  bottom:max(12px, calc(env(safe-area-inset-bottom, 0px) + 12px));
   z-index:1250;
   padding:11px 13px;
   border-radius:16px;
-  border:1px solid rgba(0,0,0,.08);
-  background:rgba(255,255,255,.96);
+  border:1px solid rgba(166,132,28,.42);
+  background:rgba(223, 187, 73, .96);
   box-shadow:0 10px 24px rgba(0,0,0,.14);
   -webkit-backdrop-filter:blur(10px);
   backdrop-filter:blur(10px);
@@ -1068,12 +1068,13 @@ button,
 }
 
 .routeNavBanner.isOnRoute{
-  background:rgba(255,255,255,.96);
+  background:rgba(223, 187, 73, .96);
+  border-color:rgba(166,132,28,.42);
 }
 
 .routeNavBanner.isTurn{
-  background:rgba(255,247,219,.98);
-  border-color:rgba(214,178,74,.42);
+  background:rgba(228, 194, 89, .97);
+  border-color:rgba(166,132,28,.5);
 }
 
 .routeNavBanner.isOffRoute{
@@ -1103,9 +1104,9 @@ button,
 
 @media (max-width:560px){
   .routeNavBanner{
-    top:max(12px, calc(env(safe-area-inset-top, 0px) + 10px));
     left:12px;
-    right:88px;
+    right:12px;
+    bottom:max(12px, calc(env(safe-area-inset-bottom, 0px) + 12px));
     padding:10px 12px;
   }
 
