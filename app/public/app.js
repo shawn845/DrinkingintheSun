@@ -81,7 +81,10 @@ const state = {
   fullscreenRouteMap: null,
   fullscreenRouteLayer: null,
   fullscreenRouteUserMarker: null,
-  fullscreenRouteUserAccuracyCircle: null
+  fullscreenRouteUserAccuracyCircle: null,
+  fullscreenRouteNav: null,
+  fullscreenRoutePubName: '',
+  fullscreenRouteLastInstructionKey: ''
 };
 
 const els = {
@@ -1199,6 +1202,10 @@ function ensureExpandedRouteMapOverlay() {
     overlay.setAttribute('aria-hidden', 'true');
     overlay.innerHTML = `
       <div class="routeMapOverlayPanel" role="dialog" aria-modal="true" aria-label="Recommended ride map">
+        <div class="routeNavBanner" id="routeNavBanner" aria-live="polite">
+          <div class="routeNavPrimary" id="routeNavPrimary">Follow the yellow line</div>
+          <div class="routeNavSecondary" id="routeNavSecondary">Open Near me to improve live route guidance.</div>
+        </div>
         <button class="routeMapClose" type="button" id="btnCloseRouteMap" aria-label="Close expanded map">×</button>
         <div class="routeMapOverlayMap" id="curatedRideMapFullscreen" aria-label="Expanded recommended ride map"></div>
       </div>
@@ -1333,6 +1340,11 @@ function closeExpandedRouteMap() {
     state.fullscreenRouteUserMarker = null;
     state.fullscreenRouteUserAccuracyCircle = null;
   }
+
+  state.fullscreenRouteNav = null;
+  state.fullscreenRoutePubName = '';
+  state.fullscreenRouteLastInstructionKey = '';
+  renderRouteNavigationBanner(null);
 }
 
 function isExpandedRouteMapOpen() {
@@ -1353,6 +1365,9 @@ function initExpandedRouteMap(pub, route) {
   }
 
   const routePoints = decodePolyline5(route.map.encodedPolyline5);
+  state.fullscreenRouteNav = buildRouteNavigationData(routePoints);
+  state.fullscreenRoutePubName = pub.name;
+  state.fullscreenRouteLastInstructionKey = '';
 
   state.fullscreenRouteMap = L.map(mapEl, {
     zoomControl: true,
@@ -1396,12 +1411,14 @@ function initExpandedRouteMap(pub, route) {
 
   state.fullscreenRouteMap.fitBounds(bounds, { padding: [26, 26] });
   updateFullscreenRouteUserMarker();
+  updateFullscreenRouteNavigation();
   setTimeout(() => state.fullscreenRouteMap && state.fullscreenRouteMap.invalidateSize(), 120);
 }
 
 function startDetailRouteLocationWatch() {
   if (!navigator.geolocation || state.detailRouteWatchId != null) {
     updateDetailRouteUserMarker();
+    updateFullscreenRouteNavigation();
     return;
   }
 
@@ -1417,6 +1434,7 @@ function startDetailRouteLocationWatch() {
 
       updateUserLocationMarker();
       updateDetailRouteUserMarker();
+      updateFullscreenRouteNavigation();
     },
     () => {
       stopDetailRouteLocationWatch(false);
@@ -1501,6 +1519,7 @@ function updateFullscreenRouteUserMarker() {
 
   if (!state.userLocation || state.userLocation.fallback) {
     clearFullscreenRouteUserMarker();
+    updateFullscreenRouteNavigation();
     return;
   }
 
@@ -1534,6 +1553,7 @@ function updateFullscreenRouteUserMarker() {
     }
   }
 
+  updateFullscreenRouteNavigation();
 }
 
 function clearFullscreenRouteUserMarker() {
@@ -1547,6 +1567,272 @@ function clearFullscreenRouteUserMarker() {
     state.fullscreenRouteUserAccuracyCircle = null;
   }
 }
+
+
+function renderRouteNavigationBanner(instruction) {
+  const banner = document.getElementById('routeNavBanner');
+  const primary = document.getElementById('routeNavPrimary');
+  const secondary = document.getElementById('routeNavSecondary');
+  if (!banner || !primary || !secondary) return;
+
+  const fallback = instruction || {
+    tone: 'idle',
+    primary: 'Follow the yellow line',
+    secondary: 'Open Near me to improve live route guidance.'
+  };
+
+  banner.classList.remove('isIdle', 'isOnRoute', 'isTurn', 'isOffRoute', 'isArrive');
+  banner.classList.add(
+    fallback.tone === 'offroute' ? 'isOffRoute'
+      : fallback.tone === 'turn' ? 'isTurn'
+      : fallback.tone === 'arrive' ? 'isArrive'
+      : fallback.tone === 'onroute' ? 'isOnRoute'
+      : 'isIdle'
+  );
+
+  const key = `${fallback.tone}|${fallback.primary}|${fallback.secondary}`;
+  if (state.fullscreenRouteLastInstructionKey !== key) {
+    state.fullscreenRouteLastInstructionKey = key;
+    primary.textContent = fallback.primary;
+    secondary.textContent = fallback.secondary;
+  }
+}
+
+function updateFullscreenRouteNavigation() {
+  if (!isExpandedRouteMapOpen()) return;
+
+  if (!state.fullscreenRouteNav) {
+    renderRouteNavigationBanner({
+      tone: 'idle',
+      primary: 'Follow the yellow line',
+      secondary: 'Route guidance will appear here.'
+    });
+    return;
+  }
+
+  if (!state.userLocation || state.userLocation.fallback) {
+    renderRouteNavigationBanner({
+      tone: 'idle',
+      primary: 'Finding your location…',
+      secondary: 'Use Near me or allow location to get live guidance.'
+    });
+    return;
+  }
+
+  const instruction = getRouteNavigationInstruction(
+    state.fullscreenRouteNav,
+    state.userLocation.lat,
+    state.userLocation.lng,
+    state.fullscreenRoutePubName || 'the pub'
+  );
+
+  renderRouteNavigationBanner(instruction);
+}
+
+function getRouteNavigationInstruction(nav, lat, lng, pubName) {
+  const position = findNearestRoutePosition(nav, lat, lng);
+  if (!position) {
+    return {
+      tone: 'idle',
+      primary: 'Follow the yellow line',
+      secondary: 'Route guidance unavailable.'
+    };
+  }
+
+  const remainingMeters = Math.max(0, nav.totalMeters - position.alongMeters);
+  const offRouteThreshold = 45;
+
+  if (remainingMeters <= 80) {
+    return {
+      tone: 'arrive',
+      primary: `Arriving at ${pubName}`,
+      secondary: `${formatNavDistance(remainingMeters)} left`
+    };
+  }
+
+  if (position.distanceMeters > offRouteThreshold) {
+    return {
+      tone: 'offroute',
+      primary: 'Off route',
+      secondary: `Head ${formatNavDistance(position.distanceMeters)} back to the yellow line`
+    };
+  }
+
+  const nextCue = nav.cues.find(cue => cue.atMeters > position.alongMeters + 10) || null;
+
+  if (nextCue) {
+    const distanceToCue = Math.max(0, nextCue.atMeters - position.alongMeters);
+
+    if (distanceToCue <= 25) {
+      return {
+        tone: 'turn',
+        primary: nextCue.nowLabel,
+        secondary: `${formatNavDistance(remainingMeters)} to ${pubName}`
+      };
+    }
+
+    if (distanceToCue <= 220) {
+      return {
+        tone: 'turn',
+        primary: `${nextCue.label} in ${formatNavDistance(distanceToCue)}`,
+        secondary: `${formatNavDistance(remainingMeters)} to ${pubName}`
+      };
+    }
+  }
+
+  return {
+    tone: 'onroute',
+    primary: 'Continue on route',
+    secondary: `${formatNavDistance(remainingMeters)} to ${pubName}`
+  };
+}
+
+function buildRouteNavigationData(routePoints) {
+  if (!Array.isArray(routePoints) || routePoints.length < 2) return null;
+
+  const refLat = routePoints.reduce((sum, point) => sum + point[0], 0) / routePoints.length;
+  const projected = routePoints.map(([lat, lng]) => projectRoutePoint(lat, lng, refLat));
+  const cumulative = [0];
+
+  for (let i = 1; i < projected.length; i++) {
+    cumulative[i] = cumulative[i - 1] + distanceBetweenProjected(projected[i - 1], projected[i]);
+  }
+
+  return {
+    refLat,
+    projected,
+    cumulative,
+    totalMeters: cumulative[cumulative.length - 1] || 0,
+    cues: extractRouteCues(projected, cumulative)
+  };
+}
+
+function extractRouteCues(projected, cumulative) {
+  if (!projected.length) return [];
+
+  const cues = [];
+  const lookAhead = 8;
+
+  for (let i = lookAhead; i < projected.length - lookAhead; i++) {
+    const prev = projected[i - lookAhead];
+    const current = projected[i];
+    const next = projected[i + lookAhead];
+    const atMeters = cumulative[i] || 0;
+
+    const inBearing = bearingBetweenProjected(prev, current);
+    const outBearing = bearingBetweenProjected(current, next);
+    const turnDeg = normalizeTurnDegrees(rad2deg(outBearing - inBearing));
+    const absTurn = Math.abs(turnDeg);
+
+    if (absTurn < 45) continue;
+
+    const cue = {
+      atMeters,
+      absTurn,
+      ...buildCueLabels(turnDeg)
+    };
+
+    const previous = cues[cues.length - 1];
+    if (previous && (cue.atMeters - previous.atMeters) < 200) {
+      if (cue.absTurn > previous.absTurn) cues[cues.length - 1] = cue;
+      continue;
+    }
+
+    cues.push(cue);
+  }
+
+  return cues;
+}
+
+function buildCueLabels(turnDeg) {
+  const isLeft = turnDeg > 0;
+  const absTurn = Math.abs(turnDeg);
+
+  if (absTurn >= 120) {
+    return {
+      type: isLeft ? 'uturn-left' : 'uturn-right',
+      label: isLeft ? 'Hard left ahead' : 'Hard right ahead',
+      nowLabel: isLeft ? 'Hard left now' : 'Hard right now'
+    };
+  }
+
+  if (absTurn >= 70) {
+    return {
+      type: isLeft ? 'sharp-left' : 'sharp-right',
+      label: isLeft ? 'Sharp left ahead' : 'Sharp right ahead',
+      nowLabel: isLeft ? 'Sharp left now' : 'Sharp right now'
+    };
+  }
+
+  return {
+    type: isLeft ? 'left' : 'right',
+    label: isLeft ? 'Left ahead' : 'Right ahead',
+    nowLabel: isLeft ? 'Left now' : 'Right now'
+  };
+}
+
+function findNearestRoutePosition(nav, lat, lng) {
+  if (!nav?.projected?.length || nav.projected.length < 2) return null;
+
+  const point = projectRoutePoint(lat, lng, nav.refLat);
+  let best = null;
+
+  for (let i = 0; i < nav.projected.length - 1; i++) {
+    const a = nav.projected[i];
+    const b = nav.projected[i + 1];
+    const segX = b.x - a.x;
+    const segY = b.y - a.y;
+    const segLenSq = (segX * segX) + (segY * segY);
+
+    if (!segLenSq) continue;
+
+    const t = clamp((((point.x - a.x) * segX) + ((point.y - a.y) * segY)) / segLenSq, 0, 1);
+    const projX = a.x + (segX * t);
+    const projY = a.y + (segY * t);
+    const dx = point.x - projX;
+    const dy = point.y - projY;
+    const distanceMeters = Math.hypot(dx, dy);
+    const segmentLength = Math.sqrt(segLenSq);
+    const alongMeters = (nav.cumulative[i] || 0) + (segmentLength * t);
+
+    if (!best || distanceMeters < best.distanceMeters) {
+      best = { distanceMeters, alongMeters, segmentIndex: i };
+    }
+  }
+
+  return best;
+}
+
+function projectRoutePoint(lat, lng, refLat) {
+  const metersPerDegLat = 111320;
+  const metersPerDegLng = Math.cos(deg2rad(refLat || lat)) * 111320;
+  return {
+    x: lng * metersPerDegLng,
+    y: lat * metersPerDegLat
+  };
+}
+
+function distanceBetweenProjected(a, b) {
+  return Math.hypot((b.x - a.x), (b.y - a.y));
+}
+
+function bearingBetweenProjected(a, b) {
+  return Math.atan2((b.y - a.y), (b.x - a.x));
+}
+
+function normalizeTurnDegrees(deg) {
+  let value = deg;
+  while (value > 180) value -= 360;
+  while (value < -180) value += 360;
+  return value;
+}
+
+function formatNavDistance(meters) {
+  if (!Number.isFinite(meters)) return '—';
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+  return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
+}
+
 
 function decodePolyline5(str) {
   let index = 0;
