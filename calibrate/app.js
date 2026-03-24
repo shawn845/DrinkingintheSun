@@ -24,6 +24,7 @@ const els = {
   enableMotionBtn: document.getElementById("enableMotionBtn"),
   addPointBtn: document.getElementById("addPointBtn"),
   undoPointBtn: document.getElementById("undoPointBtn"),
+  clearBtn: document.getElementById("clearBtn"),
   saveDraftBtn: document.getElementById("saveDraftBtn"),
   exportBtn: document.getElementById("exportBtn"),
   video: document.getElementById("video"),
@@ -49,6 +50,7 @@ function bindUI() {
   els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
   els.addPointBtn.addEventListener("click", addPoint);
   els.undoPointBtn.addEventListener("click", undoPoint);
+  els.clearBtn.addEventListener("click", clearPoints);
   els.saveDraftBtn.addEventListener("click", saveDraft);
   els.exportBtn.addEventListener("click", exportJson);
 
@@ -75,8 +77,6 @@ async function enableMotionFromButton() {
     await requestMotion();
     render();
 
-    // If motion permission was granted but Safari has not emitted data yet,
-    // let the user know to move the phone slightly.
     setTimeout(() => {
       if (state.motionReady && (state.headingDeg == null || state.pitchDeg == null)) {
         els.motionStatus.textContent = "Enabled - move phone slightly";
@@ -276,11 +276,23 @@ function undoPoint() {
   render();
 }
 
+function clearPoints() {
+  if (state.samples.length === 0) return;
+
+  const ok = confirm("Clear all captured points and start again?");
+  if (!ok) return;
+
+  state.samples = [];
+  localStorage.removeItem("dits-calibration-draft");
+  render();
+}
+
 function render() {
   els.pointsCount.textContent = String(state.samples.length);
 
   els.addPointBtn.disabled = !canCapture();
   els.undoPointBtn.disabled = state.samples.length === 0;
+  els.clearBtn.disabled = state.samples.length === 0;
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
 
