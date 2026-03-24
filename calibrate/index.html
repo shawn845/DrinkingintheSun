@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Seat calibration | Drinking in the Sun</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="cal-page">
+    <header class="cal-header">
+      <h1>Seat calibration</h1>
+      <p>
+        Stand at the seat, point the centre marker at the obstruction line,
+        then tap <strong>Add point</strong> as you pan across.
+      </p>
+    </header>
+
+    <section class="cal-form card">
+      <label for="pubName">Pub name</label>
+      <input id="pubName" type="text" placeholder="The Example Inn" />
+
+      <label for="seatName">Seat / spot name</label>
+      <input id="seatName" type="text" placeholder="Front bench by wall" />
+
+      <label for="notes">Notes (optional)</label>
+      <textarea
+        id="notes"
+        rows="3"
+        placeholder="Tall chimney blocks mid-afternoon sun"
+      ></textarea>
+
+      <button id="startBtn" class="primary">Start calibration</button>
+    </section>
+
+    <section class="cal-status card">
+      <div class="status-row">
+        <span>GPS</span>
+        <strong id="gpsStatus">Not started</strong>
+      </div>
+      <div class="status-row">
+        <span>Camera</span>
+        <strong id="cameraStatus">Not started</strong>
+      </div>
+      <div class="status-row">
+        <span>Motion</span>
+        <strong id="motionStatus">Not started</strong>
+      </div>
+      <div class="status-row">
+        <span>Heading</span>
+        <strong id="headingValue">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Pitch</span>
+        <strong id="pitchValue">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Points</span>
+        <strong id="pointsCount">0</strong>
+      </div>
+    </section>
+
+    <section class="cal-camera card">
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="reticle" aria-hidden="true"></div>
+        <div class="camera-hint">Line up the centre marker with the roofline / obstruction edge</div>
+      </div>
+    </section>
+
+    <section class="cal-controls card">
+      <button id="addPointBtn" disabled>Add point</button>
+      <button id="undoPointBtn" disabled>Undo</button>
+      <button id="saveDraftBtn" disabled>Save draft</button>
+      <button id="exportBtn" disabled>Export JSON</button>
+    </section>
+
+    <section class="cal-points card">
+      <h2>Captured points</h2>
+      <ol id="pointsList" class="points-list"></ol>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
