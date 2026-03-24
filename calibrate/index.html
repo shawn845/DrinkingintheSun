@@ -14,8 +14,8 @@
     <header class="cal-header">
       <h1>Seat calibration</h1>
       <p>
-        Stand at the seat, point the centre marker at the obstruction line,
-        then tap <strong>Add point</strong> as you pan across.
+        Sit in the seat and hold the phone at eye level. First enable motion,
+        then set the horizon, then start sampling points along the obstruction line.
       </p>
     </header>
 
@@ -58,6 +58,10 @@
         <strong id="pitchValue">--</strong>
       </div>
       <div class="status-row">
+        <span>Horizon ref</span>
+        <strong id="horizonValue">Not set</strong>
+      </div>
+      <div class="status-row">
         <span>Points</span>
         <strong id="pointsCount">0</strong>
       </div>
@@ -67,12 +71,15 @@
       <div class="video-wrap">
         <video id="video" autoplay playsinline muted></video>
         <div class="reticle" aria-hidden="true"></div>
-        <div class="camera-hint">Line up the centre marker with the roofline / obstruction edge</div>
+        <div class="camera-hint">
+          Line up the centre marker with the roofline / obstruction edge
+        </div>
       </div>
     </section>
 
     <section class="cal-controls card">
       <button id="enableMotionBtn" class="primary">Enable motion</button>
+      <button id="setHorizonBtn" disabled>Set horizon</button>
       <button id="addPointBtn" disabled>Add point</button>
       <button id="undoPointBtn" disabled>Undo</button>
       <button id="clearBtn" class="danger-lite" disabled>Clear points</button>
@@ -84,8 +91,17 @@
       <h2>Captured points</h2>
       <ol id="pointsList" class="points-list"></ol>
     </section>
+
+    <section class="cal-preview card">
+      <h2>Preview</h2>
+      <label for="previewDate">Preview date</label>
+      <input id="previewDate" type="date" />
+      <button id="previewBtn" class="primary" disabled>Calculate sun window</button>
+      <div id="previewOutput" class="preview-output">No preview yet.</div>
+    </section>
   </main>
 
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
