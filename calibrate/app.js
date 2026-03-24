@@ -9,6 +9,7 @@ const state = {
   headingDeg: null,
   pitchDeg: null,
   motionReady: false,
+  motionRequested: false,
   cameraReady: false,
   gpsReady: false,
   stream: null,
@@ -20,6 +21,7 @@ const els = {
   seatName: document.getElementById("seatName"),
   notes: document.getElementById("notes"),
   startBtn: document.getElementById("startBtn"),
+  enableMotionBtn: document.getElementById("enableMotionBtn"),
   addPointBtn: document.getElementById("addPointBtn"),
   undoPointBtn: document.getElementById("undoPointBtn"),
   saveDraftBtn: document.getElementById("saveDraftBtn"),
@@ -44,6 +46,7 @@ function init() {
 
 function bindUI() {
   els.startBtn.addEventListener("click", startCalibration);
+  els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
   els.addPointBtn.addEventListener("click", addPoint);
   els.undoPointBtn.addEventListener("click", undoPoint);
   els.saveDraftBtn.addEventListener("click", saveDraft);
@@ -51,15 +54,42 @@ function bindUI() {
 
   els.pubName.addEventListener("input", () => {
     state.pubName = els.pubName.value.trim();
+    render();
   });
 
   els.seatName.addEventListener("input", () => {
     state.seatName = els.seatName.value.trim();
+    render();
   });
 
   els.notes.addEventListener("input", () => {
     state.notes = els.notes.value.trim();
   });
+}
+
+async function enableMotionFromButton() {
+  els.enableMotionBtn.disabled = true;
+  els.motionStatus.textContent = "Requesting...";
+
+  try {
+    await requestMotion();
+    render();
+
+    // If motion permission was granted but Safari has not emitted data yet,
+    // let the user know to move the phone slightly.
+    setTimeout(() => {
+      if (state.motionReady && (state.headingDeg == null || state.pitchDeg == null)) {
+        els.motionStatus.textContent = "Enabled - move phone slightly";
+      }
+    }, 1500);
+  } catch (err) {
+    console.error(err);
+    els.motionStatus.textContent = "Failed";
+    alert(err.message || "Could not enable motion.");
+  } finally {
+    els.enableMotionBtn.disabled = false;
+    render();
+  }
 }
 
 async function startCalibration() {
@@ -77,7 +107,6 @@ async function startCalibration() {
   try {
     await requestLocation();
     await requestCamera();
-    await requestMotion();
   } catch (err) {
     console.error(err);
     alert(err.message || "Could not start calibration.");
@@ -147,22 +176,30 @@ async function requestCamera() {
 }
 
 async function requestMotion() {
-  els.motionStatus.textContent = "Requesting...";
+  if (state.motionRequested) {
+    return;
+  }
+
+  state.motionRequested = true;
+
+  const hasDeviceOrientation = typeof DeviceOrientationEvent !== "undefined";
+  if (!hasDeviceOrientation) {
+    throw new Error("Device orientation is not supported on this device/browser.");
+  }
 
   const isIOSPermissionFlow =
-    typeof DeviceOrientationEvent !== "undefined" &&
     typeof DeviceOrientationEvent.requestPermission === "function";
 
   if (isIOSPermissionFlow) {
     const response = await DeviceOrientationEvent.requestPermission();
     if (response !== "granted") {
-      throw new Error("Motion/orientation permission was not granted.");
+      throw new Error("Motion/orientation permission was denied.");
     }
   }
 
   window.addEventListener("deviceorientation", handleOrientation, true);
   state.motionReady = true;
-  els.motionStatus.textContent = "Ready";
+  els.motionStatus.textContent = "Enabled";
 }
 
 function handleOrientation(event) {
@@ -177,6 +214,11 @@ function handleOrientation(event) {
   if (pitch != null) {
     state.pitchDeg = pitch;
     els.pitchValue.textContent = `${state.pitchDeg.toFixed(1)}°`;
+  }
+
+  if (state.headingDeg != null || state.pitchDeg != null) {
+    els.motionStatus.textContent = "Ready";
+    render();
   }
 }
 
@@ -204,13 +246,18 @@ function normalizeDeg(value) {
 }
 
 function addPoint() {
-  if (!state.gpsReady || !state.cameraReady || !state.motionReady) {
+  if (!state.gpsReady || !state.cameraReady) {
     alert("Start calibration first.");
     return;
   }
 
+  if (!state.motionReady) {
+    alert("Tap Enable motion first.");
+    return;
+  }
+
   if (state.headingDeg == null || state.pitchDeg == null) {
-    alert("Waiting for motion data. Hold still for a moment and try again.");
+    alert("No motion data yet. Move the phone slightly and try again.");
     return;
   }
 
@@ -237,6 +284,11 @@ function render() {
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
 
+  if (els.enableMotionBtn) {
+    els.enableMotionBtn.disabled = state.motionReady;
+    els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
+  }
+
   renderPoints();
 }
 
@@ -257,7 +309,13 @@ function renderPoints() {
 }
 
 function canCapture() {
-  return state.gpsReady && state.cameraReady && state.motionReady;
+  return (
+    state.gpsReady &&
+    state.cameraReady &&
+    state.motionReady &&
+    state.headingDeg != null &&
+    state.pitchDeg != null
+  );
 }
 
 function hasMinimumData() {
