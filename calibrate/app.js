@@ -8,6 +8,8 @@ const state = {
   gpsTimestamp: null,
   headingDeg: null,
   pitchDeg: null,
+  horizonPitch: null,
+  horizonCapturedAt: null,
   motionReady: false,
   motionRequested: false,
   cameraReady: false,
@@ -22,17 +24,22 @@ const els = {
   notes: document.getElementById("notes"),
   startBtn: document.getElementById("startBtn"),
   enableMotionBtn: document.getElementById("enableMotionBtn"),
+  setHorizonBtn: document.getElementById("setHorizonBtn"),
   addPointBtn: document.getElementById("addPointBtn"),
   undoPointBtn: document.getElementById("undoPointBtn"),
   clearBtn: document.getElementById("clearBtn"),
   saveDraftBtn: document.getElementById("saveDraftBtn"),
   exportBtn: document.getElementById("exportBtn"),
+  previewBtn: document.getElementById("previewBtn"),
+  previewDate: document.getElementById("previewDate"),
+  previewOutput: document.getElementById("previewOutput"),
   video: document.getElementById("video"),
   gpsStatus: document.getElementById("gpsStatus"),
   cameraStatus: document.getElementById("cameraStatus"),
   motionStatus: document.getElementById("motionStatus"),
   headingValue: document.getElementById("headingValue"),
   pitchValue: document.getElementById("pitchValue"),
+  horizonValue: document.getElementById("horizonValue"),
   pointsCount: document.getElementById("pointsCount"),
   pointsList: document.getElementById("pointsList")
 };
@@ -42,17 +49,20 @@ document.addEventListener("DOMContentLoaded", init);
 function init() {
   bindUI();
   loadDraft();
+  setDefaultPreviewDate();
   render();
 }
 
 function bindUI() {
   els.startBtn.addEventListener("click", startCalibration);
   els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
+  els.setHorizonBtn.addEventListener("click", setHorizonReference);
   els.addPointBtn.addEventListener("click", addPoint);
   els.undoPointBtn.addEventListener("click", undoPoint);
   els.clearBtn.addEventListener("click", clearPoints);
   els.saveDraftBtn.addEventListener("click", saveDraft);
   els.exportBtn.addEventListener("click", exportJson);
+  els.previewBtn.addEventListener("click", calculatePreview);
 
   els.pubName.addEventListener("input", () => {
     state.pubName = els.pubName.value.trim();
@@ -67,6 +77,20 @@ function bindUI() {
   els.notes.addEventListener("input", () => {
     state.notes = els.notes.value.trim();
   });
+
+  els.previewDate.addEventListener("change", () => {
+    els.previewOutput.textContent = "Preview date updated. Tap Calculate sun window.";
+  });
+}
+
+function setDefaultPreviewDate() {
+  if (!els.previewDate.value) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    els.previewDate.value = `${y}-${m}-${d}`;
+  }
 }
 
 async function enableMotionFromButton() {
@@ -176,9 +200,7 @@ async function requestCamera() {
 }
 
 async function requestMotion() {
-  if (state.motionRequested) {
-    return;
-  }
+  if (state.motionRequested) return;
 
   state.motionRequested = true;
 
@@ -245,6 +267,24 @@ function normalizeDeg(value) {
   return out;
 }
 
+function setHorizonReference() {
+  if (!state.motionReady) {
+    alert("Tap Enable motion first.");
+    return;
+  }
+
+  if (state.pitchDeg == null) {
+    alert("No pitch data yet. Move the phone slightly and try again.");
+    return;
+  }
+
+  state.horizonPitch = round1(state.pitchDeg);
+  state.horizonCapturedAt = new Date().toISOString();
+  els.horizonValue.textContent = `${state.horizonPitch.toFixed(1)}°`;
+  els.previewOutput.textContent = "Horizon set. You can now capture points.";
+  render();
+}
+
 function addPoint() {
   if (!state.gpsReady || !state.cameraReady) {
     alert("Start calibration first.");
@@ -256,6 +296,11 @@ function addPoint() {
     return;
   }
 
+  if (state.horizonPitch == null) {
+    alert("Set the horizon first.");
+    return;
+  }
+
   if (state.headingDeg == null || state.pitchDeg == null) {
     alert("No motion data yet. Move the phone slightly and try again.");
     return;
@@ -264,15 +309,18 @@ function addPoint() {
   const sample = {
     headingDeg: round1(state.headingDeg),
     pitchDeg: round1(state.pitchDeg),
+    relativeAltDeg: round1(Math.max(0, state.horizonPitch - state.pitchDeg)),
     capturedAt: new Date().toISOString()
   };
 
   state.samples.push(sample);
+  els.previewOutput.textContent = "Points updated. Tap Calculate sun window.";
   render();
 }
 
 function undoPoint() {
   state.samples.pop();
+  els.previewOutput.textContent = "Last point removed.";
   render();
 }
 
@@ -284,7 +332,181 @@ function clearPoints() {
 
   state.samples = [];
   localStorage.removeItem("dits-calibration-draft");
+  els.previewOutput.textContent = "Points cleared. Capture a new sweep.";
   render();
+}
+
+function calculatePreview() {
+  if (!window.SunCalc) {
+    els.previewOutput.textContent = "SunCalc did not load.";
+    return;
+  }
+
+  if (!hasPreviewInputs()) {
+    alert("You need a horizon, location, and at least 2 points before preview will work.");
+    return;
+  }
+
+  const selectedDate = els.previewDate.value;
+  if (!selectedDate) {
+    alert("Pick a preview date.");
+    return;
+  }
+
+  const profile = buildProfile();
+  const windows = getSunWindowsForDate(selectedDate, profile);
+
+  if (!windows.length) {
+    els.previewOutput.innerHTML = `
+      <strong>No direct sun detected</strong><br>
+      No visible sun window was found for this date from the captured profile.
+    `;
+    return;
+  }
+
+  const first = windows[0].start;
+  const last = windows[windows.length - 1].end;
+  const list = windows
+    .map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`)
+    .join("<br>");
+
+  els.previewOutput.innerHTML = `
+    <strong>Sun windows</strong><br>
+    ${list}
+    <br><br>
+    <strong>First sun:</strong> ${formatClock(first)}<br>
+    <strong>Last sun:</strong> ${formatClock(last)}
+  `;
+}
+
+function buildProfile() {
+  const out = [];
+  let prevAdjusted = null;
+
+  for (const sample of state.samples) {
+    const raw = normalizeDeg(sample.headingDeg);
+    let adjusted = raw;
+
+    if (prevAdjusted != null) {
+      const candidates = [raw - 360, raw, raw + 360];
+      adjusted = candidates.reduce((best, candidate) => {
+        return Math.abs(candidate - prevAdjusted) < Math.abs(best - prevAdjusted)
+          ? candidate
+          : best;
+      }, candidates[0]);
+    }
+
+    out.push({
+      rawHeadingDeg: raw,
+      adjustedHeadingDeg: adjusted,
+      obstructionAltDeg: round1(Math.max(0, state.horizonPitch - sample.pitchDeg)),
+      pitchDeg: sample.pitchDeg
+    });
+
+    prevAdjusted = adjusted;
+  }
+
+  return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+}
+
+function getSunWindowsForDate(dateStr, profile) {
+  const windows = [];
+  let openWindow = null;
+
+  for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 5) {
+    const dt = localDateAtMinutes(dateStr, minutes);
+    const visible = isSunVisibleAt(dt, profile);
+
+    if (visible && !openWindow) {
+      openWindow = { start: dt, end: dt };
+    } else if (visible && openWindow) {
+      openWindow.end = dt;
+    } else if (!visible && openWindow) {
+      windows.push({ ...openWindow });
+      openWindow = null;
+    }
+  }
+
+  if (openWindow) {
+    windows.push({ ...openWindow });
+  }
+
+  return windows;
+}
+
+function isSunVisibleAt(dateObj, profile) {
+  const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
+  const sunAltDeg = radToDeg(pos.altitude);
+
+  if (sunAltDeg <= 0) return false;
+
+  const sunHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
+  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profile);
+
+  return sunAltDeg > obstructionAltDeg;
+}
+
+function getObstructionAltitudeAtHeading(compassHeadingDeg, profile) {
+  if (!profile.length) return 0;
+  if (profile.length === 1) return profile[0].obstructionAltDeg;
+
+  const targetAdjusted = mapCompassToAdjustedHeading(compassHeadingDeg, profile);
+
+  if (targetAdjusted <= profile[0].adjustedHeadingDeg) {
+    return profile[0].obstructionAltDeg;
+  }
+
+  if (targetAdjusted >= profile[profile.length - 1].adjustedHeadingDeg) {
+    return profile[profile.length - 1].obstructionAltDeg;
+  }
+
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i];
+    const b = profile[i + 1];
+
+    if (
+      targetAdjusted >= a.adjustedHeadingDeg &&
+      targetAdjusted <= b.adjustedHeadingDeg
+    ) {
+      const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
+      if (span === 0) return a.obstructionAltDeg;
+
+      const t = (targetAdjusted - a.adjustedHeadingDeg) / span;
+      return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
+    }
+  }
+
+  return profile[profile.length - 1].obstructionAltDeg;
+}
+
+function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
+  const mid =
+    (profile[0].adjustedHeadingDeg +
+      profile[profile.length - 1].adjustedHeadingDeg) / 2;
+
+  const candidates = [
+    compassHeadingDeg - 720,
+    compassHeadingDeg - 360,
+    compassHeadingDeg,
+    compassHeadingDeg + 360,
+    compassHeadingDeg + 720
+  ];
+
+  return candidates.reduce((best, candidate) => {
+    return Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best;
+  }, candidates[0]);
+}
+
+function localDateAtMinutes(dateStr, totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  return new Date(`${dateStr}T${hh}:${mm}:00`);
+}
+
+function radToDeg(rad) {
+  return (rad * 180) / Math.PI;
 }
 
 function render() {
@@ -295,11 +517,20 @@ function render() {
   els.clearBtn.disabled = state.samples.length === 0;
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
+  els.previewBtn.disabled = !hasPreviewInputs();
+
+  els.setHorizonBtn.disabled =
+    !state.motionReady || state.pitchDeg == null;
 
   if (els.enableMotionBtn) {
     els.enableMotionBtn.disabled = state.motionReady;
-    els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
+    els.enableMotionBtn.textContent = state.motionReady
+      ? "Motion enabled"
+      : "Enable motion";
   }
+
+  els.horizonValue.textContent =
+    state.horizonPitch == null ? "Not set" : `${state.horizonPitch.toFixed(1)}°`;
 
   renderPoints();
 }
@@ -314,6 +545,9 @@ function renderPoints() {
       <div class="point-meta">
         Heading ${sample.headingDeg.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°
       </div>
+      <div class="point-meta">
+        Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°
+      </div>
       <div class="point-meta">${formatTime(sample.capturedAt)}</div>
     `;
     els.pointsList.appendChild(li);
@@ -325,6 +559,7 @@ function canCapture() {
     state.gpsReady &&
     state.cameraReady &&
     state.motionReady &&
+    state.horizonPitch != null &&
     state.headingDeg != null &&
     state.pitchDeg != null
   );
@@ -340,6 +575,10 @@ function hasMinimumData() {
   );
 }
 
+function hasPreviewInputs() {
+  return hasMinimumData() && state.horizonPitch != null && state.samples.length >= 2;
+}
+
 function buildRecord() {
   return {
     pubName: state.pubName,
@@ -351,6 +590,8 @@ function buildRecord() {
     gpsTimestamp: state.gpsTimestamp,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
+    horizonPitch: state.horizonPitch,
+    horizonCapturedAt: state.horizonCapturedAt,
     samples: [...state.samples]
   };
 }
@@ -380,6 +621,8 @@ function loadDraft() {
     state.lng = draft.lng ?? null;
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
+    state.horizonPitch = draft.horizonPitch ?? null;
+    state.horizonCapturedAt = draft.horizonCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
 
     state.gpsReady = state.lat != null && state.lng != null;
@@ -393,6 +636,10 @@ function loadDraft() {
         ? `${Math.round(state.gpsAccuracyM)}m accuracy`
         : "saved";
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
+    }
+
+    if (state.horizonPitch != null) {
+      els.horizonValue.textContent = `${state.horizonPitch.toFixed(1)}°`;
     }
   } catch (err) {
     console.error("Draft load failed", err);
@@ -440,4 +687,11 @@ function formatTime(iso) {
   } catch {
     return iso;
   }
+}
+
+function formatClock(dateObj) {
+  return dateObj.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
