@@ -364,15 +364,11 @@ function calculatePreview() {
   }
 
   const profile = buildProfile();
-  const profileBins = buildProfileBins(profile, 1);
   const sunPath = buildSunPath(selectedDate, profile);
   const overlap = getHeadingOverlap(profile, sunPath);
-  const windows = getSunWindowsForDate(selectedDate, profileBins);
+  const windows = getSunWindowsForDate(selectedDate, profile);
 
-  const capturedRange = formatHeadingArrow(
-    state.samples[0].headingDeg,
-    state.samples[state.samples.length - 1].headingDeg
-  );
+  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
@@ -410,9 +406,7 @@ function calculatePreview() {
 
   const first = windows[0].start;
   const last = windows[windows.length - 1].end;
-  const list = windows
-    .map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`)
-    .join("<br>");
+  const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
 
   els.previewOutput.innerHTML = `
     <strong>Sun windows</strong><br>
@@ -457,61 +451,6 @@ function buildProfile() {
   return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
 }
 
-function buildProfileBins(profile, binSizeDeg = 1) {
-  if (!profile || profile.length < 2) return null;
-
-  const minHeading = Math.floor(profile[0].adjustedHeadingDeg);
-  const maxHeading = Math.ceil(profile[profile.length - 1].adjustedHeadingDeg);
-  const bins = [];
-
-  for (let h = minHeading; h <= maxHeading; h += binSizeDeg) {
-    bins.push({
-      heading: h,
-      obstructionAltDeg: interpolateObstructionAtHeading(h, profile)
-    });
-  }
-
-  return {
-    minHeading,
-    maxHeading,
-    binSizeDeg,
-    bins,
-    profile
-  };
-}
-
-function interpolateObstructionAtHeading(targetHeading, profile) {
-  if (!profile.length) return 0;
-  if (profile.length === 1) return profile[0].obstructionAltDeg;
-
-  if (targetHeading <= profile[0].adjustedHeadingDeg) {
-    return profile[0].obstructionAltDeg;
-  }
-
-  if (targetHeading >= profile[profile.length - 1].adjustedHeadingDeg) {
-    return profile[profile.length - 1].obstructionAltDeg;
-  }
-
-  for (let i = 0; i < profile.length - 1; i++) {
-    const a = profile[i];
-    const b = profile[i + 1];
-
-    if (
-      targetHeading >= a.adjustedHeadingDeg &&
-      targetHeading <= b.adjustedHeadingDeg
-    ) {
-      const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
-      if (span === 0) {
-        return Math.max(a.obstructionAltDeg, b.obstructionAltDeg);
-      }
-      const t = (targetHeading - a.adjustedHeadingDeg) / span;
-      return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
-    }
-  }
-
-  return 0;
-}
-
 function buildSunPath(dateStr, profile) {
   if (!window.SunCalc || state.lat == null || state.lng == null) return [];
 
@@ -538,13 +477,13 @@ function buildSunPath(dateStr, profile) {
   return points;
 }
 
-function getSunWindowsForDate(dateStr, profileBins) {
+function getSunWindowsForDate(dateStr, profile) {
   const windows = [];
   let openWindow = null;
 
   for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 1) {
     const dt = localDateAtMinutes(dateStr, minutes);
-    const visible = isSunVisibleAt(dt, profileBins);
+    const visible = isSunVisibleAt(dt, profile);
 
     if (visible && !openWindow) {
       openWindow = { start: dt, end: dt };
@@ -560,10 +499,10 @@ function getSunWindowsForDate(dateStr, profileBins) {
     windows.push({ ...openWindow });
   }
 
-  return mergeTinyGaps(windows, 5);
+  return mergeTinyGaps(windows, 3);
 }
 
-function mergeTinyGaps(windows, maxGapMinutes = 5) {
+function mergeTinyGaps(windows, maxGapMinutes = 3) {
   if (!windows.length) return [];
 
   const merged = [{ ...windows[0] }];
@@ -583,40 +522,44 @@ function mergeTinyGaps(windows, maxGapMinutes = 5) {
   return merged;
 }
 
-function isSunVisibleAt(dateObj, profileBins) {
+function isSunVisibleAt(dateObj, profile) {
   const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
   const sunAltDeg = radToDeg(pos.altitude);
 
   if (sunAltDeg <= 0) return false;
-  if (!profileBins || !profileBins.bins.length) return true;
+  if (!profile.length) return false;
 
   const sunHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profileBins);
+  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profile);
+
+  if (!Number.isFinite(obstructionAltDeg)) return false;
 
   return sunAltDeg > obstructionAltDeg + 0.5;
 }
 
-function getObstructionAltitudeAtHeading(compassHeadingDeg, profileBins) {
-  if (!profileBins || !profileBins.bins.length) return 0;
+function getObstructionAltitudeAtHeading(compassHeadingDeg, profile) {
+  if (!profile.length) return Number.POSITIVE_INFINITY;
+  if (profile.length === 1) return profile[0].obstructionAltDeg;
 
-  const targetAdjusted = mapCompassToAdjustedHeading(
-    compassHeadingDeg,
-    profileBins.profile
-  );
+  const targetAdjusted = mapCompassToAdjustedHeading(compassHeadingDeg, profile);
 
-  if (
-    targetAdjusted < profileBins.minHeading ||
-    targetAdjusted > profileBins.maxHeading
-  ) {
-    return 0;
+  if (targetAdjusted < profile[0].adjustedHeadingDeg || targetAdjusted > profile[profile.length - 1].adjustedHeadingDeg) {
+    return Number.POSITIVE_INFINITY;
   }
 
-  const idx = Math.round(
-    (targetAdjusted - profileBins.minHeading) / profileBins.binSizeDeg
-  );
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i];
+    const b = profile[i + 1];
 
-  const clampedIdx = Math.max(0, Math.min(profileBins.bins.length - 1, idx));
-  return profileBins.bins[clampedIdx].obstructionAltDeg;
+    if (targetAdjusted >= a.adjustedHeadingDeg && targetAdjusted <= b.adjustedHeadingDeg) {
+      const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
+      if (span === 0) return a.obstructionAltDeg;
+      const t = (targetAdjusted - a.adjustedHeadingDeg) / span;
+      return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
+    }
+  }
+
+  return Number.POSITIVE_INFINITY;
 }
 
 function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
@@ -857,10 +800,7 @@ function renderProfileGraph() {
     ctx.fillText("Sun path", pad.left + 111, pad.top + 9);
   }
 
-  const capturedRange = formatHeadingArrow(
-    state.samples[0].headingDeg,
-    state.samples[state.samples.length - 1].headingDeg
-  );
+  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
