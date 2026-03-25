@@ -1,4 +1,4 @@
-const CAMERA_HEADING_OFFSET_DEG = 180;
+const CAMERA_HEADING_OFFSET_DEG = 0;
 
 const state = {
   pubName: "",
