@@ -8,8 +8,8 @@ const state = {
   gpsTimestamp: null,
   headingDeg: null,
   pitchDeg: null,
-  horizonPitch: null,
-  horizonCapturedAt: null,
+  levelPitch: null,
+  levelCapturedAt: null,
   motionReady: false,
   motionRequested: false,
   cameraReady: false,
@@ -41,7 +41,10 @@ const els = {
   pitchValue: document.getElementById("pitchValue"),
   horizonValue: document.getElementById("horizonValue"),
   pointsCount: document.getElementById("pointsCount"),
-  pointsList: document.getElementById("pointsList")
+  pointsList: document.getElementById("pointsList"),
+  profileCanvas: document.getElementById("profileCanvas"),
+  graphHint: document.getElementById("graphHint"),
+  rangeInfo: document.getElementById("rangeInfo")
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -56,7 +59,7 @@ function init() {
 function bindUI() {
   els.startBtn.addEventListener("click", startCalibration);
   els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
-  els.setHorizonBtn.addEventListener("click", setHorizonReference);
+  els.setHorizonBtn.addEventListener("click", setLevelReference);
   els.addPointBtn.addEventListener("click", addPoint);
   els.undoPointBtn.addEventListener("click", undoPoint);
   els.clearBtn.addEventListener("click", clearPoints);
@@ -80,17 +83,22 @@ function bindUI() {
 
   els.previewDate.addEventListener("change", () => {
     els.previewOutput.textContent = "Preview date updated. Tap Calculate sun window.";
+    renderProfileGraph();
   });
 }
 
 function setDefaultPreviewDate() {
   if (!els.previewDate.value) {
     const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    els.previewDate.value = `${y}-${m}-${d}`;
+    els.previewDate.value = dateToLocalInputValue(now);
   }
+}
+
+function dateToLocalInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 async function enableMotionFromButton() {
@@ -162,6 +170,7 @@ function requestLocation() {
           : "Ready";
 
         els.gpsStatus.textContent = acc;
+        render();
         resolve();
       },
       (err) => {
@@ -267,7 +276,7 @@ function normalizeDeg(value) {
   return out;
 }
 
-function setHorizonReference() {
+function setLevelReference() {
   if (!state.motionReady) {
     alert("Tap Enable motion first.");
     return;
@@ -278,10 +287,10 @@ function setHorizonReference() {
     return;
   }
 
-  state.horizonPitch = round1(state.pitchDeg);
-  state.horizonCapturedAt = new Date().toISOString();
-  els.horizonValue.textContent = `${state.horizonPitch.toFixed(1)}°`;
-  els.previewOutput.textContent = "Horizon set. You can now capture points.";
+  state.levelPitch = round1(state.pitchDeg);
+  state.levelCapturedAt = new Date().toISOString();
+  els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
+  els.previewOutput.textContent = "Level reference set. You can now capture points.";
   render();
 }
 
@@ -296,8 +305,8 @@ function addPoint() {
     return;
   }
 
-  if (state.horizonPitch == null) {
-    alert("Set the horizon first.");
+  if (state.levelPitch == null) {
+    alert("Set the level reference first.");
     return;
   }
 
@@ -309,7 +318,7 @@ function addPoint() {
   const sample = {
     headingDeg: round1(state.headingDeg),
     pitchDeg: round1(state.pitchDeg),
-    relativeAltDeg: round1(Math.max(0, state.horizonPitch - state.pitchDeg)),
+    relativeAltDeg: round1(Math.max(0, state.levelPitch - state.pitchDeg)),
     capturedAt: new Date().toISOString()
   };
 
@@ -319,6 +328,7 @@ function addPoint() {
 }
 
 function undoPoint() {
+  if (state.samples.length === 0) return;
   state.samples.pop();
   els.previewOutput.textContent = "Last point removed.";
   render();
@@ -343,7 +353,7 @@ function calculatePreview() {
   }
 
   if (!hasPreviewInputs()) {
-    alert("You need a horizon, location, and at least 2 points before preview will work.");
+    alert("You need a level reference, location, and at least 2 points before preview will work.");
     return;
   }
 
@@ -354,29 +364,61 @@ function calculatePreview() {
   }
 
   const profile = buildProfile();
+  const sunPath = buildSunPath(selectedDate, profile);
+  const overlap = getHeadingOverlap(profile, sunPath);
   const windows = getSunWindowsForDate(selectedDate, profile);
+
+  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const sunRange = sunPath.length
+    ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
+    : "No sun above horizon";
+
+  if (!sunPath.length) {
+    els.previewOutput.innerHTML = `
+      <strong>No sun above horizon</strong><br>
+      No solar path was found above the horizon for this date at this location.
+    `;
+    renderProfileGraph();
+    return;
+  }
+
+  if (!overlap.hasOverlap) {
+    els.previewOutput.innerHTML = `
+      <strong>No overlap between the captured sweep and the sun path</strong><br>
+      Captured sweep: ${capturedRange}<br>
+      Sun path on this date: ${sunRange}<br><br>
+      This usually means the sampled skyline is facing a different direction from where the sun travels on the selected date.
+    `;
+    renderProfileGraph();
+    return;
+  }
 
   if (!windows.length) {
     els.previewOutput.innerHTML = `
-      <strong>No direct sun detected</strong><br>
-      No visible sun window was found for this date from the captured profile.
+      <strong>No direct sun detected inside the captured sweep</strong><br>
+      Captured sweep: ${capturedRange}<br>
+      Sun path on this date: ${sunRange}<br><br>
+      This suggests the obstruction profile is fully blocking the sampled portion of the sky for the tested date.
     `;
+    renderProfileGraph();
     return;
   }
 
   const first = windows[0].start;
   const last = windows[windows.length - 1].end;
-  const list = windows
-    .map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`)
-    .join("<br>");
+  const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
 
   els.previewOutput.innerHTML = `
     <strong>Sun windows</strong><br>
     ${list}
     <br><br>
     <strong>First sun:</strong> ${formatClock(first)}<br>
-    <strong>Last sun:</strong> ${formatClock(last)}
+    <strong>Last sun:</strong> ${formatClock(last)}<br>
+    <strong>Captured sweep:</strong> ${capturedRange}<br>
+    <strong>Sun path:</strong> ${sunRange}
   `;
+
+  renderProfileGraph();
 }
 
 function buildProfile() {
@@ -399,7 +441,7 @@ function buildProfile() {
     out.push({
       rawHeadingDeg: raw,
       adjustedHeadingDeg: adjusted,
-      obstructionAltDeg: round1(Math.max(0, state.horizonPitch - sample.pitchDeg)),
+      obstructionAltDeg: round1(Math.max(0, state.levelPitch - sample.pitchDeg)),
       pitchDeg: sample.pitchDeg
     });
 
@@ -407,6 +449,32 @@ function buildProfile() {
   }
 
   return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+}
+
+function buildSunPath(dateStr, profile) {
+  if (!window.SunCalc || state.lat == null || state.lng == null) return [];
+
+  const points = [];
+  for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 5) {
+    const dt = localDateAtMinutes(dateStr, minutes);
+    const pos = window.SunCalc.getPosition(dt, state.lat, state.lng);
+    const altDeg = radToDeg(pos.altitude);
+    if (altDeg <= 0) continue;
+
+    const rawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
+    const adjustedHeadingDeg = profile && profile.length
+      ? mapCompassToAdjustedHeading(rawHeadingDeg, profile)
+      : rawHeadingDeg;
+
+    points.push({
+      date: dt,
+      rawHeadingDeg,
+      adjustedHeadingDeg,
+      altDeg
+    });
+  }
+
+  return points;
 }
 
 function getSunWindowsForDate(dateStr, profile) {
@@ -452,38 +520,27 @@ function getObstructionAltitudeAtHeading(compassHeadingDeg, profile) {
 
   const targetAdjusted = mapCompassToAdjustedHeading(compassHeadingDeg, profile);
 
-  if (targetAdjusted <= profile[0].adjustedHeadingDeg) {
-    return profile[0].obstructionAltDeg;
-  }
-
-  if (targetAdjusted >= profile[profile.length - 1].adjustedHeadingDeg) {
-    return profile[profile.length - 1].obstructionAltDeg;
+  if (targetAdjusted < profile[0].adjustedHeadingDeg || targetAdjusted > profile[profile.length - 1].adjustedHeadingDeg) {
+    return 0;
   }
 
   for (let i = 0; i < profile.length - 1; i++) {
     const a = profile[i];
     const b = profile[i + 1];
 
-    if (
-      targetAdjusted >= a.adjustedHeadingDeg &&
-      targetAdjusted <= b.adjustedHeadingDeg
-    ) {
+    if (targetAdjusted >= a.adjustedHeadingDeg && targetAdjusted <= b.adjustedHeadingDeg) {
       const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
       if (span === 0) return a.obstructionAltDeg;
-
       const t = (targetAdjusted - a.adjustedHeadingDeg) / span;
       return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
     }
   }
 
-  return profile[profile.length - 1].obstructionAltDeg;
+  return 0;
 }
 
 function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
-  const mid =
-    (profile[0].adjustedHeadingDeg +
-      profile[profile.length - 1].adjustedHeadingDeg) / 2;
-
+  const mid = (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2;
   const candidates = [
     compassHeadingDeg - 720,
     compassHeadingDeg - 360,
@@ -497,12 +554,35 @@ function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
   }, candidates[0]);
 }
 
+function getHeadingOverlap(profile, sunPath) {
+  if (!profile.length || !sunPath.length) {
+    return { hasOverlap: false, start: null, end: null };
+  }
+
+  const profileMin = profile[0].adjustedHeadingDeg;
+  const profileMax = profile[profile.length - 1].adjustedHeadingDeg;
+  const sunMin = Math.min(...sunPath.map((p) => p.adjustedHeadingDeg));
+  const sunMax = Math.max(...sunPath.map((p) => p.adjustedHeadingDeg));
+
+  const start = Math.max(profileMin, sunMin);
+  const end = Math.min(profileMax, sunMax);
+
+  return {
+    hasOverlap: end >= start,
+    start,
+    end,
+    profileMin,
+    profileMax,
+    sunMin,
+    sunMax
+  };
+}
+
 function localDateAtMinutes(dateStr, totalMinutes) {
+  const [y, m, d] = dateStr.split("-").map(Number);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  return new Date(`${dateStr}T${hh}:${mm}:00`);
+  return new Date(y, m - 1, d, hours, minutes, 0, 0);
 }
 
 function radToDeg(rad) {
@@ -519,8 +599,7 @@ function render() {
   els.exportBtn.disabled = !hasMinimumData();
   els.previewBtn.disabled = !hasPreviewInputs();
 
-  els.setHorizonBtn.disabled =
-    !state.motionReady || state.pitchDeg == null;
+  els.setHorizonBtn.disabled = !state.motionReady || state.pitchDeg == null;
 
   if (els.enableMotionBtn) {
     els.enableMotionBtn.disabled = state.motionReady;
@@ -530,9 +609,10 @@ function render() {
   }
 
   els.horizonValue.textContent =
-    state.horizonPitch == null ? "Not set" : `${state.horizonPitch.toFixed(1)}°`;
+    state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
 
   renderPoints();
+  renderProfileGraph();
 }
 
 function renderPoints() {
@@ -554,12 +634,193 @@ function renderPoints() {
   });
 }
 
+function renderProfileGraph() {
+  const canvas = els.profileCanvas;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.fillStyle = "#faf8f2";
+  ctx.fillRect(0, 0, width, height);
+
+  const profile = state.samples.length >= 2 ? buildProfile() : [];
+  const previewDate = els.previewDate.value;
+  const sunPath = (profile.length >= 2 && previewDate && state.lat != null && state.lng != null)
+    ? buildSunPath(previewDate, profile)
+    : [];
+
+  drawGraphFrame(ctx, width, height);
+
+  if (profile.length < 2) {
+    drawGraphText(ctx, width, height, "Add at least 2 points");
+    if (els.graphHint) {
+      els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
+    }
+    if (els.rangeInfo) {
+      els.rangeInfo.textContent = "No heading ranges yet.";
+    }
+    return;
+  }
+
+  const pad = { top: 18, right: 18, bottom: 34, left: 42 };
+  const graphW = width - pad.left - pad.right;
+  const graphH = height - pad.top - pad.bottom;
+
+  const profileXMin = profile[0].adjustedHeadingDeg;
+  const profileXMax = profile[profile.length - 1].adjustedHeadingDeg;
+  const sunXMin = sunPath.length ? Math.min(...sunPath.map((p) => p.adjustedHeadingDeg)) : profileXMin;
+  const sunXMax = sunPath.length ? Math.max(...sunPath.map((p) => p.adjustedHeadingDeg)) : profileXMax;
+
+  const xMin = Math.min(profileXMin, sunXMin);
+  const xMax = Math.max(profileXMax, sunXMax);
+
+  let yMax = 0;
+  for (const p of profile) yMax = Math.max(yMax, p.obstructionAltDeg);
+  for (const p of sunPath) yMax = Math.max(yMax, p.altDeg);
+  yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
+
+  ctx.fillStyle = "#6c6c6c";
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+
+  for (let i = 0; i <= 4; i++) {
+    const value = (yMax / 4) * i;
+    const y = pad.top + graphH - (value / yMax) * graphH;
+
+    ctx.strokeStyle = "#eee7d9";
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + graphW, y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#6c6c6c";
+    ctx.fillText(`${Math.round(value)}°`, pad.left - 6, y);
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#6c6c6c";
+  ctx.fillText(`${normalizeDeg(profile[0].rawHeadingDeg).toFixed(0)}°`, pad.left, pad.top + graphH + 8);
+  ctx.fillText(`${normalizeDeg(profile[profile.length - 1].rawHeadingDeg).toFixed(0)}°`, pad.left + graphW, pad.top + graphH + 8);
+
+  ctx.beginPath();
+  for (let i = 0; i < profile.length; i++) {
+    const p = profile[i];
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  ctx.lineTo(lastX, pad.top + graphH);
+  ctx.lineTo(firstX, pad.top + graphH);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(227, 185, 60, 0.22)";
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i < profile.length; i++) {
+    const p = profile[i];
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = "#1f1f1f";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  for (const p of profile) {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fill();
+  }
+
+  if (sunPath.length) {
+    ctx.beginPath();
+    sunPath.forEach((p, i) => {
+      const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+      const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#d06a00";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fillRect(pad.left + 8, pad.top + 8, 10, 2);
+    ctx.fillStyle = "#1f1f1f";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Obstruction", pad.left + 24, pad.top + 9);
+
+    ctx.strokeStyle = "#d06a00";
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left + 95, pad.top + 9);
+    ctx.lineTo(pad.left + 105, pad.top + 9);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#d06a00";
+    ctx.fillText("Sun path", pad.left + 111, pad.top + 9);
+  }
+
+  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const sunRange = sunPath.length
+    ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
+    : "No sun above horizon";
+  const overlap = getHeadingOverlap(profile, sunPath);
+
+  if (els.graphHint) {
+    els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path for the selected date.";
+  }
+
+  if (els.rangeInfo) {
+    els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
+  }
+}
+
+function toGraphX(value, min, max, left, width) {
+  const span = Math.max(1, max - min);
+  return left + ((value - min) / span) * width;
+}
+
+function toGraphY(value, yMax, top, height) {
+  return top + height - (value / Math.max(1, yMax)) * height;
+}
+
+function drawGraphFrame(ctx, width, height) {
+  ctx.strokeStyle = "#d8d0c1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(42, 18, width - 60, height - 52);
+}
+
+function drawGraphText(ctx, width, height, text) {
+  ctx.fillStyle = "#6c6c6c";
+  ctx.font = "14px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, width / 2, height / 2);
+}
+
 function canCapture() {
   return (
     state.gpsReady &&
     state.cameraReady &&
     state.motionReady &&
-    state.horizonPitch != null &&
+    state.levelPitch != null &&
     state.headingDeg != null &&
     state.pitchDeg != null
   );
@@ -576,7 +837,7 @@ function hasMinimumData() {
 }
 
 function hasPreviewInputs() {
-  return hasMinimumData() && state.horizonPitch != null && state.samples.length >= 2;
+  return hasMinimumData() && state.levelPitch != null && state.samples.length >= 2;
 }
 
 function buildRecord() {
@@ -590,8 +851,8 @@ function buildRecord() {
     gpsTimestamp: state.gpsTimestamp,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
-    horizonPitch: state.horizonPitch,
-    horizonCapturedAt: state.horizonCapturedAt,
+    levelPitch: state.levelPitch,
+    levelCapturedAt: state.levelCapturedAt,
     samples: [...state.samples]
   };
 }
@@ -621,8 +882,8 @@ function loadDraft() {
     state.lng = draft.lng ?? null;
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
-    state.horizonPitch = draft.horizonPitch ?? null;
-    state.horizonCapturedAt = draft.horizonCapturedAt ?? null;
+    state.levelPitch = draft.levelPitch ?? null;
+    state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
 
     state.gpsReady = state.lat != null && state.lng != null;
@@ -638,8 +899,8 @@ function loadDraft() {
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
     }
 
-    if (state.horizonPitch != null) {
-      els.horizonValue.textContent = `${state.horizonPitch.toFixed(1)}°`;
+    if (state.levelPitch != null) {
+      els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
     }
   } catch (err) {
     console.error("Draft load failed", err);
@@ -694,4 +955,8 @@ function formatClock(dateObj) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function formatHeadingArrow(startDeg, endDeg) {
+  return `${normalizeDeg(startDeg).toFixed(0)}° → ${normalizeDeg(endDeg).toFixed(0)}°`;
 }
