@@ -8,7 +8,6 @@ const state = {
   lng: null,
   gpsAccuracyM: null,
   gpsTimestamp: null,
-  sensorHeadingDeg: null,
   headingDeg: null,
   pitchDeg: null,
   levelPitch: null,
@@ -92,8 +91,7 @@ function bindUI() {
 
 function setDefaultPreviewDate() {
   if (!els.previewDate.value) {
-    const now = new Date();
-    els.previewDate.value = dateToLocalInputValue(now);
+    els.previewDate.value = dateToLocalInputValue(new Date());
   }
 }
 
@@ -216,8 +214,7 @@ async function requestMotion() {
 
   state.motionRequested = true;
 
-  const hasDeviceOrientation = typeof DeviceOrientationEvent !== "undefined";
-  if (!hasDeviceOrientation) {
+  if (typeof DeviceOrientationEvent === "undefined") {
     throw new Error("Device orientation is not supported on this device/browser.");
   }
 
@@ -237,12 +234,11 @@ async function requestMotion() {
 }
 
 function handleOrientation(event) {
-  const sensorHeading = getHeading(event);
+  const heading = getHeading(event);
   const pitch = getPitch(event);
 
-  if (sensorHeading != null) {
-    state.sensorHeadingDeg = normalizeDeg(sensorHeading);
-    state.headingDeg = normalizeDeg(state.sensorHeadingDeg + CAMERA_HEADING_OFFSET_DEG);
+  if (heading != null) {
+    state.headingDeg = normalizeDeg(heading);
     els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
   }
 
@@ -258,15 +254,16 @@ function handleOrientation(event) {
 }
 
 function getHeading(event) {
+  let baseHeading = null;
+
   if (typeof event.webkitCompassHeading === "number") {
-    return event.webkitCompassHeading;
+    baseHeading = event.webkitCompassHeading;
+  } else if (typeof event.alpha === "number") {
+    baseHeading = 360 - event.alpha;
   }
 
-  if (typeof event.alpha === "number") {
-    return 360 - event.alpha;
-  }
-
-  return null;
+  if (baseHeading == null) return null;
+  return normalizeDeg(baseHeading + CAMERA_HEADING_OFFSET_DEG);
 }
 
 function getPitch(event) {
@@ -319,10 +316,14 @@ function addPoint() {
     return;
   }
 
+  const relativeAltDeg = round1(
+    Math.min(89, Math.abs(state.levelPitch - state.pitchDeg))
+  );
+
   const sample = {
     headingDeg: round1(state.headingDeg),
     pitchDeg: round1(state.pitchDeg),
-    relativeAltDeg: round1(Math.max(0, state.levelPitch - state.pitchDeg)),
+    relativeAltDeg,
     capturedAt: new Date().toISOString()
   };
 
@@ -368,13 +369,16 @@ function calculatePreview() {
   }
 
   const profile = buildProfile();
-  const sector = getSweepSector(profile);
-  const profileBins = buildProfileBins(profile, sector, 1);
-  const sunPath = buildSunPath(selectedDate, sector);
-  const overlap = getHeadingOverlap(sector, sunPath);
-  const windows = getSunWindowsForDate(selectedDate, profileBins, sector);
+  const profileBins = buildProfileBins(profile, 1);
+  const sunPath = buildSunPath(selectedDate, profile);
+  const overlap = getHeadingOverlap(profile, sunPath);
+  const windows = getSunWindowsForDate(selectedDate, profileBins);
 
-  const capturedRange = formatHeadingArrow(profile[0].rawHeadingDeg, profile[profile.length - 1].rawHeadingDeg);
+  const capturedRange = formatHeadingArrow(
+    state.samples[0].headingDeg,
+    state.samples[state.samples.length - 1].headingDeg
+  );
+
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
@@ -392,8 +396,7 @@ function calculatePreview() {
     els.previewOutput.innerHTML = `
       <strong>No overlap between the captured sweep and the sun path</strong><br>
       Captured sweep: ${capturedRange}<br>
-      Sun path on this date: ${sunRange}<br><br>
-      This means the sampled skyline is facing a different direction from where the sun travels on the selected date.
+      Sun path on this date: ${sunRange}
     `;
     renderProfileGraph();
     return;
@@ -403,8 +406,7 @@ function calculatePreview() {
     els.previewOutput.innerHTML = `
       <strong>No direct sun detected inside the captured sweep</strong><br>
       Captured sweep: ${capturedRange}<br>
-      Sun path on this date: ${sunRange}<br><br>
-      This suggests the sampled obstruction profile is fully blocking the sampled portion of the sky for the tested date.
+      Sun path on this date: ${sunRange}
     `;
     renderProfileGraph();
     return;
@@ -430,48 +432,44 @@ function calculatePreview() {
 }
 
 function buildProfile() {
-  const traced = [];
-  let prevUnwrapped = null;
+  const out = [];
+  let prevAdjusted = null;
 
   for (const sample of state.samples) {
     const raw = normalizeDeg(sample.headingDeg);
-    let unwrapped = raw;
+    let adjusted = raw;
 
-    if (prevUnwrapped != null) {
-      const candidates = [raw - 720, raw - 360, raw, raw + 360, raw + 720];
-      unwrapped = candidates.reduce((best, candidate) => {
-        return Math.abs(candidate - prevUnwrapped) < Math.abs(best - prevUnwrapped)
+    if (prevAdjusted != null) {
+      const candidates = [raw - 360, raw, raw + 360];
+      adjusted = candidates.reduce((best, candidate) => {
+        return Math.abs(candidate - prevAdjusted) < Math.abs(best - prevAdjusted)
           ? candidate
           : best;
       }, candidates[0]);
     }
 
-    traced.push({
+    const obstructionAltDeg = Number.isFinite(sample.relativeAltDeg)
+      ? sample.relativeAltDeg
+      : round1(Math.min(89, Math.abs(state.levelPitch - sample.pitchDeg)));
+
+    out.push({
       rawHeadingDeg: raw,
-      unwrappedHeadingDeg: unwrapped,
-      obstructionAltDeg: round1(sample.relativeAltDeg),
+      adjustedHeadingDeg: adjusted,
+      obstructionAltDeg,
       pitchDeg: sample.pitchDeg
     });
 
-    prevUnwrapped = unwrapped;
+    prevAdjusted = adjusted;
   }
 
-  return traced.sort((a, b) => a.unwrappedHeadingDeg - b.unwrappedHeadingDeg);
+  return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
 }
 
-function getSweepSector(profile) {
-  return {
-    start: profile[0].unwrappedHeadingDeg,
-    end: profile[profile.length - 1].unwrappedHeadingDeg,
-    mid: (profile[0].unwrappedHeadingDeg + profile[profile.length - 1].unwrappedHeadingDeg) / 2
-  };
-}
-
-function buildProfileBins(profile, sector, binSizeDeg = 1) {
+function buildProfileBins(profile, binSizeDeg = 1) {
   if (!profile || profile.length < 2) return null;
 
-  const minHeading = Math.floor(sector.start);
-  const maxHeading = Math.ceil(sector.end);
+  const minHeading = Math.floor(profile[0].adjustedHeadingDeg);
+  const maxHeading = Math.ceil(profile[profile.length - 1].adjustedHeadingDeg);
   const bins = [];
 
   for (let h = minHeading; h <= maxHeading; h += binSizeDeg) {
@@ -491,35 +489,40 @@ function buildProfileBins(profile, sector, binSizeDeg = 1) {
 }
 
 function interpolateObstructionAtHeading(targetHeading, profile) {
-  if (!profile.length) return Infinity;
+  if (!profile.length) return 0;
   if (profile.length === 1) return profile[0].obstructionAltDeg;
 
-  if (targetHeading < profile[0].unwrappedHeadingDeg || targetHeading > profile[profile.length - 1].unwrappedHeadingDeg) {
-    return Infinity;
+  if (targetHeading <= profile[0].adjustedHeadingDeg) {
+    return profile[0].obstructionAltDeg;
   }
 
-  if (targetHeading === profile[0].unwrappedHeadingDeg) return profile[0].obstructionAltDeg;
-  if (targetHeading === profile[profile.length - 1].unwrappedHeadingDeg) return profile[profile.length - 1].obstructionAltDeg;
+  if (targetHeading >= profile[profile.length - 1].adjustedHeadingDeg) {
+    return profile[profile.length - 1].obstructionAltDeg;
+  }
 
   for (let i = 0; i < profile.length - 1; i++) {
     const a = profile[i];
     const b = profile[i + 1];
 
-    if (targetHeading >= a.unwrappedHeadingDeg && targetHeading <= b.unwrappedHeadingDeg) {
-      const span = b.unwrappedHeadingDeg - a.unwrappedHeadingDeg;
+    if (
+      targetHeading >= a.adjustedHeadingDeg &&
+      targetHeading <= b.adjustedHeadingDeg
+    ) {
+      const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
       if (span === 0) return Math.max(a.obstructionAltDeg, b.obstructionAltDeg);
-      const t = (targetHeading - a.unwrappedHeadingDeg) / span;
+      const t = (targetHeading - a.adjustedHeadingDeg) / span;
       return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
     }
   }
 
-  return Infinity;
+  return 0;
 }
 
-function buildSunPath(dateStr, sector) {
+function buildSunPath(dateStr, profile) {
   if (!window.SunCalc || state.lat == null || state.lng == null) return [];
 
   const points = [];
+
   for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 5) {
     const dt = localDateAtMinutes(dateStr, minutes);
     const pos = window.SunCalc.getPosition(dt, state.lat, state.lng);
@@ -527,12 +530,14 @@ function buildSunPath(dateStr, sector) {
     if (altDeg <= 0) continue;
 
     const rawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-    const unwrappedHeadingDeg = mapRawHeadingToSectorFrame(rawHeadingDeg, sector);
+    const adjustedHeadingDeg = profile && profile.length
+      ? mapCompassToAdjustedHeading(rawHeadingDeg, profile)
+      : rawHeadingDeg;
 
     points.push({
       date: dt,
       rawHeadingDeg,
-      unwrappedHeadingDeg,
+      adjustedHeadingDeg,
       altDeg
     });
   }
@@ -540,49 +545,15 @@ function buildSunPath(dateStr, sector) {
   return points;
 }
 
-function mapRawHeadingToSectorFrame(rawHeadingDeg, sector) {
-  const candidates = [
-    rawHeadingDeg - 720,
-    rawHeadingDeg - 360,
-    rawHeadingDeg,
-    rawHeadingDeg + 360,
-    rawHeadingDeg + 720
-  ];
+function getSunWindowsForDate(dateStr, profileBins) {
+  if (!profileBins || !profileBins.bins.length) return [];
 
-  return candidates.reduce((best, candidate) => {
-    return Math.abs(candidate - sector.mid) < Math.abs(best - sector.mid) ? candidate : best;
-  }, candidates[0]);
-}
-
-function getHeadingOverlap(sector, sunPath) {
-  if (!sunPath.length) {
-    return { hasOverlap: false, start: null, end: null };
-  }
-
-  const sunMin = Math.min(...sunPath.map((p) => p.unwrappedHeadingDeg));
-  const sunMax = Math.max(...sunPath.map((p) => p.unwrappedHeadingDeg));
-
-  const start = Math.max(sector.start, sunMin);
-  const end = Math.min(sector.end, sunMax);
-
-  return {
-    hasOverlap: end >= start,
-    start,
-    end,
-    sectorStart: sector.start,
-    sectorEnd: sector.end,
-    sunMin,
-    sunMax
-  };
-}
-
-function getSunWindowsForDate(dateStr, profileBins, sector) {
   const windows = [];
   let openWindow = null;
 
   for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 1) {
     const dt = localDateAtMinutes(dateStr, minutes);
-    const visible = isSunVisibleAt(dt, profileBins, sector);
+    const visible = isSunVisibleAt(dt, profileBins);
 
     if (visible && !openWindow) {
       openWindow = { start: dt, end: dt };
@@ -621,34 +592,79 @@ function mergeTinyGaps(windows, maxGapMinutes = 5) {
   return merged;
 }
 
-function isSunVisibleAt(dateObj, profileBins, sector) {
+function isSunVisibleAt(dateObj, profileBins) {
   const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
   const sunAltDeg = radToDeg(pos.altitude);
   if (sunAltDeg <= 0) return false;
 
-  const sunRawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const sunUnwrappedHeadingDeg = mapRawHeadingToSectorFrame(sunRawHeadingDeg, sector);
+  const sunHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
+  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profileBins);
 
-  if (sunUnwrappedHeadingDeg < sector.start || sunUnwrappedHeadingDeg > sector.end) {
+  if (obstructionAltDeg == null) {
     return false;
   }
-
-  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunUnwrappedHeadingDeg, profileBins);
-  if (!Number.isFinite(obstructionAltDeg)) return false;
 
   return sunAltDeg > obstructionAltDeg + 0.5;
 }
 
-function getObstructionAltitudeAtHeading(unwrappedHeadingDeg, profileBins) {
-  if (!profileBins || !profileBins.bins.length) return Infinity;
+function getObstructionAltitudeAtHeading(compassHeadingDeg, profileBins) {
+  if (!profileBins || !profileBins.bins.length) return null;
 
-  if (unwrappedHeadingDeg < profileBins.minHeading || unwrappedHeadingDeg > profileBins.maxHeading) {
-    return Infinity;
+  const targetAdjusted = mapCompassToAdjustedHeading(
+    compassHeadingDeg,
+    profileBins.profile
+  );
+
+  if (
+    targetAdjusted < profileBins.minHeading ||
+    targetAdjusted > profileBins.maxHeading
+  ) {
+    return null;
   }
 
-  const idx = Math.round((unwrappedHeadingDeg - profileBins.minHeading) / profileBins.binSizeDeg);
+  const idx = Math.round(
+    (targetAdjusted - profileBins.minHeading) / profileBins.binSizeDeg
+  );
+
   const clampedIdx = Math.max(0, Math.min(profileBins.bins.length - 1, idx));
   return profileBins.bins[clampedIdx].obstructionAltDeg;
+}
+
+function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
+  const mid =
+    (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2;
+
+  const candidates = [
+    compassHeadingDeg - 720,
+    compassHeadingDeg - 360,
+    compassHeadingDeg,
+    compassHeadingDeg + 360,
+    compassHeadingDeg + 720
+  ];
+
+  return candidates.reduce((best, candidate) => {
+    return Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best;
+  }, candidates[0]);
+}
+
+function getHeadingOverlap(profile, sunPath) {
+  if (!profile.length || !sunPath.length) {
+    return { hasOverlap: false, start: null, end: null };
+  }
+
+  const profileMin = profile[0].adjustedHeadingDeg;
+  const profileMax = profile[profile.length - 1].adjustedHeadingDeg;
+  const sunMin = Math.min(...sunPath.map((p) => p.adjustedHeadingDeg));
+  const sunMax = Math.max(...sunPath.map((p) => p.adjustedHeadingDeg));
+
+  const start = Math.max(profileMin, sunMin);
+  const end = Math.min(profileMax, sunMax);
+
+  return {
+    hasOverlap: end >= start,
+    start,
+    end
+  };
 }
 
 function localDateAtMinutes(dateStr, totalMinutes) {
@@ -671,11 +687,12 @@ function render() {
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
   els.previewBtn.disabled = !hasPreviewInputs();
-
   els.setHorizonBtn.disabled = !state.motionReady || state.pitchDeg == null;
 
   els.enableMotionBtn.disabled = state.motionReady;
-  els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
+  els.enableMotionBtn.textContent = state.motionReady
+    ? "Motion enabled"
+    : "Enable motion";
 
   els.horizonValue.textContent =
     state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
@@ -710,46 +727,48 @@ function renderProfileGraph() {
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
 
+  ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#faf8f2";
   ctx.fillRect(0, 0, width, height);
 
   const profile = state.samples.length >= 2 ? buildProfile() : [];
+  const previewDate = els.previewDate.value;
+  const sunPath =
+    profile.length >= 2 && previewDate && state.lat != null && state.lng != null
+      ? buildSunPath(previewDate, profile)
+      : [];
+
+  drawGraphFrame(ctx, width, height);
+
   if (profile.length < 2) {
-    drawGraphFrame(ctx, width, height);
     drawGraphText(ctx, width, height, "Add at least 2 points");
-    els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
-    els.rangeInfo.textContent = "No heading ranges yet.";
+    if (els.graphHint) {
+      els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
+    }
+    if (els.rangeInfo) {
+      els.rangeInfo.textContent = "No heading ranges yet.";
+    }
     return;
   }
-
-  const sector = getSweepSector(profile);
-  const previewDate = els.previewDate.value;
-  const sunPath = (previewDate && state.lat != null && state.lng != null)
-    ? buildSunPath(previewDate, sector)
-    : [];
 
   const pad = { top: 18, right: 18, bottom: 34, left: 42 };
   const graphW = width - pad.left - pad.right;
   const graphH = height - pad.top - pad.bottom;
 
-  const profileXMin = profile[0].unwrappedHeadingDeg;
-  const profileXMax = profile[profile.length - 1].unwrappedHeadingDeg;
-  const sunXMin = sunPath.length ? Math.min(...sunPath.map((p) => p.unwrappedHeadingDeg)) : profileXMin;
-  const sunXMax = sunPath.length ? Math.max(...sunPath.map((p) => p.unwrappedHeadingDeg)) : profileXMax;
+  const profileXMin = profile[0].adjustedHeadingDeg;
+  const profileXMax = profile[profile.length - 1].adjustedHeadingDeg;
 
-  const xMin = Math.min(profileXMin, sunXMin);
-  const xMax = Math.max(profileXMax, sunXMax);
+  const xMin = profileXMin;
+  const xMax = profileXMax;
 
   let yMax = 0;
   for (const p of profile) yMax = Math.max(yMax, p.obstructionAltDeg);
-  for (const p of sunPath) yMax = Math.max(yMax, p.altDeg);
-  yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
 
-  ctx.strokeStyle = "#d8d0c1";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(pad.left, pad.top, graphW, graphH);
+  const sunInSweep = sunPath.filter((p) => p.adjustedHeadingDeg >= xMin && p.adjustedHeadingDeg <= xMax);
+  for (const p of sunInSweep) yMax = Math.max(yMax, p.altDeg);
+
+  yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
 
   ctx.fillStyle = "#6c6c6c";
   ctx.font = "12px sans-serif";
@@ -779,13 +798,15 @@ function renderProfileGraph() {
   ctx.beginPath();
   for (let i = 0; i < profile.length; i++) {
     const p = profile[i];
-    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
-  const lastX = toGraphX(profile[profile.length - 1].unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
-  const firstX = toGraphX(profile[0].unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+
+  const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+
   ctx.lineTo(lastX, pad.top + graphH);
   ctx.lineTo(firstX, pad.top + graphH);
   ctx.closePath();
@@ -795,7 +816,7 @@ function renderProfileGraph() {
   ctx.beginPath();
   for (let i = 0; i < profile.length; i++) {
     const p = profile[i];
-    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
@@ -805,7 +826,7 @@ function renderProfileGraph() {
   ctx.stroke();
 
   for (const p of profile) {
-    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -813,10 +834,10 @@ function renderProfileGraph() {
     ctx.fill();
   }
 
-  if (sunPath.length) {
+  if (sunInSweep.length) {
     ctx.beginPath();
-    sunPath.forEach((p, i) => {
-      const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+    sunInSweep.forEach((p, i) => {
+      const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
       const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -826,34 +847,26 @@ function renderProfileGraph() {
     ctx.setLineDash([6, 5]);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    ctx.fillStyle = "#1f1f1f";
-    ctx.fillRect(pad.left + 8, pad.top + 8, 10, 2);
-    ctx.fillStyle = "#1f1f1f";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Obstruction", pad.left + 24, pad.top + 9);
-
-    ctx.strokeStyle = "#d06a00";
-    ctx.setLineDash([6, 5]);
-    ctx.beginPath();
-    ctx.moveTo(pad.left + 95, pad.top + 9);
-    ctx.lineTo(pad.left + 105, pad.top + 9);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "#d06a00";
-    ctx.fillText("Sun path", pad.left + 111, pad.top + 9);
   }
 
-  const capturedRange = formatHeadingArrow(profile[0].rawHeadingDeg, profile[profile.length - 1].rawHeadingDeg);
+  const capturedRange = formatHeadingArrow(
+    state.samples[0].headingDeg,
+    state.samples[state.samples.length - 1].headingDeg
+  );
+
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
-  const overlap = getHeadingOverlap(sector, sunPath);
 
-  els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path for the selected date.";
-  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
+  const overlap = getHeadingOverlap(profile, sunPath);
+
+  if (els.graphHint) {
+    els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path inside the captured sweep.";
+  }
+
+  if (els.rangeInfo) {
+    els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
+  }
 }
 
 function toGraphX(value, min, max, left, width) {
@@ -915,7 +928,6 @@ function buildRecord() {
     gpsTimestamp: state.gpsTimestamp,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
-    cameraHeadingOffsetDeg: CAMERA_HEADING_OFFSET_DEG,
     levelPitch: state.levelPitch,
     levelCapturedAt: state.levelCapturedAt,
     samples: [...state.samples]
