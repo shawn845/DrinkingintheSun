@@ -1,3 +1,5 @@
+const CAMERA_HEADING_OFFSET_DEG = 180;
+
 const state = {
   pubName: "",
   seatName: "",
@@ -6,6 +8,7 @@ const state = {
   lng: null,
   gpsAccuracyM: null,
   gpsTimestamp: null,
+  sensorHeadingDeg: null,
   headingDeg: null,
   pitchDeg: null,
   levelPitch: null,
@@ -234,11 +237,12 @@ async function requestMotion() {
 }
 
 function handleOrientation(event) {
-  const heading = getHeading(event);
+  const sensorHeading = getHeading(event);
   const pitch = getPitch(event);
 
-  if (heading != null) {
-    state.headingDeg = normalizeDeg(heading);
+  if (sensorHeading != null) {
+    state.sensorHeadingDeg = normalizeDeg(sensorHeading);
+    state.headingDeg = normalizeDeg(state.sensorHeadingDeg + CAMERA_HEADING_OFFSET_DEG);
     els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
   }
 
@@ -364,11 +368,13 @@ function calculatePreview() {
   }
 
   const profile = buildProfile();
-  const sunPath = buildSunPath(selectedDate, profile);
-  const overlap = getHeadingOverlap(profile, sunPath);
-  const windows = getSunWindowsForDate(selectedDate, profile);
+  const sector = getSweepSector(profile);
+  const profileBins = buildProfileBins(profile, sector, 1);
+  const sunPath = buildSunPath(selectedDate, sector);
+  const overlap = getHeadingOverlap(sector, sunPath);
+  const windows = getSunWindowsForDate(selectedDate, profileBins, sector);
 
-  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const capturedRange = formatHeadingArrow(profile[0].rawHeadingDeg, profile[profile.length - 1].rawHeadingDeg);
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
@@ -387,7 +393,7 @@ function calculatePreview() {
       <strong>No overlap between the captured sweep and the sun path</strong><br>
       Captured sweep: ${capturedRange}<br>
       Sun path on this date: ${sunRange}<br><br>
-      This usually means the sampled skyline is facing a different direction from where the sun travels on the selected date.
+      This means the sampled skyline is facing a different direction from where the sun travels on the selected date.
     `;
     renderProfileGraph();
     return;
@@ -398,7 +404,7 @@ function calculatePreview() {
       <strong>No direct sun detected inside the captured sweep</strong><br>
       Captured sweep: ${capturedRange}<br>
       Sun path on this date: ${sunRange}<br><br>
-      This suggests the obstruction profile is fully blocking the sampled portion of the sky for the tested date.
+      This suggests the sampled obstruction profile is fully blocking the sampled portion of the sky for the tested date.
     `;
     renderProfileGraph();
     return;
@@ -406,7 +412,9 @@ function calculatePreview() {
 
   const first = windows[0].start;
   const last = windows[windows.length - 1].end;
-  const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
+  const list = windows
+    .map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`)
+    .join("<br>");
 
   els.previewOutput.innerHTML = `
     <strong>Sun windows</strong><br>
@@ -422,36 +430,93 @@ function calculatePreview() {
 }
 
 function buildProfile() {
-  const out = [];
-  let prevAdjusted = null;
+  const traced = [];
+  let prevUnwrapped = null;
 
   for (const sample of state.samples) {
     const raw = normalizeDeg(sample.headingDeg);
-    let adjusted = raw;
+    let unwrapped = raw;
 
-    if (prevAdjusted != null) {
-      const candidates = [raw - 360, raw, raw + 360];
-      adjusted = candidates.reduce((best, candidate) => {
-        return Math.abs(candidate - prevAdjusted) < Math.abs(best - prevAdjusted)
+    if (prevUnwrapped != null) {
+      const candidates = [raw - 720, raw - 360, raw, raw + 360, raw + 720];
+      unwrapped = candidates.reduce((best, candidate) => {
+        return Math.abs(candidate - prevUnwrapped) < Math.abs(best - prevUnwrapped)
           ? candidate
           : best;
       }, candidates[0]);
     }
 
-    out.push({
+    traced.push({
       rawHeadingDeg: raw,
-      adjustedHeadingDeg: adjusted,
-      obstructionAltDeg: round1(Math.max(0, state.levelPitch - sample.pitchDeg)),
+      unwrappedHeadingDeg: unwrapped,
+      obstructionAltDeg: round1(sample.relativeAltDeg),
       pitchDeg: sample.pitchDeg
     });
 
-    prevAdjusted = adjusted;
+    prevUnwrapped = unwrapped;
   }
 
-  return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+  return traced.sort((a, b) => a.unwrappedHeadingDeg - b.unwrappedHeadingDeg);
 }
 
-function buildSunPath(dateStr, profile) {
+function getSweepSector(profile) {
+  return {
+    start: profile[0].unwrappedHeadingDeg,
+    end: profile[profile.length - 1].unwrappedHeadingDeg,
+    mid: (profile[0].unwrappedHeadingDeg + profile[profile.length - 1].unwrappedHeadingDeg) / 2
+  };
+}
+
+function buildProfileBins(profile, sector, binSizeDeg = 1) {
+  if (!profile || profile.length < 2) return null;
+
+  const minHeading = Math.floor(sector.start);
+  const maxHeading = Math.ceil(sector.end);
+  const bins = [];
+
+  for (let h = minHeading; h <= maxHeading; h += binSizeDeg) {
+    bins.push({
+      heading: h,
+      obstructionAltDeg: interpolateObstructionAtHeading(h, profile)
+    });
+  }
+
+  return {
+    minHeading,
+    maxHeading,
+    binSizeDeg,
+    bins,
+    profile
+  };
+}
+
+function interpolateObstructionAtHeading(targetHeading, profile) {
+  if (!profile.length) return Infinity;
+  if (profile.length === 1) return profile[0].obstructionAltDeg;
+
+  if (targetHeading < profile[0].unwrappedHeadingDeg || targetHeading > profile[profile.length - 1].unwrappedHeadingDeg) {
+    return Infinity;
+  }
+
+  if (targetHeading === profile[0].unwrappedHeadingDeg) return profile[0].obstructionAltDeg;
+  if (targetHeading === profile[profile.length - 1].unwrappedHeadingDeg) return profile[profile.length - 1].obstructionAltDeg;
+
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i];
+    const b = profile[i + 1];
+
+    if (targetHeading >= a.unwrappedHeadingDeg && targetHeading <= b.unwrappedHeadingDeg) {
+      const span = b.unwrappedHeadingDeg - a.unwrappedHeadingDeg;
+      if (span === 0) return Math.max(a.obstructionAltDeg, b.obstructionAltDeg);
+      const t = (targetHeading - a.unwrappedHeadingDeg) / span;
+      return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
+    }
+  }
+
+  return Infinity;
+}
+
+function buildSunPath(dateStr, sector) {
   if (!window.SunCalc || state.lat == null || state.lng == null) return [];
 
   const points = [];
@@ -462,14 +527,12 @@ function buildSunPath(dateStr, profile) {
     if (altDeg <= 0) continue;
 
     const rawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-    const adjustedHeadingDeg = profile && profile.length
-      ? mapCompassToAdjustedHeading(rawHeadingDeg, profile)
-      : rawHeadingDeg;
+    const unwrappedHeadingDeg = mapRawHeadingToSectorFrame(rawHeadingDeg, sector);
 
     points.push({
       date: dt,
       rawHeadingDeg,
-      adjustedHeadingDeg,
+      unwrappedHeadingDeg,
       altDeg
     });
   }
@@ -477,13 +540,49 @@ function buildSunPath(dateStr, profile) {
   return points;
 }
 
-function getSunWindowsForDate(dateStr, profile) {
+function mapRawHeadingToSectorFrame(rawHeadingDeg, sector) {
+  const candidates = [
+    rawHeadingDeg - 720,
+    rawHeadingDeg - 360,
+    rawHeadingDeg,
+    rawHeadingDeg + 360,
+    rawHeadingDeg + 720
+  ];
+
+  return candidates.reduce((best, candidate) => {
+    return Math.abs(candidate - sector.mid) < Math.abs(best - sector.mid) ? candidate : best;
+  }, candidates[0]);
+}
+
+function getHeadingOverlap(sector, sunPath) {
+  if (!sunPath.length) {
+    return { hasOverlap: false, start: null, end: null };
+  }
+
+  const sunMin = Math.min(...sunPath.map((p) => p.unwrappedHeadingDeg));
+  const sunMax = Math.max(...sunPath.map((p) => p.unwrappedHeadingDeg));
+
+  const start = Math.max(sector.start, sunMin);
+  const end = Math.min(sector.end, sunMax);
+
+  return {
+    hasOverlap: end >= start,
+    start,
+    end,
+    sectorStart: sector.start,
+    sectorEnd: sector.end,
+    sunMin,
+    sunMax
+  };
+}
+
+function getSunWindowsForDate(dateStr, profileBins, sector) {
   const windows = [];
   let openWindow = null;
 
   for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 1) {
     const dt = localDateAtMinutes(dateStr, minutes);
-    const visible = isSunVisibleAt(dt, profile);
+    const visible = isSunVisibleAt(dt, profileBins, sector);
 
     if (visible && !openWindow) {
       openWindow = { start: dt, end: dt };
@@ -499,10 +598,10 @@ function getSunWindowsForDate(dateStr, profile) {
     windows.push({ ...openWindow });
   }
 
-  return mergeTinyGaps(windows, 3);
+  return mergeTinyGaps(windows, 5);
 }
 
-function mergeTinyGaps(windows, maxGapMinutes = 3) {
+function mergeTinyGaps(windows, maxGapMinutes = 5) {
   if (!windows.length) return [];
 
   const merged = [{ ...windows[0] }];
@@ -522,83 +621,34 @@ function mergeTinyGaps(windows, maxGapMinutes = 3) {
   return merged;
 }
 
-function isSunVisibleAt(dateObj, profile) {
+function isSunVisibleAt(dateObj, profileBins, sector) {
   const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
   const sunAltDeg = radToDeg(pos.altitude);
-
   if (sunAltDeg <= 0) return false;
-  if (!profile.length) return false;
 
-  const sunHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profile);
+  const sunRawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
+  const sunUnwrappedHeadingDeg = mapRawHeadingToSectorFrame(sunRawHeadingDeg, sector);
 
+  if (sunUnwrappedHeadingDeg < sector.start || sunUnwrappedHeadingDeg > sector.end) {
+    return false;
+  }
+
+  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunUnwrappedHeadingDeg, profileBins);
   if (!Number.isFinite(obstructionAltDeg)) return false;
 
   return sunAltDeg > obstructionAltDeg + 0.5;
 }
 
-function getObstructionAltitudeAtHeading(compassHeadingDeg, profile) {
-  if (!profile.length) return Number.POSITIVE_INFINITY;
-  if (profile.length === 1) return profile[0].obstructionAltDeg;
+function getObstructionAltitudeAtHeading(unwrappedHeadingDeg, profileBins) {
+  if (!profileBins || !profileBins.bins.length) return Infinity;
 
-  const targetAdjusted = mapCompassToAdjustedHeading(compassHeadingDeg, profile);
-
-  if (targetAdjusted < profile[0].adjustedHeadingDeg || targetAdjusted > profile[profile.length - 1].adjustedHeadingDeg) {
-    return Number.POSITIVE_INFINITY;
+  if (unwrappedHeadingDeg < profileBins.minHeading || unwrappedHeadingDeg > profileBins.maxHeading) {
+    return Infinity;
   }
 
-  for (let i = 0; i < profile.length - 1; i++) {
-    const a = profile[i];
-    const b = profile[i + 1];
-
-    if (targetAdjusted >= a.adjustedHeadingDeg && targetAdjusted <= b.adjustedHeadingDeg) {
-      const span = b.adjustedHeadingDeg - a.adjustedHeadingDeg;
-      if (span === 0) return a.obstructionAltDeg;
-      const t = (targetAdjusted - a.adjustedHeadingDeg) / span;
-      return a.obstructionAltDeg + (b.obstructionAltDeg - a.obstructionAltDeg) * t;
-    }
-  }
-
-  return Number.POSITIVE_INFINITY;
-}
-
-function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
-  const mid = (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2;
-  const candidates = [
-    compassHeadingDeg - 720,
-    compassHeadingDeg - 360,
-    compassHeadingDeg,
-    compassHeadingDeg + 360,
-    compassHeadingDeg + 720
-  ];
-
-  return candidates.reduce((best, candidate) => {
-    return Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best;
-  }, candidates[0]);
-}
-
-function getHeadingOverlap(profile, sunPath) {
-  if (!profile.length || !sunPath.length) {
-    return { hasOverlap: false, start: null, end: null };
-  }
-
-  const profileMin = profile[0].adjustedHeadingDeg;
-  const profileMax = profile[profile.length - 1].adjustedHeadingDeg;
-  const sunMin = Math.min(...sunPath.map((p) => p.adjustedHeadingDeg));
-  const sunMax = Math.max(...sunPath.map((p) => p.adjustedHeadingDeg));
-
-  const start = Math.max(profileMin, sunMin);
-  const end = Math.min(profileMax, sunMax);
-
-  return {
-    hasOverlap: end >= start,
-    start,
-    end,
-    profileMin,
-    profileMax,
-    sunMin,
-    sunMax
-  };
+  const idx = Math.round((unwrappedHeadingDeg - profileBins.minHeading) / profileBins.binSizeDeg);
+  const clampedIdx = Math.max(0, Math.min(profileBins.bins.length - 1, idx));
+  return profileBins.bins[clampedIdx].obstructionAltDeg;
 }
 
 function localDateAtMinutes(dateStr, totalMinutes) {
@@ -624,12 +674,8 @@ function render() {
 
   els.setHorizonBtn.disabled = !state.motionReady || state.pitchDeg == null;
 
-  if (els.enableMotionBtn) {
-    els.enableMotionBtn.disabled = state.motionReady;
-    els.enableMotionBtn.textContent = state.motionReady
-      ? "Motion enabled"
-      : "Enable motion";
-  }
+  els.enableMotionBtn.disabled = state.motionReady;
+  els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
 
   els.horizonValue.textContent =
     state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
@@ -670,32 +716,28 @@ function renderProfileGraph() {
   ctx.fillRect(0, 0, width, height);
 
   const profile = state.samples.length >= 2 ? buildProfile() : [];
-  const previewDate = els.previewDate.value;
-  const sunPath = (profile.length >= 2 && previewDate && state.lat != null && state.lng != null)
-    ? buildSunPath(previewDate, profile)
-    : [];
-
-  drawGraphFrame(ctx, width, height);
-
   if (profile.length < 2) {
+    drawGraphFrame(ctx, width, height);
     drawGraphText(ctx, width, height, "Add at least 2 points");
-    if (els.graphHint) {
-      els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
-    }
-    if (els.rangeInfo) {
-      els.rangeInfo.textContent = "No heading ranges yet.";
-    }
+    els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
+    els.rangeInfo.textContent = "No heading ranges yet.";
     return;
   }
+
+  const sector = getSweepSector(profile);
+  const previewDate = els.previewDate.value;
+  const sunPath = (previewDate && state.lat != null && state.lng != null)
+    ? buildSunPath(previewDate, sector)
+    : [];
 
   const pad = { top: 18, right: 18, bottom: 34, left: 42 };
   const graphW = width - pad.left - pad.right;
   const graphH = height - pad.top - pad.bottom;
 
-  const profileXMin = profile[0].adjustedHeadingDeg;
-  const profileXMax = profile[profile.length - 1].adjustedHeadingDeg;
-  const sunXMin = sunPath.length ? Math.min(...sunPath.map((p) => p.adjustedHeadingDeg)) : profileXMin;
-  const sunXMax = sunPath.length ? Math.max(...sunPath.map((p) => p.adjustedHeadingDeg)) : profileXMax;
+  const profileXMin = profile[0].unwrappedHeadingDeg;
+  const profileXMax = profile[profile.length - 1].unwrappedHeadingDeg;
+  const sunXMin = sunPath.length ? Math.min(...sunPath.map((p) => p.unwrappedHeadingDeg)) : profileXMin;
+  const sunXMax = sunPath.length ? Math.max(...sunPath.map((p) => p.unwrappedHeadingDeg)) : profileXMax;
 
   const xMin = Math.min(profileXMin, sunXMin);
   const xMax = Math.max(profileXMax, sunXMax);
@@ -704,6 +746,10 @@ function renderProfileGraph() {
   for (const p of profile) yMax = Math.max(yMax, p.obstructionAltDeg);
   for (const p of sunPath) yMax = Math.max(yMax, p.altDeg);
   yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
+
+  ctx.strokeStyle = "#d8d0c1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad.left, pad.top, graphW, graphH);
 
   ctx.fillStyle = "#6c6c6c";
   ctx.font = "12px sans-serif";
@@ -733,13 +779,13 @@ function renderProfileGraph() {
   ctx.beginPath();
   for (let i = 0; i < profile.length; i++) {
     const p = profile[i];
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
-  const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-  const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  const lastX = toGraphX(profile[profile.length - 1].unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
+  const firstX = toGraphX(profile[0].unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
   ctx.lineTo(lastX, pad.top + graphH);
   ctx.lineTo(firstX, pad.top + graphH);
   ctx.closePath();
@@ -749,7 +795,7 @@ function renderProfileGraph() {
   ctx.beginPath();
   for (let i = 0; i < profile.length; i++) {
     const p = profile[i];
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
@@ -759,7 +805,7 @@ function renderProfileGraph() {
   ctx.stroke();
 
   for (const p of profile) {
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
@@ -770,7 +816,7 @@ function renderProfileGraph() {
   if (sunPath.length) {
     ctx.beginPath();
     sunPath.forEach((p, i) => {
-      const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+      const x = toGraphX(p.unwrappedHeadingDeg, xMin, xMax, pad.left, graphW);
       const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -800,19 +846,14 @@ function renderProfileGraph() {
     ctx.fillText("Sun path", pad.left + 111, pad.top + 9);
   }
 
-  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const capturedRange = formatHeadingArrow(profile[0].rawHeadingDeg, profile[profile.length - 1].rawHeadingDeg);
   const sunRange = sunPath.length
     ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg)
     : "No sun above horizon";
-  const overlap = getHeadingOverlap(profile, sunPath);
+  const overlap = getHeadingOverlap(sector, sunPath);
 
-  if (els.graphHint) {
-    els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path for the selected date.";
-  }
-
-  if (els.rangeInfo) {
-    els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
-  }
+  els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path for the selected date.";
+  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
 }
 
 function toGraphX(value, min, max, left, width) {
@@ -874,6 +915,7 @@ function buildRecord() {
     gpsTimestamp: state.gpsTimestamp,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
+    cameraHeadingOffsetDeg: CAMERA_HEADING_OFFSET_DEG,
     levelPitch: state.levelPitch,
     levelCapturedAt: state.levelCapturedAt,
     samples: [...state.samples]
