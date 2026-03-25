@@ -6,7 +6,6 @@
   --border: #ddd6c8;
   --accent: #e3b93c;
   --accent-text: #1f1f1f;
-  --danger: #b54a3a;
 }
 
 * {
@@ -92,6 +91,11 @@ button {
 button.primary {
   background: var(--accent);
   color: var(--accent-text);
+}
+
+button.danger-lite {
+  background: #f3e2dd;
+  color: #7a2f24;
 }
 
 button:disabled {
@@ -190,6 +194,7 @@ video {
 }
 
 .cal-points h2,
+.cal-graph h2,
 .cal-preview h2 {
   margin: 0 0 10px;
   font-size: 1.05rem;
@@ -209,9 +214,19 @@ video {
   font-size: 0.92rem;
 }
 
+.cal-graph,
 .cal-preview {
   display: grid;
   gap: 10px;
+}
+
+#profileCanvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #faf8f2;
 }
 
 .preview-output {
@@ -220,11 +235,6 @@ video {
   padding: 12px;
   background: #faf8f2;
   min-height: 72px;
-}
-
-button.danger-lite {
-  background: #f3e2dd;
-  color: #7a2f24;
 }
 
 @media (max-width: 520px) {
