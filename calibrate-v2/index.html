@@ -27,7 +27,15 @@
       <div class="video-wrap large">
         <video id="video" autoplay playsinline muted></video>
         <div class="reticle" aria-hidden="true"></div>
+
+        <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
+
         <div id="cameraHint" class="camera-hint">Camera ready.</div>
+
+        <div id="captureBar" class="capture-bar hidden">
+          <button id="addPointBtn" class="primary capture-btn" disabled>Mark obstruction</button>
+          <button id="undoPointBtn" class="capture-btn secondary" disabled>Undo</button>
+        </div>
       </div>
 
       <div class="reading-row compact">
@@ -80,8 +88,18 @@
 
     <section id="screen3" class="card screen hidden">
       <h2>Set eye-level reference</h2>
-      <p class="subtle">Keep the phone straight ahead and steady for about a second, then tap the button.</p>
-      <button id="setHorizonBtn" class="primary" disabled>Set eye-level reference</button>
+      <p class="subtle">Hold the phone straight ahead at eye level, then set the reference.</p>
+
+      <div class="status-stack compact-status">
+        <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">Waiting</strong></div>
+        <div class="status-pill"><span>GPS</span><strong id="gpsStatusMirror">Waiting</strong></div>
+        <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">Waiting</strong></div>
+      </div>
+
+      <div class="button-stack">
+        <button id="setHorizonBtn" class="primary" disabled>Set eye-level reference</button>
+      </div>
+
       <div class="nav-row">
         <button id="backTo2Btn">Back</button>
         <button id="toStep4Btn" class="primary" disabled>Next</button>
@@ -89,8 +107,8 @@
     </section>
 
     <section id="screen4" class="card screen hidden">
-      <h2>Mark the skyline</h2>
-      <p class="subtle">Tap more points wherever the skyline changes shape. Add extra points around trees, chimneys and roof corners.</p>
+      <h2>Mark the obstruction</h2>
+      <p class="subtle">Tap more points where the skyline changes shape. Add extra points around trees, chimneys, poles, and roof corners.</p>
 
       <div class="capture-summary">
         <div class="summary-card"><span>Points</span><strong id="pointsCount">0</strong></div>
@@ -98,15 +116,8 @@
       </div>
 
       <div class="button-grid">
-        <button id="addPointBtn" class="primary" disabled>Mark obstruction</button>
-        <button id="undoPointBtn" disabled>Undo</button>
         <button id="clearBtn" class="danger-lite" disabled>Start again</button>
       </div>
-
-      <details class="debug-panel">
-        <summary>Show captured points</summary>
-        <ol id="pointsList" class="points-list"></ol>
-      </details>
 
       <div class="nav-row">
         <button id="backTo3Btn">Back</button>
@@ -116,31 +127,28 @@
 
     <section id="screen5" class="card screen hidden">
       <h2>Review</h2>
+
       <label for="previewDate">Preview date</label>
       <input id="previewDate" type="date" />
       <button id="previewBtn" class="primary" disabled>Preview sun times</button>
+
       <div id="previewOutput" class="preview-output">No preview yet.</div>
 
-      <div class="button-grid review-actions">
-        <button id="saveDraftBtn" disabled>Save draft</button>
-        <button id="exportBtn" class="primary" disabled>Export JSON</button>
-      </div>
-
-      <details class="debug-panel" open>
-        <summary>Show review graph</summary>
+      <div class="graph-block">
         <canvas id="profileCanvas" width="640" height="260"></canvas>
         <div id="graphHint" class="meta-line">Add at least 2 points to see the obstruction profile.</div>
         <div id="rangeInfo" class="meta-line">No heading ranges yet.</div>
-      </details>
+      </div>
 
       <details class="debug-panel">
-        <summary>Show technical readings</summary>
-        <div class="technical-grid">
-          <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">--</strong></div>
-          <div class="status-pill"><span>GPS</span><strong id="gpsStatusMirror">--</strong></div>
-          <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">--</strong></div>
-        </div>
+        <summary>Debug details</summary>
+        <ol id="pointsList" class="points-list"></ol>
       </details>
+
+      <div class="button-grid review-actions">
+        <button id="saveDraftBtn">Save draft</button>
+        <button id="exportBtn" class="primary">Export JSON</button>
+      </div>
 
       <div class="nav-row">
         <button id="backTo4Btn">Back</button>
