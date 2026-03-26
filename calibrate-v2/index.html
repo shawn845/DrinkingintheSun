@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Seat calibration v2 | Drinking in the Sun</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="wizard-page">
+    <header class="hero card">
+      <div class="eyebrow">Calibration v2</div>
+      <h1>Seat calibration</h1>
+      <p>Use this version for simpler contributor testing. Sit in the actual seat and hold the phone at eye level.</p>
+      <div id="stepSummary" class="step-summary">Step 1 of 5</div>
+    </header>
+
+    <nav class="step-strip card" aria-label="Progress">
+      <div class="step-chip" id="chip1">1. Start</div>
+      <div class="step-chip" id="chip2">2. Permissions</div>
+      <div class="step-chip" id="chip3">3. Set reference</div>
+      <div class="step-chip" id="chip4">4. Mark skyline</div>
+      <div class="step-chip" id="chip5">5. Review</div>
+    </nav>
+
+    <section id="screen1" class="card screen current">
+      <h2>Start</h2>
+      <label for="pubName">Pub name</label>
+      <input id="pubName" type="text" placeholder="The Example Inn" />
+
+      <label for="seatName">Seat / spot name</label>
+      <input id="seatName" type="text" placeholder="Front bench by wall" />
+
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" rows="3" placeholder="Tall palm blocks late afternoon sun"></textarea>
+
+      <div class="helper-list">
+        <div>Sit in the actual seat.</div>
+        <div>Hold the phone at eye level.</div>
+        <div>Pan slowly left to right.</div>
+      </div>
+
+      <button id="startBtn" class="primary">Continue</button>
+    </section>
+
+    <section id="screen2" class="card screen hidden">
+      <h2>Permissions</h2>
+      <p class="subtle">Turn on motion first, then load location and camera.</p>
+
+      <div class="status-stack compact-status">
+        <div class="status-pill"><span>Motion</span><strong id="motionStatus">Not enabled</strong></div>
+        <div class="status-pill"><span>GPS</span><strong id="gpsStatus">Not started</strong></div>
+        <div class="status-pill"><span>Camera</span><strong id="cameraStatus">Not started</strong></div>
+      </div>
+
+      <div class="button-stack">
+        <button id="enableMotionBtn" class="primary">Enable motion</button>
+        <button id="loadSiteBtn">Use my location and camera</button>
+      </div>
+
+      <div class="nav-row">
+        <button id="backTo1Btn">Back</button>
+        <button id="toStep3Btn" class="primary" disabled>Next</button>
+      </div>
+    </section>
+
+    <section id="screen3" class="card screen hidden">
+      <h2>Set eye-level reference</h2>
+      <p class="subtle">Hold the phone level and steady for a moment, then tap the button.</p>
+
+      <div class="video-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="reticle" aria-hidden="true"></div>
+        <div class="camera-hint">Aim the centre marker at straight-ahead eye level</div>
+      </div>
+
+      <div class="reading-row">
+        <div class="reading-card"><span>Heading</span><strong id="headingValue">--</strong></div>
+        <div class="reading-card"><span>Pitch</span><strong id="pitchValue">--</strong></div>
+        <div class="reading-card"><span>Level ref</span><strong id="horizonValue">Not set</strong></div>
+      </div>
+
+      <button id="setHorizonBtn" class="primary" disabled>Set eye-level reference</button>
+
+      <div class="nav-row">
+        <button id="backTo2Btn">Back</button>
+        <button id="toStep4Btn" class="primary" disabled>Next</button>
+      </div>
+    </section>
+
+    <section id="screen4" class="card screen hidden">
+      <h2>Mark the skyline</h2>
+      <p class="subtle">Pan across the obstruction line. Tap more points wherever the skyline changes shape.</p>
+
+      <div class="video-wrap large">
+        <video id="videoMirror" class="video-hidden"></video>
+        <div class="reticle" aria-hidden="true"></div>
+        <div class="camera-hint">Add extra points around trees, chimneys, roof corners and poles</div>
+      </div>
+
+      <div class="capture-summary">
+        <div class="summary-card"><span>Points</span><strong id="pointsCount">0</strong></div>
+        <div class="summary-card"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
+      </div>
+
+      <div class="button-grid">
+        <button id="addPointBtn" class="primary" disabled>Mark obstruction</button>
+        <button id="undoPointBtn" disabled>Undo</button>
+        <button id="clearBtn" class="danger-lite" disabled>Start again</button>
+      </div>
+
+      <details class="debug-panel">
+        <summary>Show captured points</summary>
+        <ol id="pointsList" class="points-list"></ol>
+      </details>
+
+      <div class="nav-row">
+        <button id="backTo3Btn">Back</button>
+        <button id="toStep5Btn" class="primary" disabled>Review</button>
+      </div>
+    </section>
+
+    <section id="screen5" class="card screen hidden">
+      <h2>Review</h2>
+      <label for="previewDate">Preview date</label>
+      <input id="previewDate" type="date" />
+      <button id="previewBtn" class="primary" disabled>Preview sun times</button>
+      <div id="previewOutput" class="preview-output">No preview yet.</div>
+
+      <div class="button-grid review-actions">
+        <button id="saveDraftBtn" disabled>Save draft</button>
+        <button id="exportBtn" class="primary" disabled>Export JSON</button>
+      </div>
+
+      <details class="debug-panel" open>
+        <summary>Show review graph</summary>
+        <canvas id="profileCanvas" width="640" height="260"></canvas>
+        <div id="graphHint" class="meta-line">Add at least 2 points to see the obstruction profile.</div>
+        <div id="rangeInfo" class="meta-line">No heading ranges yet.</div>
+      </details>
+
+      <details class="debug-panel">
+        <summary>Show technical readings</summary>
+        <div class="technical-grid">
+          <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">--</strong></div>
+          <div class="status-pill"><span>GPS</span><strong id="gpsStatusMirror">--</strong></div>
+          <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">--</strong></div>
+        </div>
+      </details>
+
+      <div class="nav-row">
+        <button id="backTo4Btn">Back</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
