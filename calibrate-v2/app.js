@@ -66,6 +66,8 @@ const els = {
   graphHint: document.getElementById("graphHint"),
   rangeInfo: document.getElementById("rangeInfo"),
   qualitySummary: document.getElementById("qualitySummary"),
+  floatingPointsBadge: document.getElementById("floatingPointsBadge"),
+  captureBar: document.getElementById("captureBar"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
   screen2: document.getElementById("screen2"),
@@ -656,10 +658,20 @@ function render() {
   els.qualitySummary.textContent = getQualitySummary();
   els.horizonValue.textContent = state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
 
+  if (els.floatingPointsBadge) {
+    const label = `${state.samples.length} point${state.samples.length === 1 ? "" : "s"}`;
+    els.floatingPointsBadge.textContent = label;
+    els.floatingPointsBadge.classList.toggle("hidden", state.currentStep !== 4);
+  }
+
+  if (els.captureBar) {
+    els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
+  }
+
   if (state.currentStep === 3) {
     els.cameraHint.textContent = "Aim the centre marker at straight-ahead eye level.";
   } else if (state.currentStep === 4) {
-    els.cameraHint.textContent = "Tap more points where the skyline changes shape.";
+    els.cameraHint.textContent = "Use the bottom button to mark the skyline without scrolling.";
   }
 
   renderPoints();
