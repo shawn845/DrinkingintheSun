@@ -51,7 +51,6 @@ const els = {
   previewDate: document.getElementById("previewDate"),
   previewOutput: document.getElementById("previewOutput"),
   video: document.getElementById("video"),
-  videoMirror: document.getElementById("videoMirror"),
   gpsStatus: document.getElementById("gpsStatus"),
   cameraStatus: document.getElementById("cameraStatus"),
   motionStatus: document.getElementById("motionStatus"),
@@ -77,7 +76,9 @@ const els = {
   chip2: document.getElementById("chip2"),
   chip3: document.getElementById("chip3"),
   chip4: document.getElementById("chip4"),
-  chip5: document.getElementById("chip5")
+  chip5: document.getElementById("chip5"),
+  cameraStage: document.getElementById("cameraStage"),
+  cameraHint: document.getElementById("cameraHint")
 };
 
 document.addEventListener("DOMContentLoaded", init);
@@ -90,7 +91,7 @@ function init() {
 }
 
 function bindUI() {
-  els.startBtn.addEventListener("click", continueFromStart);
+  els.startBtn.addEventListener("click", startWizard);
   els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
   els.loadSiteBtn.addEventListener("click", loadSiteRequirements);
   els.toStep3Btn.addEventListener("click", () => goToStep(3));
@@ -108,16 +109,24 @@ function bindUI() {
   els.exportBtn.addEventListener("click", exportJson);
   els.previewBtn.addEventListener("click", calculatePreview);
 
-  els.pubName.addEventListener("input", () => { state.pubName = els.pubName.value.trim(); render(); });
-  els.seatName.addEventListener("input", () => { state.seatName = els.seatName.value.trim(); render(); });
-  els.notes.addEventListener("input", () => { state.notes = els.notes.value.trim(); });
+  els.pubName.addEventListener("input", () => {
+    state.pubName = els.pubName.value.trim();
+    render();
+  });
+  els.seatName.addEventListener("input", () => {
+    state.seatName = els.seatName.value.trim();
+    render();
+  });
+  els.notes.addEventListener("input", () => {
+    state.notes = els.notes.value.trim();
+  });
   els.previewDate.addEventListener("change", () => {
     els.previewOutput.textContent = "Preview date updated. Tap Preview sun times.";
     renderProfileGraph();
   });
 }
 
-function continueFromStart() {
+function startWizard() {
   state.pubName = els.pubName.value.trim();
   state.seatName = els.seatName.value.trim();
   state.notes = els.notes.value.trim();
@@ -131,6 +140,9 @@ function continueFromStart() {
 function goToStep(step) {
   state.currentStep = step;
   render();
+  if (state.stream) {
+    requestAnimationFrame(() => ensureVideoPlayback());
+  }
 }
 
 function setDefaultPreviewDate() {
@@ -152,7 +164,6 @@ async function enableMotionFromButton() {
   syncMirrorStatuses();
   try {
     await requestMotion();
-    render();
     setTimeout(() => {
       if (state.motionReady && (state.headingDeg == null || state.pitchDeg == null)) {
         els.motionStatus.textContent = "Enabled - move phone slightly";
@@ -183,6 +194,18 @@ async function loadSiteRequirements() {
     els.loadSiteBtn.disabled = false;
     render();
   }
+}
+
+function attachStreamToVideo(stream) {
+  if (els.video && els.video.srcObject !== stream) {
+    els.video.srcObject = stream;
+  }
+}
+
+async function ensureVideoPlayback() {
+  if (!els.video || !state.stream) return;
+  attachStreamToVideo(state.stream);
+  try { await els.video.play(); } catch (_) {}
 }
 
 function requestLocation() {
@@ -232,8 +255,8 @@ async function requestCamera() {
   });
 
   state.stream = stream;
-  els.video.srcObject = stream;
-  if (els.videoMirror) els.videoMirror.srcObject = stream;
+  attachStreamToVideo(stream);
+  await ensureVideoPlayback();
   state.cameraReady = true;
   els.cameraStatus.textContent = "Ready";
   syncMirrorStatuses();
@@ -334,11 +357,15 @@ function getRecentPitchMedian(windowMs = LEVEL_REFERENCE_WINDOW_MS) {
 function getRecentHeadingMean(windowMs = POINT_SAMPLE_WINDOW_MS) {
   const recent = getRecentSamples(state.recentHeadingSamples, windowMs);
   if (recent.length < MIN_MOTION_SAMPLES) return null;
-  let sumX = 0, sumY = 0;
+
+  let sumX = 0;
+  let sumY = 0;
   for (const sample of recent) {
     const rad = (sample.value * Math.PI) / 180;
-    sumX += Math.cos(rad); sumY += Math.sin(rad);
+    sumX += Math.cos(rad);
+    sumY += Math.sin(rad);
   }
+
   if (sumX === 0 && sumY === 0) return null;
   return normalizeDeg((Math.atan2(sumY, sumX) * 180) / Math.PI);
 }
@@ -346,19 +373,23 @@ function getRecentHeadingMean(windowMs = POINT_SAMPLE_WINDOW_MS) {
 function getStabilizedReading() {
   const pitch = getRecentPitchMedian(POINT_SAMPLE_WINDOW_MS);
   const heading = getRecentHeadingMean(POINT_SAMPLE_WINDOW_MS);
-  return { pitchDeg: pitch ?? state.pitchDeg, headingDeg: heading ?? state.headingDeg };
+  return {
+    pitchDeg: pitch ?? state.pitchDeg,
+    headingDeg: heading ?? state.headingDeg
+  };
 }
 
 function setLevelReference() {
   if (!state.motionReady) return alert("Enable motion first.");
   const levelPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
-  if (levelPitch == null) return alert("Hold the phone level and steady for a moment, then try again.");
+  if (levelPitch == null) {
+    return alert("Hold the phone level and steady for a moment, then try again.");
+  }
   state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
   els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
   els.previewOutput.textContent = "Eye-level reference set. You can now mark the skyline.";
   goToStep(4);
-  render();
 }
 
 function addPoint() {
@@ -378,7 +409,7 @@ function addPoint() {
     relativeAltDeg,
     capturedAt: new Date().toISOString()
   });
-  els.previewOutput.textContent = "Points updated. Preview sun times when ready.";
+  els.previewOutput.textContent = "Points updated. Tap Preview sun times.";
   render();
 }
 
@@ -390,15 +421,22 @@ function undoPoint() {
 
 function clearPoints() {
   if (!state.samples.length) return;
-  if (!confirm("Clear all captured points and start this sweep again?")) return;
+  if (!confirm("Clear all captured points and start again?")) return;
   state.samples = [];
+  localStorage.removeItem("dits-calibration-draft");
   els.previewOutput.textContent = "Points cleared. Capture a new sweep.";
   render();
 }
 
 function calculatePreview() {
-  if (!window.SunCalc) return (els.previewOutput.textContent = "SunCalc did not load.");
-  if (!hasPreviewInputs()) return alert("You need a level reference, location, and at least 2 points.");
+  if (!window.SunCalc) {
+    els.previewOutput.textContent = "SunCalc did not load.";
+    return;
+  }
+  if (!hasPreviewInputs()) {
+    alert("You need an eye-level reference, location, and at least 2 points before preview will work.");
+    return;
+  }
   const selectedDate = els.previewDate.value;
   if (!selectedDate) return alert("Pick a preview date.");
 
@@ -407,24 +445,28 @@ function calculatePreview() {
   const sunPath = buildSunPath(selectedDate, profile);
   const overlap = getHeadingOverlap(profile, sunPath);
   const windows = getSunWindowsForDate(selectedDate, profileBins);
+
   const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
 
   if (!sunPath.length) {
     els.previewOutput.innerHTML = `<strong>No sun above horizon</strong><br>No solar path was found above the horizon for this date at this location.`;
-    return renderProfileGraph();
+    renderProfileGraph();
+    return;
   }
   if (!overlap.hasOverlap) {
     els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sun path on this date: ${sunRange}`;
-    return renderProfileGraph();
+    renderProfileGraph();
+    return;
   }
   if (!windows.length) {
     els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sun path on this date: ${sunRange}`;
-    return renderProfileGraph();
+    renderProfileGraph();
+    return;
   }
 
   const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
-  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}`;
+  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sun path:</strong> ${sunRange}`;
   renderProfileGraph();
 }
 
@@ -438,7 +480,12 @@ function buildProfile() {
       const candidates = [raw - 360, raw, raw + 360];
       adjusted = candidates.reduce((best, candidate) => Math.abs(candidate - prevAdjusted) < Math.abs(best - prevAdjusted) ? candidate : best, candidates[0]);
     }
-    out.push({ rawHeadingDeg: raw, adjustedHeadingDeg: adjusted, obstructionAltDeg: sample.relativeAltDeg, pitchDeg: sample.pitchDeg });
+    out.push({
+      rawHeadingDeg: raw,
+      adjustedHeadingDeg: adjusted,
+      obstructionAltDeg: Number.isFinite(sample.relativeAltDeg) ? sample.relativeAltDeg : round1(Math.min(89, Math.abs(state.levelPitch - sample.pitchDeg))),
+      pitchDeg: sample.pitchDeg
+    });
     prevAdjusted = adjusted;
   }
   return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
@@ -496,7 +543,10 @@ function getSunWindowsForDate(dateStr, profileBins) {
     const visible = isSunVisibleAt(dt, profileBins);
     if (visible && !openWindow) openWindow = { start: dt, end: dt };
     else if (visible && openWindow) openWindow.end = dt;
-    else if (!visible && openWindow) { windows.push({ ...openWindow }); openWindow = null; }
+    else if (!visible && openWindow) {
+      windows.push({ ...openWindow });
+      openWindow = null;
+    }
   }
   if (openWindow) windows.push({ ...openWindow });
   return mergeTinyGaps(windows, 5);
@@ -541,7 +591,7 @@ function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
 }
 
 function getHeadingOverlap(profile, sunPath) {
-  if (!profile.length || !sunPath.length) return { hasOverlap: false, start: null, end: null };
+  if (!profile.length || !sunPath.length) return { hasOverlap: false };
   const profileMin = profile[0].adjustedHeadingDeg;
   const profileMax = profile[profile.length - 1].adjustedHeadingDeg;
   const sunMin = Math.min(...sunPath.map((p) => p.adjustedHeadingDeg));
@@ -551,88 +601,77 @@ function getHeadingOverlap(profile, sunPath) {
   return { hasOverlap: end >= start, start, end };
 }
 
-function getCalibrationWarnings(profile, sunPath) {
-  const warnings = [];
-  if (profile.length < 6) warnings.push("add more points");
-  if (profile.length >= 2) {
-    const sweepWidth = profile[profile.length - 1].adjustedHeadingDeg - profile[0].adjustedHeadingDeg;
-    if (sweepWidth < 20) warnings.push("sweep is narrow");
-    let maxGap = 0;
-    for (let i = 1; i < profile.length; i++) maxGap = Math.max(maxGap, profile[i].adjustedHeadingDeg - profile[i - 1].adjustedHeadingDeg);
-    if (maxGap > 10) warnings.push("big gap between marks");
-  }
-  if (sunPath.length) {
-    const overlap = getHeadingOverlap(profile, sunPath);
-    if (!overlap.hasOverlap) warnings.push("sun path does not overlap this sweep");
-  }
-  return warnings;
-}
-
 function localDateAtMinutes(dateStr, totalMinutes) {
   const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d, Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return new Date(y, m - 1, d, hours, minutes, 0, 0);
 }
 
-function radToDeg(rad) { return (rad * 180) / Math.PI; }
+function radToDeg(rad) {
+  return (rad * 180) / Math.PI;
+}
+
+function getQualitySummary() {
+  if (state.samples.length < 4) return "Low";
+  const profile = buildProfile();
+  const sweepWidth = Math.abs(profile[profile.length - 1].adjustedHeadingDeg - profile[0].adjustedHeadingDeg);
+  if (sweepWidth < 12) return "Low";
+  if (hasLargeHeadingGap(profile)) return "Fair";
+  return "Good";
+}
+
+function hasLargeHeadingGap(profile) {
+  for (let i = 1; i < profile.length; i++) {
+    if (Math.abs(profile[i].adjustedHeadingDeg - profile[i - 1].adjustedHeadingDeg) > 12) return true;
+  }
+  return false;
+}
 
 function render() {
-  els.pointsCount.textContent = String(state.samples.length);
+  const screens = [els.screen1, els.screen2, els.screen3, els.screen4, els.screen5];
+  screens.forEach((screen, idx) => screen.classList.toggle("hidden", idx + 1 !== state.currentStep));
+
+  const chips = [els.chip1, els.chip2, els.chip3, els.chip4, els.chip5];
+  chips.forEach((chip, idx) => {
+    chip.classList.toggle("active", idx + 1 === state.currentStep);
+    chip.classList.toggle("done", idx + 1 < state.currentStep);
+  });
+
+  els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
+  els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
+
+  els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
+  els.setHorizonBtn.disabled = !(state.motionReady && state.pitchDeg != null);
+  els.toStep4Btn.disabled = state.levelPitch == null;
   els.addPointBtn.disabled = !canCapture();
   els.undoPointBtn.disabled = state.samples.length === 0;
   els.clearBtn.disabled = state.samples.length === 0;
+  els.toStep5Btn.disabled = state.samples.length < 2;
+  els.previewBtn.disabled = !hasPreviewInputs();
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
-  els.previewBtn.disabled = !hasPreviewInputs();
-  els.setHorizonBtn.disabled = !state.motionReady || state.pitchDeg == null;
-  els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
-  els.toStep4Btn.disabled = state.levelPitch == null;
-  els.toStep5Btn.disabled = state.samples.length < 2;
 
-  els.enableMotionBtn.disabled = state.motionReady;
-  els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
+  els.pointsCount.textContent = String(state.samples.length);
+  els.qualitySummary.textContent = getQualitySummary();
   els.horizonValue.textContent = state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
 
-  updateWizardUI();
+  if (state.currentStep === 3) {
+    els.cameraHint.textContent = "Aim the centre marker at straight-ahead eye level.";
+  } else if (state.currentStep === 4) {
+    els.cameraHint.textContent = "Tap more points where the skyline changes shape.";
+  }
+
   renderPoints();
   renderProfileGraph();
   syncMirrorStatuses();
-  updateQualitySummary();
-}
-
-function updateWizardUI() {
-  const screens = [els.screen1, els.screen2, els.screen3, els.screen4, els.screen5];
-  screens.forEach((screen, idx) => screen.classList.toggle('hidden', idx + 1 !== state.currentStep));
-  const chips = [els.chip1, els.chip2, els.chip3, els.chip4, els.chip5];
-  chips.forEach((chip, idx) => {
-    chip.classList.toggle('active', idx + 1 === state.currentStep);
-    chip.classList.toggle('done', idx + 1 < state.currentStep);
-  });
-  els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
-}
-
-function syncMirrorStatuses() {
-  if (els.gpsStatusMirror) els.gpsStatusMirror.textContent = els.gpsStatus.textContent;
-  if (els.cameraStatusMirror) els.cameraStatusMirror.textContent = els.cameraStatus.textContent;
-  if (els.motionStatusMirror) els.motionStatusMirror.textContent = els.motionStatus.textContent;
-}
-
-function updateQualitySummary() {
-  if (!els.qualitySummary) return;
-  if (state.samples.length < 2) {
-    els.qualitySummary.textContent = 'Waiting';
-    return;
-  }
-  const profile = buildProfile();
-  const sunPath = els.previewDate.value && state.lat != null && state.lng != null ? buildSunPath(els.previewDate.value, profile) : [];
-  const warnings = getCalibrationWarnings(profile, sunPath);
-  els.qualitySummary.textContent = warnings.length ? 'Needs check' : 'Good';
 }
 
 function renderPoints() {
-  els.pointsList.innerHTML = '';
+  els.pointsList.innerHTML = "";
   state.samples.forEach((sample, index) => {
-    const li = document.createElement('li');
-    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}°, obstruction ${sample.relativeAltDeg.toFixed(1)}°</div>`;
+    const li = document.createElement("li");
+    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
     els.pointsList.appendChild(li);
   });
 }
@@ -640,10 +679,12 @@ function renderPoints() {
 function renderProfileGraph() {
   const canvas = els.profileCanvas;
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const width = canvas.width, height = canvas.height;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#faf8f2'; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#faf8f2";
+  ctx.fillRect(0, 0, width, height);
 
   const profile = state.samples.length >= 2 ? buildProfile() : [];
   const previewDate = els.previewDate.value;
@@ -651,9 +692,9 @@ function renderProfileGraph() {
   drawGraphFrame(ctx, width, height);
 
   if (profile.length < 2) {
-    drawGraphText(ctx, width, height, 'Add at least 2 points');
-    els.graphHint.textContent = 'Add at least 2 points to see the obstruction profile.';
-    els.rangeInfo.textContent = 'No heading ranges yet.';
+    drawGraphText(ctx, width, height, "Add at least 2 points");
+    els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
+    els.rangeInfo.textContent = "No heading ranges yet.";
     return;
   }
 
@@ -662,20 +703,31 @@ function renderProfileGraph() {
   const graphH = height - pad.top - pad.bottom;
   const xMin = profile[0].adjustedHeadingDeg;
   const xMax = profile[profile.length - 1].adjustedHeadingDeg;
-  let yMax = Math.max(10, ...profile.map(p => p.obstructionAltDeg));
+  let yMax = 0;
+  for (const p of profile) yMax = Math.max(yMax, p.obstructionAltDeg);
   const sunInSweep = sunPath.filter((p) => p.adjustedHeadingDeg >= xMin && p.adjustedHeadingDeg <= xMax);
   for (const p of sunInSweep) yMax = Math.max(yMax, p.altDeg);
   yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
 
-  ctx.fillStyle = '#6c6c6c'; ctx.font = '12px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = "#6c6c6c";
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
   for (let i = 0; i <= 4; i++) {
     const value = (yMax / 4) * i;
     const y = pad.top + graphH - (value / yMax) * graphH;
-    ctx.strokeStyle = '#eee7d9'; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + graphW, y); ctx.stroke();
+    ctx.strokeStyle = "#eee7d9";
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + graphW, y);
+    ctx.stroke();
+    ctx.fillStyle = "#6c6c6c";
     ctx.fillText(`${Math.round(value)}°`, pad.left - 6, y);
   }
 
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#6c6c6c";
   ctx.fillText(`${normalizeDeg(profile[0].rawHeadingDeg).toFixed(0)}°`, pad.left, pad.top + graphH + 8);
   ctx.fillText(`${normalizeDeg(profile[profile.length - 1].rawHeadingDeg).toFixed(0)}°`, pad.left + graphW, pad.top + graphH + 8);
 
@@ -683,50 +735,99 @@ function renderProfileGraph() {
   profile.forEach((p, i) => {
     const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   });
   const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
   const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-  ctx.lineTo(lastX, pad.top + graphH); ctx.lineTo(firstX, pad.top + graphH); ctx.closePath();
-  ctx.fillStyle = 'rgba(227, 185, 60, 0.22)'; ctx.fill();
+  ctx.lineTo(lastX, pad.top + graphH);
+  ctx.lineTo(firstX, pad.top + graphH);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(227, 185, 60, 0.22)";
+  ctx.fill();
 
   ctx.beginPath();
   profile.forEach((p, i) => {
     const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = '#1f1f1f'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = "#1f1f1f";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
-  profile.forEach((p) => {
+  for (const p of profile) {
     const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
     const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fillStyle = '#1f1f1f'; ctx.fill();
-  });
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fill();
+  }
 
   if (sunInSweep.length) {
     ctx.beginPath();
     sunInSweep.forEach((p, i) => {
       const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
       const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = '#d06a00'; ctx.lineWidth = 2; ctx.setLineDash([6,5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = "#d06a00";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
-  const warnings = getCalibrationWarnings(profile, sunPath);
-  els.graphHint.textContent = 'Black line = skyline obstruction. Orange dashed line = sun path inside your sweep.';
-  els.rangeInfo.textContent = warnings.length ? `Check: ${warnings.join(', ')}` : 'Check: good';
+  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
+  const overlap = getHeadingOverlap(profile, sunPath);
+  els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path inside the captured sweep.";
+  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
 }
 
-function toGraphX(value, min, max, left, width) { const span = Math.max(1, max - min); return left + ((value - min) / span) * width; }
-function toGraphY(value, yMax, top, height) { return top + height - (value / Math.max(1, yMax)) * height; }
-function drawGraphFrame(ctx, width, height) { ctx.strokeStyle = '#d8d0c1'; ctx.lineWidth = 1; ctx.strokeRect(42, 18, width - 60, height - 52); }
-function drawGraphText(ctx, width, height, text) { ctx.fillStyle = '#6c6c6c'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, width / 2, height / 2); }
+function toGraphX(value, min, max, left, width) {
+  const span = Math.max(1, max - min);
+  return left + ((value - min) / span) * width;
+}
 
-function canCapture() { return state.gpsReady && state.cameraReady && state.motionReady && state.levelPitch != null && state.headingDeg != null && state.pitchDeg != null; }
-function hasMinimumData() { return state.pubName && state.seatName && state.lat != null && state.lng != null && state.samples.length > 0; }
-function hasPreviewInputs() { return hasMinimumData() && state.levelPitch != null && state.samples.length >= 2; }
+function toGraphY(value, yMax, top, height) {
+  return top + height - (value / Math.max(1, yMax)) * height;
+}
+
+function drawGraphFrame(ctx, width, height) {
+  ctx.strokeStyle = "#d8d0c1";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(42, 18, width - 60, height - 52);
+}
+
+function drawGraphText(ctx, width, height, text) {
+  ctx.fillStyle = "#6c6c6c";
+  ctx.font = "14px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, width / 2, height / 2);
+}
+
+function syncMirrorStatuses() {
+  if (els.motionStatusMirror) els.motionStatusMirror.textContent = els.motionStatus.textContent;
+  if (els.gpsStatusMirror) els.gpsStatusMirror.textContent = els.gpsStatus.textContent;
+  if (els.cameraStatusMirror) els.cameraStatusMirror.textContent = els.cameraStatus.textContent;
+}
+
+function canCapture() {
+  return state.gpsReady && state.cameraReady && state.motionReady && state.levelPitch != null && state.headingDeg != null && state.pitchDeg != null;
+}
+
+function hasMinimumData() {
+  return state.pubName && state.seatName && state.lat != null && state.lng != null && state.samples.length > 0;
+}
+
+function hasPreviewInputs() {
+  return hasMinimumData() && state.levelPitch != null && state.samples.length >= 2;
+}
 
 function buildRecord() {
   return {
@@ -747,21 +848,23 @@ function buildRecord() {
 
 function saveDraft() {
   try {
-    localStorage.setItem('dits-calibration-draft-v2', JSON.stringify(buildRecord()));
-    alert('Draft saved on this device.');
+    const draft = buildRecord();
+    localStorage.setItem("dits-calibration-draft-v2", JSON.stringify(draft));
+    alert("Draft saved on this device.");
   } catch (err) {
-    console.error(err); alert('Could not save draft.');
+    console.error(err);
+    alert("Could not save draft.");
   }
 }
 
 function loadDraft() {
   try {
-    const raw = localStorage.getItem('dits-calibration-draft-v2');
+    const raw = localStorage.getItem("dits-calibration-draft-v2");
     if (!raw) return;
     const draft = JSON.parse(raw);
-    state.pubName = draft.pubName || '';
-    state.seatName = draft.seatName || '';
-    state.notes = draft.notes || '';
+    state.pubName = draft.pubName || "";
+    state.seatName = draft.seatName || "";
+    state.notes = draft.notes || "";
     state.lat = draft.lat ?? null;
     state.lng = draft.lng ?? null;
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
@@ -770,26 +873,55 @@ function loadDraft() {
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
     state.gpsReady = state.lat != null && state.lng != null;
-    els.pubName.value = state.pubName; els.seatName.value = state.seatName; els.notes.value = state.notes;
-    if (state.gpsReady) els.gpsStatus.textContent = Number.isFinite(state.gpsAccuracyM) ? `Draft loaded (${Math.round(state.gpsAccuracyM)}m accuracy)` : 'Draft loaded';
-    if (state.levelPitch != null) els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
-    syncMirrorStatuses();
-  } catch (err) { console.error('Draft load failed', err); }
+    els.pubName.value = state.pubName;
+    els.seatName.value = state.seatName;
+    els.notes.value = state.notes;
+    if (state.gpsReady) {
+      const acc = Number.isFinite(state.gpsAccuracyM) ? `${Math.round(state.gpsAccuracyM)}m accuracy` : "saved";
+      els.gpsStatus.textContent = `Draft loaded (${acc})`;
+    }
+    if (state.levelPitch != null) {
+      els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
+    }
+  } catch (err) {
+    console.error("Draft load failed", err);
+  }
 }
 
 function exportJson() {
   try {
     const record = buildRecord();
-    const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `${slugify(record.pubName || 'pub')}-${slugify(record.seatName || 'seat')}-calibration-v2.json`;
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-  } catch (err) { console.error(err); alert('Could not export JSON.'); }
+    a.download = `${slugify(record.pubName || "pub")}-${slugify(record.seatName || "seat")}-calibration-v2.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error(err);
+    alert("Could not export JSON.");
+  }
 }
 
-function slugify(input) { return String(input).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
-function round1(value) { return Math.round(value * 10) / 10; }
-function formatClock(dateObj) { return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-function formatHeadingArrow(startDeg, endDeg) { return `${normalizeDeg(startDeg).toFixed(0)}° → ${normalizeDeg(endDeg).toFixed(0)}°`; }
+function slugify(input) {
+  return String(input).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function round1(value) {
+  return Math.round(value * 10) / 10;
+}
+
+function formatTime(iso) {
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function formatClock(dateObj) {
+  return dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatHeadingArrow(startDeg, endDeg) {
+  return `${normalizeDeg(startDeg).toFixed(0)}° → ${normalizeDeg(endDeg).toFixed(0)}°`;
+}
