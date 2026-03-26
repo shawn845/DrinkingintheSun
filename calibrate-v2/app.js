@@ -35,7 +35,6 @@ const els = {
   enableMotionBtn: document.getElementById("enableMotionBtn"),
   loadSiteBtn: document.getElementById("loadSiteBtn"),
   toStep3Btn: document.getElementById("toStep3Btn"),
-  toStep4Btn: document.getElementById("toStep4Btn"),
   toStep5Btn: document.getElementById("toStep5Btn"),
   backTo1Btn: document.getElementById("backTo1Btn"),
   backTo2Btn: document.getElementById("backTo2Btn"),
@@ -68,6 +67,7 @@ const els = {
   qualitySummary: document.getElementById("qualitySummary"),
   floatingPointsBadge: document.getElementById("floatingPointsBadge"),
   captureBar: document.getElementById("captureBar"),
+  cameraActions: document.getElementById("cameraActions"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
   screen2: document.getElementById("screen2"),
@@ -97,7 +97,6 @@ function bindUI() {
   els.enableMotionBtn.addEventListener("click", enableMotionFromButton);
   els.loadSiteBtn.addEventListener("click", loadSiteRequirements);
   els.toStep3Btn.addEventListener("click", () => goToStep(3));
-  els.toStep4Btn.addEventListener("click", () => goToStep(4));
   els.toStep5Btn.addEventListener("click", () => goToStep(5));
   els.backTo1Btn.addEventListener("click", () => goToStep(1));
   els.backTo2Btn.addEventListener("click", () => goToStep(2));
@@ -294,13 +293,13 @@ function handleOrientation(event) {
   if (heading != null) {
     state.headingDeg = normalizeDeg(heading);
     state.recentHeadingSamples.push({ value: state.headingDeg, ts: now });
-    els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
+    if (els.headingValue) els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
   }
 
   if (pitch != null) {
     state.pitchDeg = pitch;
     state.recentPitchSamples.push({ value: state.pitchDeg, ts: now });
-    els.pitchValue.textContent = `${state.pitchDeg.toFixed(1)}°`;
+    if (els.pitchValue) els.pitchValue.textContent = `${state.pitchDeg.toFixed(1)}°`;
   }
 
   pruneRecentMotionSamples(now);
@@ -389,7 +388,7 @@ function setLevelReference() {
   }
   state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
-  els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
+  if (els.horizonValue) els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
   els.previewOutput.textContent = "Eye-level reference set. You can now mark the skyline.";
   goToStep(4);
 }
@@ -640,12 +639,13 @@ function render() {
     chip.classList.toggle("done", idx + 1 < state.currentStep);
   });
 
+  document.body.classList.toggle("capture-focus", state.currentStep === 3 || state.currentStep === 4);
+
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
   els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
 
   els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
   els.setHorizonBtn.disabled = !(state.motionReady && state.pitchDeg != null);
-  els.toStep4Btn.disabled = state.levelPitch == null;
   els.addPointBtn.disabled = !canCapture();
   els.undoPointBtn.disabled = state.samples.length === 0;
   els.clearBtn.disabled = state.samples.length === 0;
@@ -656,7 +656,15 @@ function render() {
 
   els.pointsCount.textContent = String(state.samples.length);
   els.qualitySummary.textContent = getQualitySummary();
-  els.horizonValue.textContent = state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
+  if (els.horizonValue) {
+    els.horizonValue.textContent = state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
+  }
+
+  if (els.cameraActions) {
+    els.cameraActions.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
+  }
+
+  els.setHorizonBtn.classList.toggle("hidden", state.currentStep !== 3);
 
   if (els.floatingPointsBadge) {
     const label = `${state.samples.length} point${state.samples.length === 1 ? "" : "s"}`;
@@ -669,9 +677,9 @@ function render() {
   }
 
   if (state.currentStep === 3) {
-    els.cameraHint.textContent = "Aim the centre marker at straight-ahead eye level.";
+    els.cameraHint.textContent = "Hold the phone straight ahead, then tap Set eye-level reference below.";
   } else if (state.currentStep === 4) {
-    els.cameraHint.textContent = "Use the bottom button to mark the skyline without scrolling.";
+    els.cameraHint.textContent = "Mark the skyline using the buttons directly below the camera.";
   }
 
   renderPoints();
@@ -893,7 +901,7 @@ function loadDraft() {
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
     }
     if (state.levelPitch != null) {
-      els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
+      if (els.horizonValue) els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
     }
   } catch (err) {
     console.error("Draft load failed", err);
