@@ -23,30 +23,33 @@
       <div class="step-chip" id="chip5">5. Review</div>
     </nav>
 
-    <section id="cameraStage" class="card hidden">
+    <section id="cameraStage" class="card camera-stage-card hidden">
       <div class="video-wrap large">
         <video id="video" autoplay playsinline muted></video>
         <div class="reticle" aria-hidden="true"></div>
 
         <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
 
-        <div id="cameraHint" class="camera-hint">Camera ready.</div>
+        <div id="cameraHint" class="camera-hint">
+          Camera ready.
+        </div>
+      </div>
+
+      <div id="cameraActions" class="camera-actions hidden">
+        <button id="setHorizonBtn" class="primary camera-action-btn hidden" disabled>
+          Set eye-level reference
+        </button>
 
         <div id="captureBar" class="capture-bar hidden">
           <button id="addPointBtn" class="primary capture-btn" disabled>Mark obstruction</button>
           <button id="undoPointBtn" class="capture-btn secondary" disabled>Undo</button>
         </div>
       </div>
-
-      <div class="reading-row compact">
-        <div class="reading-card"><span>Heading</span><strong id="headingValue">--</strong></div>
-        <div class="reading-card"><span>Pitch</span><strong id="pitchValue">--</strong></div>
-        <div class="reading-card"><span>Eye-level ref</span><strong id="horizonValue">Not set</strong></div>
-      </div>
     </section>
 
     <section id="screen1" class="card screen current">
       <h2>Start</h2>
+
       <label for="pubName">Pub name</label>
       <input id="pubName" type="text" placeholder="The Example Inn" />
 
@@ -88,7 +91,7 @@
 
     <section id="screen3" class="card screen hidden">
       <h2>Set eye-level reference</h2>
-      <p class="subtle">Hold the phone straight ahead at eye level, then set the reference.</p>
+      <p class="subtle">Hold the phone straight ahead at eye level, then tap the button below the camera.</p>
 
       <div class="status-stack compact-status">
         <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">Waiting</strong></div>
@@ -96,26 +99,23 @@
         <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">Waiting</strong></div>
       </div>
 
-      <div class="button-stack">
-        <button id="setHorizonBtn" class="primary" disabled>Set eye-level reference</button>
-      </div>
-
-      <div class="nav-row">
+      <div class="nav-row single">
         <button id="backTo2Btn">Back</button>
-        <button id="toStep4Btn" class="primary" disabled>Next</button>
       </div>
     </section>
 
     <section id="screen4" class="card screen hidden">
       <h2>Mark the obstruction</h2>
-      <p class="subtle">Tap more points where the skyline changes shape. Add extra points around trees, chimneys, poles, and roof corners.</p>
+      <p class="subtle">
+        Mark more points where the skyline changes shape. Add extra points around trees, chimneys, poles, and roof corners.
+      </p>
 
-      <div class="capture-summary">
+      <div class="capture-summary compact-summary">
         <div class="summary-card"><span>Points</span><strong id="pointsCount">0</strong></div>
         <div class="summary-card"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
       </div>
 
-      <div class="button-grid">
+      <div class="button-grid single-action">
         <button id="clearBtn" class="danger-lite" disabled>Start again</button>
       </div>
 
