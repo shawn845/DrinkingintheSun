@@ -1,4 +1,8 @@
 const CAMERA_HEADING_OFFSET_DEG = 0;
+const LEVEL_REFERENCE_WINDOW_MS = 900;
+const POINT_SAMPLE_WINDOW_MS = 350;
+const MOTION_SAMPLE_KEEP_MS = 2500;
+const MIN_MOTION_SAMPLES = 5;
 
 const state = {
   pubName: "",
@@ -17,7 +21,9 @@ const state = {
   cameraReady: false,
   gpsReady: false,
   stream: null,
-  samples: []
+  samples: [],
+  recentPitchSamples: [],
+  recentHeadingSamples: []
 };
 
 const els = {
@@ -236,16 +242,21 @@ async function requestMotion() {
 function handleOrientation(event) {
   const heading = getHeading(event);
   const pitch = getPitch(event);
+  const now = Date.now();
 
   if (heading != null) {
     state.headingDeg = normalizeDeg(heading);
+    state.recentHeadingSamples.push({ value: state.headingDeg, ts: now });
     els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
   }
 
   if (pitch != null) {
     state.pitchDeg = pitch;
+    state.recentPitchSamples.push({ value: state.pitchDeg, ts: now });
     els.pitchValue.textContent = `${state.pitchDeg.toFixed(1)}°`;
   }
+
+  pruneRecentMotionSamples(now);
 
   if (state.headingDeg != null || state.pitchDeg != null) {
     els.motionStatus.textContent = "Ready";
@@ -277,21 +288,73 @@ function normalizeDeg(value) {
   return out;
 }
 
+function pruneRecentMotionSamples(now = Date.now()) {
+  const cutoff = now - MOTION_SAMPLE_KEEP_MS;
+  state.recentPitchSamples = state.recentPitchSamples.filter((s) => s.ts >= cutoff);
+  state.recentHeadingSamples = state.recentHeadingSamples.filter((s) => s.ts >= cutoff);
+}
+
+function getRecentSamples(samples, windowMs) {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  return samples.filter((s) => s.ts >= cutoff);
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function getRecentPitchMedian(windowMs = LEVEL_REFERENCE_WINDOW_MS) {
+  const recent = getRecentSamples(state.recentPitchSamples, windowMs);
+  if (recent.length < MIN_MOTION_SAMPLES) return null;
+  return median(recent.map((s) => s.value));
+}
+
+function getRecentHeadingMean(windowMs = POINT_SAMPLE_WINDOW_MS) {
+  const recent = getRecentSamples(state.recentHeadingSamples, windowMs);
+  if (recent.length < MIN_MOTION_SAMPLES) return null;
+
+  let sumX = 0;
+  let sumY = 0;
+  for (const sample of recent) {
+    const rad = (sample.value * Math.PI) / 180;
+    sumX += Math.cos(rad);
+    sumY += Math.sin(rad);
+  }
+
+  if (sumX === 0 && sumY === 0) return null;
+  return normalizeDeg((Math.atan2(sumY, sumX) * 180) / Math.PI);
+}
+
+function getStabilizedReading() {
+  const pitch = getRecentPitchMedian(POINT_SAMPLE_WINDOW_MS);
+  const heading = getRecentHeadingMean(POINT_SAMPLE_WINDOW_MS);
+
+  return {
+    pitchDeg: pitch ?? state.pitchDeg,
+    headingDeg: heading ?? state.headingDeg
+  };
+}
+
 function setLevelReference() {
   if (!state.motionReady) {
     alert("Tap Enable motion first.");
     return;
   }
 
-  if (state.pitchDeg == null) {
-    alert("No pitch data yet. Move the phone slightly and try again.");
+  const levelPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
+  if (levelPitch == null) {
+    alert("Hold the phone level and steady for a moment, then try again.");
     return;
   }
 
-  state.levelPitch = round1(state.pitchDeg);
+  state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
   els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
-  els.previewOutput.textContent = "Level reference set. You can now capture points.";
+  els.previewOutput.textContent = "Level reference set from a short stable sample. You can now capture points.";
   render();
 }
 
@@ -311,18 +374,19 @@ function addPoint() {
     return;
   }
 
-  if (state.headingDeg == null || state.pitchDeg == null) {
-    alert("No motion data yet. Move the phone slightly and try again.");
+  const reading = getStabilizedReading();
+  if (reading.headingDeg == null || reading.pitchDeg == null) {
+    alert("Hold the phone steady for a moment and try again.");
     return;
   }
 
   const relativeAltDeg = round1(
-    Math.min(89, Math.abs(state.levelPitch - state.pitchDeg))
+    Math.min(89, Math.abs(state.levelPitch - reading.pitchDeg))
   );
 
   const sample = {
-    headingDeg: round1(state.headingDeg),
-    pitchDeg: round1(state.pitchDeg),
+    headingDeg: round1(reading.headingDeg),
+    pitchDeg: round1(reading.pitchDeg),
     relativeAltDeg,
     capturedAt: new Date().toISOString()
   };
@@ -667,6 +731,30 @@ function getHeadingOverlap(profile, sunPath) {
   };
 }
 
+function getCalibrationWarnings(profile, sunPath) {
+  const warnings = [];
+
+  if (profile.length < 6) warnings.push("low point count");
+
+  if (profile.length >= 2) {
+    const sweepWidth = profile[profile.length - 1].adjustedHeadingDeg - profile[0].adjustedHeadingDeg;
+    if (sweepWidth < 20) warnings.push("narrow sweep");
+
+    let maxGap = 0;
+    for (let i = 1; i < profile.length; i++) {
+      maxGap = Math.max(maxGap, profile[i].adjustedHeadingDeg - profile[i - 1].adjustedHeadingDeg);
+    }
+    if (maxGap > 10) warnings.push("large gap between points");
+  }
+
+  if (sunPath.length) {
+    const overlap = getHeadingOverlap(profile, sunPath);
+    if (!overlap.hasOverlap) warnings.push("no sun-path overlap");
+  }
+
+  return warnings;
+}
+
 function localDateAtMinutes(dateStr, totalMinutes) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const hours = Math.floor(totalMinutes / 60);
@@ -865,7 +953,9 @@ function renderProfileGraph() {
   }
 
   if (els.rangeInfo) {
-    els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
+    const warnings = getCalibrationWarnings(profile, sunPath);
+    const warningText = warnings.length ? ` | Check: ${warnings.join(", ")}` : " | Check: good";
+    els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}${warningText}`;
   }
 }
 
