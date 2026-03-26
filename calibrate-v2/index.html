@@ -1,27 +1,154 @@
-:root {
-  --bg: #f6f3eb;
-  --card: #ffffff;
-  --text: #1f1f1f;
-  --muted: #6c6c6c;
-  --border: #ddd6c8;
-  --accent: #e3b93c;
-  --accent-text: #1f1f1f;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-body{min-height:100svh}
-.wizard-page{max-width:760px;margin:0 auto;padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
-.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
-.hero h1{margin:0 0 6px;font-size:1.7rem}.hero p{margin:0;color:var(--muted)}.eyebrow{font-size:.82rem;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}.step-summary{margin-top:12px;font-weight:700}
-.step-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.step-chip{padding:10px 8px;border-radius:12px;background:#f0eadf;color:var(--muted);font-size:.88rem;text-align:center}.step-chip.active{background:var(--accent);color:var(--accent-text);font-weight:700}.step-chip.done{background:#e8f1df;color:#2d5c19}
-.hidden{display:none}.screen h2{margin:0 0 10px;font-size:1.1rem}.subtle{margin:0 0 12px;color:var(--muted)}
-label{display:block;font-weight:600;font-size:.95rem;margin:0 0 6px}input,textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 13px;font:inherit;background:#fff;color:var(--text);margin:0 0 10px}
-button{appearance:none;border:0;border-radius:14px;padding:13px 14px;font:inherit;font-weight:700;background:#ece7db;color:var(--text)}button.primary{background:var(--accent);color:var(--accent-text)}button.danger-lite{background:#f3e2dd;color:#7a2f24}button:disabled{opacity:.5}
-.helper-list{display:grid;gap:6px;margin:10px 0 14px;color:var(--muted);font-size:.95rem}.button-stack,.button-grid{display:grid;gap:10px}.button-grid{grid-template-columns:1fr 1fr}.review-actions{margin-top:12px}
-.nav-row{display:flex;justify-content:space-between;gap:10px;margin-top:14px}.nav-row button{flex:1}
-.status-stack,.technical-grid{display:grid;gap:8px}.technical-grid{grid-template-columns:1fr 1fr 1fr}.status-pill{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#faf8f2}.status-pill span{color:var(--muted)}
-.video-wrap{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;border-radius:16px;background:#111}.video-wrap.large{aspect-ratio:4/5}video{width:100%;height:100%;object-fit:cover;display:block}.reticle{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);border:2px solid #fff;border-radius:999px;box-shadow:0 0 0 9999px rgba(0,0,0,.04)}.reticle::before,.reticle::after{content:"";position:absolute;background:#fff;opacity:.95}.reticle::before{left:50%;top:-12px;width:2px;height:58px;transform:translateX(-50%)}.reticle::after{top:50%;left:-12px;width:58px;height:2px;transform:translateY(-50%)}.camera-hint{position:absolute;left:12px;right:12px;bottom:12px;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;font-size:.92rem}
-.reading-row,.capture-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}.reading-row.compact{margin-top:12px}.reading-card,.summary-card{padding:12px;border:1px solid var(--border);border-radius:12px;background:#faf8f2}.reading-card span,.summary-card span{display:block;color:var(--muted);font-size:.85rem;margin-bottom:4px}.reading-card strong,.summary-card strong{font-size:1rem}
-.points-list{margin:0;padding-left:20px}.points-list li{margin-bottom:8px}.meta-line{color:var(--muted);font-size:.92rem;margin-top:8px}.preview-output{border:1px solid var(--border);border-radius:12px;padding:12px;background:#faf8f2;min-height:72px}
-#profileCanvas{width:100%;height:auto;display:block;border:1px solid var(--border);border-radius:12px;background:#faf8f2}.debug-panel{margin-top:12px}.debug-panel summary{cursor:pointer;font-weight:600;color:var(--muted)}
-@media (max-width:640px){.step-strip{grid-template-columns:1fr 1fr}.button-grid,.reading-row,.capture-summary,.technical-grid{grid-template-columns:1fr}.nav-row{flex-direction:column}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Seat calibration v2 | Drinking in the Sun</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="wizard-page">
+    <header class="hero card">
+      <div class="eyebrow">Calibration v2</div>
+      <h1>Seat calibration</h1>
+      <p>Guided test version with one persistent camera view.</p>
+      <div id="stepSummary" class="step-summary">Step 1 of 5</div>
+    </header>
+
+    <nav class="step-strip card" aria-label="Progress">
+      <div class="step-chip" id="chip1">1. Start</div>
+      <div class="step-chip" id="chip2">2. Permissions</div>
+      <div class="step-chip" id="chip3">3. Set reference</div>
+      <div class="step-chip" id="chip4">4. Mark skyline</div>
+      <div class="step-chip" id="chip5">5. Review</div>
+    </nav>
+
+    <section id="cameraStage" class="card hidden">
+      <div class="video-wrap large">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="reticle" aria-hidden="true"></div>
+        <div id="cameraHint" class="camera-hint">Camera ready.</div>
+      </div>
+
+      <div class="reading-row compact">
+        <div class="reading-card"><span>Heading</span><strong id="headingValue">--</strong></div>
+        <div class="reading-card"><span>Pitch</span><strong id="pitchValue">--</strong></div>
+        <div class="reading-card"><span>Eye-level ref</span><strong id="horizonValue">Not set</strong></div>
+      </div>
+    </section>
+
+    <section id="screen1" class="card screen current">
+      <h2>Start</h2>
+      <label for="pubName">Pub name</label>
+      <input id="pubName" type="text" placeholder="The Example Inn" />
+
+      <label for="seatName">Seat / spot name</label>
+      <input id="seatName" type="text" placeholder="Front bench by wall" />
+
+      <label for="notes">Notes (optional)</label>
+      <textarea id="notes" rows="3" placeholder="Tall palm blocks late afternoon sun"></textarea>
+
+      <div class="helper-list">
+        <div>Sit in the actual seat.</div>
+        <div>Hold the phone at eye level.</div>
+        <div>Pan slowly left to right.</div>
+      </div>
+
+      <button id="startBtn" class="primary">Continue</button>
+    </section>
+
+    <section id="screen2" class="card screen hidden">
+      <h2>Permissions</h2>
+      <p class="subtle">Turn on motion first, then load location and camera.</p>
+
+      <div class="status-stack compact-status">
+        <div class="status-pill"><span>Motion</span><strong id="motionStatus">Not enabled</strong></div>
+        <div class="status-pill"><span>GPS</span><strong id="gpsStatus">Not started</strong></div>
+        <div class="status-pill"><span>Camera</span><strong id="cameraStatus">Not started</strong></div>
+      </div>
+
+      <div class="button-stack">
+        <button id="enableMotionBtn" class="primary">Enable motion</button>
+        <button id="loadSiteBtn">Use my location and camera</button>
+      </div>
+
+      <div class="nav-row">
+        <button id="backTo1Btn">Back</button>
+        <button id="toStep3Btn" class="primary" disabled>Next</button>
+      </div>
+    </section>
+
+    <section id="screen3" class="card screen hidden">
+      <h2>Set eye-level reference</h2>
+      <p class="subtle">Keep the phone straight ahead and steady for about a second, then tap the button.</p>
+      <button id="setHorizonBtn" class="primary" disabled>Set eye-level reference</button>
+      <div class="nav-row">
+        <button id="backTo2Btn">Back</button>
+        <button id="toStep4Btn" class="primary" disabled>Next</button>
+      </div>
+    </section>
+
+    <section id="screen4" class="card screen hidden">
+      <h2>Mark the skyline</h2>
+      <p class="subtle">Tap more points wherever the skyline changes shape. Add extra points around trees, chimneys and roof corners.</p>
+
+      <div class="capture-summary">
+        <div class="summary-card"><span>Points</span><strong id="pointsCount">0</strong></div>
+        <div class="summary-card"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
+      </div>
+
+      <div class="button-grid">
+        <button id="addPointBtn" class="primary" disabled>Mark obstruction</button>
+        <button id="undoPointBtn" disabled>Undo</button>
+        <button id="clearBtn" class="danger-lite" disabled>Start again</button>
+      </div>
+
+      <details class="debug-panel">
+        <summary>Show captured points</summary>
+        <ol id="pointsList" class="points-list"></ol>
+      </details>
+
+      <div class="nav-row">
+        <button id="backTo3Btn">Back</button>
+        <button id="toStep5Btn" class="primary" disabled>Review</button>
+      </div>
+    </section>
+
+    <section id="screen5" class="card screen hidden">
+      <h2>Review</h2>
+      <label for="previewDate">Preview date</label>
+      <input id="previewDate" type="date" />
+      <button id="previewBtn" class="primary" disabled>Preview sun times</button>
+      <div id="previewOutput" class="preview-output">No preview yet.</div>
+
+      <div class="button-grid review-actions">
+        <button id="saveDraftBtn" disabled>Save draft</button>
+        <button id="exportBtn" class="primary" disabled>Export JSON</button>
+      </div>
+
+      <details class="debug-panel" open>
+        <summary>Show review graph</summary>
+        <canvas id="profileCanvas" width="640" height="260"></canvas>
+        <div id="graphHint" class="meta-line">Add at least 2 points to see the obstruction profile.</div>
+        <div id="rangeInfo" class="meta-line">No heading ranges yet.</div>
+      </details>
+
+      <details class="debug-panel">
+        <summary>Show technical readings</summary>
+        <div class="technical-grid">
+          <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">--</strong></div>
+          <div class="status-pill"><span>GPS</span><strong id="gpsStatusMirror">--</strong></div>
+          <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">--</strong></div>
+        </div>
+      </details>
+
+      <div class="nav-row">
+        <button id="backTo4Btn">Back</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
