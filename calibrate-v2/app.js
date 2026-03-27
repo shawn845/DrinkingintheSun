@@ -78,11 +78,27 @@ const els = {
   chip3: document.getElementById("chip3"),
   chip4: document.getElementById("chip4"),
   chip5: document.getElementById("chip5"),
-  cameraStage: document.getElementById("cameraStage"),
-  cameraHint: document.getElementById("cameraHint")
+  cameraStage: document.getElementById("cameraStage")
 };
 
 document.addEventListener("DOMContentLoaded", init);
+
+document.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+}, { passive: false });
+
+let lastTouchEndTs = 0;
+document.addEventListener("touchend", (event) => {
+  const now = Date.now();
+  if (now - lastTouchEndTs < 300) {
+    event.preventDefault();
+  }
+  lastTouchEndTs = now;
+}, { passive: false });
+
+document.addEventListener("gesturestart", (event) => {
+  event.preventDefault();
+}, { passive: false });
 
 function init() {
   bindUI();
@@ -261,25 +277,32 @@ async function requestCamera() {
 }
 
 async function requestMotion() {
+  if (state.motionReady) return;
   if (state.motionRequested) return;
-  state.motionRequested = true;
 
   if (typeof DeviceOrientationEvent === "undefined") {
     throw new Error("Device orientation is not supported on this device/browser.");
   }
 
-  const isIOSPermissionFlow = typeof DeviceOrientationEvent.requestPermission === "function";
-  if (isIOSPermissionFlow) {
-    const response = await DeviceOrientationEvent.requestPermission();
-    if (response !== "granted") {
-      throw new Error("Motion/orientation permission was denied.");
-    }
-  }
+  state.motionRequested = true;
 
-  window.addEventListener("deviceorientation", handleOrientation, true);
-  state.motionReady = true;
-  els.motionStatus.textContent = "Enabled";
-  syncMirrorStatuses();
+  try {
+    const isIOSPermissionFlow = typeof DeviceOrientationEvent.requestPermission === "function";
+    if (isIOSPermissionFlow) {
+      const response = await DeviceOrientationEvent.requestPermission();
+      if (response !== "granted") {
+        throw new Error("Motion/orientation permission was denied.");
+      }
+    }
+
+    window.addEventListener("deviceorientation", handleOrientation, true);
+    state.motionReady = true;
+    els.motionStatus.textContent = "Enabled";
+    syncMirrorStatuses();
+  } catch (err) {
+    state.motionRequested = false;
+    throw err;
+  }
 }
 
 function handleOrientation(event) {
@@ -396,7 +419,7 @@ function addPoint() {
     return alert("Hold the phone steady for a moment and try again.");
   }
 
-  const relativeAltDeg = round1(Math.min(89, Math.abs(state.levelPitch - reading.pitchDeg)));
+  const relativeAltDeg = round1(clampRelativeAltitude(state.levelPitch - reading.pitchDeg));
   state.samples.push({
     headingDeg: round1(reading.headingDeg),
     pitchDeg: round1(reading.pitchDeg),
@@ -477,7 +500,7 @@ function buildProfile() {
     out.push({
       rawHeadingDeg: raw,
       adjustedHeadingDeg: adjusted,
-      obstructionAltDeg: Number.isFinite(sample.relativeAltDeg) ? sample.relativeAltDeg : round1(Math.min(89, Math.abs(state.levelPitch - sample.pitchDeg))),
+      obstructionAltDeg: Number.isFinite(sample.relativeAltDeg) ? sample.relativeAltDeg : round1(clampRelativeAltitude(state.levelPitch - sample.pitchDeg)),
       pitchDeg: sample.pitchDeg
     });
     prevAdjusted = adjusted;
@@ -667,12 +690,6 @@ function render() {
   els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
   els.captureMeta.classList.toggle("hidden", state.currentStep !== 4);
   els.captureFooter.classList.toggle("hidden", state.currentStep !== 4);
-
-  if (state.currentStep === 3) {
-    els.cameraHint.textContent = "Aim the centre marker at straight-ahead eye level.";
-  } else if (state.currentStep === 4) {
-    els.cameraHint.textContent = "Mark the skyline using the buttons below.";
-  }
 
   renderPoints();
   renderProfileGraph();
@@ -917,6 +934,11 @@ function exportJson() {
 
 function slugify(input) {
   return String(input).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function clampRelativeAltitude(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(89, value));
 }
 
 function round1(value) {
