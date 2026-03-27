@@ -24,7 +24,8 @@ const state = {
   samples: [],
   recentPitchSamples: [],
   recentHeadingSamples: [],
-  currentStep: 1
+  currentStep: 1,
+  calibrationDate: null
 };
 
 const els = {
@@ -48,6 +49,7 @@ const els = {
   exportBtn: document.getElementById("exportBtn"),
   previewBtn: document.getElementById("previewBtn"),
   previewDate: document.getElementById("previewDate"),
+  calibrationDateText: document.getElementById("calibrationDateText"),
   previewOutput: document.getElementById("previewOutput"),
   video: document.getElementById("video"),
   gpsStatus: document.getElementById("gpsStatus"),
@@ -132,10 +134,6 @@ function bindUI() {
   els.notes.addEventListener("input", () => {
     state.notes = els.notes.value.trim();
   });
-  els.previewDate.addEventListener("change", () => {
-    els.previewOutput.textContent = "Preview date updated. Tap Preview sun times.";
-    renderProfileGraph();
-  });
 }
 
 function startWizard() {
@@ -158,9 +156,13 @@ function goToStep(step) {
 }
 
 function setDefaultPreviewDate() {
-  if (!els.previewDate.value) {
-    els.previewDate.value = dateToLocalInputValue(new Date());
+  if (!state.calibrationDate) {
+    state.calibrationDate = dateToLocalInputValue(new Date());
   }
+  if (els.previewDate) {
+    els.previewDate.value = state.calibrationDate;
+  }
+  updateCalibrationDateText();
 }
 
 function dateToLocalInputValue(date) {
@@ -168,6 +170,21 @@ function dateToLocalInputValue(date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function formatDateLabel(value) {
+  if (!value) return "—";
+  const [y, m, d] = String(value).split("-").map(Number);
+  if (!y || !m || !d) return value;
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+function updateCalibrationDateText() {
+  if (els.previewDate) els.previewDate.value = state.calibrationDate || "";
+  if (els.calibrationDateText) {
+    els.calibrationDateText.textContent = formatDateLabel(state.calibrationDate);
+  }
 }
 
 async function enableMotionFromButton() {
@@ -450,8 +467,8 @@ function calculatePreview() {
     alert("You need an eye-level reference, location, and at least 2 points before preview will work.");
     return;
   }
-  const selectedDate = els.previewDate.value;
-  if (!selectedDate) return alert("Pick a preview date.");
+  const selectedDate = state.calibrationDate || els.previewDate.value;
+  if (!selectedDate) return alert("No calibration date found.");
 
   const profile = buildProfile();
   const profileBins = buildProfileBins(profile, 1);
@@ -654,6 +671,7 @@ function render() {
   document.body.classList.toggle("capture-focus", state.currentStep === 3 || state.currentStep === 4);
 
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
+  updateCalibrationDateText();
   els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
 
   els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
@@ -879,6 +897,7 @@ function buildRecord() {
     lng: state.lng,
     gpsAccuracyM: state.gpsAccuracyM,
     gpsTimestamp: state.gpsTimestamp,
+    calibrationDate: state.calibrationDate,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
     levelPitch: state.levelPitch,
@@ -910,6 +929,7 @@ function loadDraft() {
     state.lng = draft.lng ?? null;
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
+    state.calibrationDate = draft.calibrationDate || state.calibrationDate || dateToLocalInputValue(new Date());
     state.levelPitch = draft.levelPitch ?? null;
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
@@ -921,6 +941,7 @@ function loadDraft() {
       const acc = Number.isFinite(state.gpsAccuracyM) ? `${Math.round(state.gpsAccuracyM)}m accuracy` : "saved";
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
     }
+    updateCalibrationDateText();
   } catch (err) {
     console.error("Draft load failed", err);
   }
