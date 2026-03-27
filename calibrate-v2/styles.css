@@ -43,6 +43,19 @@ body {
   box-shadow: 0 2px 10px rgba(0,0,0,.04);
 }
 
+.top-progress {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  margin: 2px 2px 8px;
+}
+
+.top-progress .step-summary {
+  margin: 0;
+  font-weight: 700;
+  font-size: .92rem;
+}
+
 .hero h1 {
   margin: 0 0 6px;
   font-size: 1.45rem;
@@ -72,11 +85,11 @@ body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .step-chip {
-  padding: 8px 6px;
+  padding: 7px 6px;
   border-radius: 10px;
   background: #f0eadf;
   color: var(--muted);
@@ -360,6 +373,23 @@ video {
   padding: 10px 12px;
 }
 
+.review-date-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #faf8f2;
+}
+
+.meta-label {
+  color: var(--muted);
+  font-size: .9rem;
+}
+
 .preview-output {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -399,6 +429,7 @@ body.capture-focus {
 }
 
 body.capture-focus .hero,
+body.capture-focus .top-progress,
 body.capture-focus .step-strip {
   display: none;
 }
@@ -513,8 +544,8 @@ body.capture-focus .floating-points {
 
 @media (max-width: 420px) {
   .step-chip {
-    font-size: .73rem;
-    padding: 7px 4px;
+    font-size: .72rem;
+    padding: 6px 4px;
   }
 
   .capture-bar {
