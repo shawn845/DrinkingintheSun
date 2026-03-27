@@ -64,6 +64,7 @@ const els = {
   captureSummary: document.getElementById("captureSummary"),
   captureBar: document.getElementById("captureBar"),
   captureUtilityRow: document.getElementById("captureUtilityRow"),
+  captureDebugLine: document.getElementById("captureDebugLine"),
   cameraActions: document.getElementById("cameraActions"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
@@ -432,10 +433,12 @@ function addPoint() {
     return alert("Hold the phone steady for a moment and try again.");
   }
 
-  const relativeAltDeg = round1(clampRelativeAltitude(state.levelPitch - reading.pitchDeg));
+  const rawRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, reading.pitchDeg);
+  const relativeAltDeg = clampCapturedRelativeAltitude(rawRelativeAltDeg);
   state.samples.push({
     headingDeg: round1(reading.headingDeg),
     pitchDeg: round1(reading.pitchDeg),
+    rawRelativeAltDeg,
     relativeAltDeg,
     capturedAt: new Date().toISOString()
   });
@@ -513,7 +516,9 @@ function buildProfile() {
     out.push({
       rawHeadingDeg: raw,
       adjustedHeadingDeg: adjusted,
-      obstructionAltDeg: Number.isFinite(sample.relativeAltDeg) ? sample.relativeAltDeg : round1(clampRelativeAltitude(state.levelPitch - sample.pitchDeg)),
+      obstructionAltDeg: Number.isFinite(sample.relativeAltDeg)
+        ? sample.relativeAltDeg
+        : clampCapturedRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg)),
       pitchDeg: sample.pitchDeg
     });
     prevAdjusted = adjusted;
@@ -651,6 +656,32 @@ function getQualitySummary() {
   return "Good";
 }
 
+function computeRawRelativeAltitude(levelPitch, pitchDeg) {
+  if (!Number.isFinite(levelPitch) || !Number.isFinite(pitchDeg)) return null;
+  return round1(pitchDeg - levelPitch);
+}
+
+function clampCapturedRelativeAltitude(rawRelativeAltDeg) {
+  if (!Number.isFinite(rawRelativeAltDeg)) return 0;
+  return round1(clampRelativeAltitude(rawRelativeAltDeg));
+}
+
+function formatSignedDeg(value) {
+  if (!Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}°`;
+}
+
+function getCaptureDebugLine() {
+  const pitchText = Number.isFinite(state.pitchDeg) ? `${state.pitchDeg.toFixed(1)}°` : "—";
+  if (state.currentStep === 3) {
+    if (!Number.isFinite(state.levelPitch)) return `Live pitch <strong>${pitchText}</strong>. Set the reticle on the true eye-level horizon, then tap the button.`;
+    const rawRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, state.pitchDeg);
+    return `Level <strong>${state.levelPitch.toFixed(1)}°</strong> • live relative <strong>${formatSignedDeg(rawRelativeAltDeg)}</strong>`;
+  }
+  const rawRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, state.pitchDeg);
+  return `Live relative <strong>${formatSignedDeg(rawRelativeAltDeg)}</strong> • level <strong>${Number.isFinite(state.levelPitch) ? state.levelPitch.toFixed(1) + "°" : "—"}</strong> • pitch <strong>${pitchText}</strong>`;
+}
+
 function hasLargeHeadingGap(profile) {
   for (let i = 1; i < profile.length; i++) {
     if (Math.abs(profile[i].adjustedHeadingDeg - profile[i - 1].adjustedHeadingDeg) > 12) return true;
@@ -704,6 +735,10 @@ function render() {
   els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
   els.levelStatusLine.classList.toggle("hidden", state.currentStep !== 3);
   els.captureUtilityRow.classList.toggle("hidden", state.currentStep !== 4);
+  if (els.captureDebugLine) {
+    els.captureDebugLine.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
+    els.captureDebugLine.innerHTML = getCaptureDebugLine();
+  }
 
   renderPoints();
   renderProfileGraph();
@@ -714,7 +749,8 @@ function renderPoints() {
   els.pointsList.innerHTML = "";
   state.samples.forEach((sample, index) => {
     const li = document.createElement("li");
-    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
+    const rawInfo = Number.isFinite(sample.rawRelativeAltDeg) ? ` (raw ${formatSignedDeg(sample.rawRelativeAltDeg)})` : "";
+    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°${rawInfo}</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
     els.pointsList.appendChild(li);
   });
 }
