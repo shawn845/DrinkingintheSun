@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -11,38 +12,42 @@
     <header class="hero card">
       <div class="eyebrow">Calibration v2</div>
       <h1>Seat calibration</h1>
-      <p>Guided test version with one persistent camera view.</p>
+      <p>Guided capture flow for contributors.</p>
       <div id="stepSummary" class="step-summary">Step 1 of 5</div>
     </header>
 
     <nav class="step-strip card" aria-label="Progress">
-      <div class="step-chip" id="chip1">1. Start</div>
-      <div class="step-chip" id="chip2">2. Permissions</div>
-      <div class="step-chip" id="chip3">3. Set reference</div>
-      <div class="step-chip" id="chip4">4. Mark skyline</div>
-      <div class="step-chip" id="chip5">5. Review</div>
+      <div class="step-chip" id="chip1">Start</div>
+      <div class="step-chip" id="chip2">Setup</div>
+      <div class="step-chip" id="chip3">Level</div>
+      <div class="step-chip" id="chip4">Capture</div>
+      <div class="step-chip" id="chip5">Review</div>
     </nav>
 
     <section id="cameraStage" class="card camera-stage-card hidden">
       <div class="video-wrap large">
         <video id="video" autoplay playsinline muted></video>
         <div class="reticle" aria-hidden="true"></div>
-
         <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
-
-        <div id="cameraHint" class="camera-hint">
-          Camera ready.
-        </div>
+        <div id="cameraHint" class="camera-hint">Camera ready.</div>
       </div>
 
       <div id="cameraActions" class="camera-actions hidden">
-        <button id="setHorizonBtn" class="primary camera-action-btn hidden" disabled>
-          Set eye-level reference
-        </button>
+        <button id="setHorizonBtn" class="primary camera-action-btn hidden" disabled>Set eye-level reference</button>
 
         <div id="captureBar" class="capture-bar hidden">
           <button id="addPointBtn" class="primary capture-btn" disabled>Mark obstruction</button>
           <button id="undoPointBtn" class="capture-btn secondary" disabled>Undo</button>
+        </div>
+
+        <div id="captureMeta" class="capture-meta hidden">
+          <div class="meta-pill"><span>Points</span><strong id="pointsCount">0</strong></div>
+          <div class="meta-pill"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
+        </div>
+
+        <div id="captureFooter" class="capture-footer hidden">
+          <button id="clearBtn" class="danger-lite footer-btn" disabled>Start again</button>
+          <button id="toStep5Btn" class="primary footer-btn" disabled>Review</button>
         </div>
       </div>
     </section>
@@ -69,8 +74,8 @@
     </section>
 
     <section id="screen2" class="card screen hidden">
-      <h2>Permissions</h2>
-      <p class="subtle">Turn on motion first, then load location and camera.</p>
+      <h2>Setup</h2>
+      <p class="subtle">First enable motion. Then load location and camera.</p>
 
       <div class="status-stack compact-status">
         <div class="status-pill"><span>Motion</span><strong id="motionStatus">Not enabled</strong></div>
@@ -106,22 +111,10 @@
 
     <section id="screen4" class="card screen hidden">
       <h2>Mark the obstruction</h2>
-      <p class="subtle">
-        Mark more points where the skyline changes shape. Add extra points around trees, chimneys, poles, and roof corners.
-      </p>
+      <p class="subtle">Add more points where the skyline changes shape. Add extra points around trees, poles, chimneys, and roof corners.</p>
 
-      <div class="capture-summary compact-summary">
-        <div class="summary-card"><span>Points</span><strong id="pointsCount">0</strong></div>
-        <div class="summary-card"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
-      </div>
-
-      <div class="button-grid single-action">
-        <button id="clearBtn" class="danger-lite" disabled>Start again</button>
-      </div>
-
-      <div class="nav-row">
+      <div class="nav-row single">
         <button id="backTo3Btn">Back</button>
-        <button id="toStep5Btn" class="primary" disabled>Review</button>
       </div>
     </section>
 
