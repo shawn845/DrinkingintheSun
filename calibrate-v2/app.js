@@ -56,9 +56,6 @@ const els = {
   gpsStatusMirror: document.getElementById("gpsStatusMirror"),
   cameraStatusMirror: document.getElementById("cameraStatusMirror"),
   motionStatusMirror: document.getElementById("motionStatusMirror"),
-  headingValue: document.getElementById("headingValue"),
-  pitchValue: document.getElementById("pitchValue"),
-  horizonValue: document.getElementById("horizonValue"),
   pointsCount: document.getElementById("pointsCount"),
   pointsList: document.getElementById("pointsList"),
   profileCanvas: document.getElementById("profileCanvas"),
@@ -67,6 +64,8 @@ const els = {
   qualitySummary: document.getElementById("qualitySummary"),
   floatingPointsBadge: document.getElementById("floatingPointsBadge"),
   captureBar: document.getElementById("captureBar"),
+  captureMeta: document.getElementById("captureMeta"),
+  captureFooter: document.getElementById("captureFooter"),
   cameraActions: document.getElementById("cameraActions"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
@@ -215,7 +214,6 @@ function requestLocation() {
       reject(new Error("Geolocation is not supported on this device/browser."));
       return;
     }
-
     els.gpsStatus.textContent = "Requesting...";
     syncMirrorStatuses();
 
@@ -246,7 +244,6 @@ async function requestCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     throw new Error("Camera access is not supported on this browser.");
   }
-
   els.cameraStatus.textContent = "Requesting...";
   syncMirrorStatuses();
 
@@ -293,13 +290,11 @@ function handleOrientation(event) {
   if (heading != null) {
     state.headingDeg = normalizeDeg(heading);
     state.recentHeadingSamples.push({ value: state.headingDeg, ts: now });
-    if (els.headingValue) els.headingValue.textContent = `${state.headingDeg.toFixed(1)}°`;
   }
 
   if (pitch != null) {
     state.pitchDeg = pitch;
     state.recentPitchSamples.push({ value: state.pitchDeg, ts: now });
-    if (els.pitchValue) els.pitchValue.textContent = `${state.pitchDeg.toFixed(1)}°`;
   }
 
   pruneRecentMotionSamples(now);
@@ -366,7 +361,6 @@ function getRecentHeadingMean(windowMs = POINT_SAMPLE_WINDOW_MS) {
     sumX += Math.cos(rad);
     sumY += Math.sin(rad);
   }
-
   if (sumX === 0 && sumY === 0) return null;
   return normalizeDeg((Math.atan2(sumY, sumX) * 180) / Math.PI);
 }
@@ -388,7 +382,6 @@ function setLevelReference() {
   }
   state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
-  if (els.horizonValue) els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
   els.previewOutput.textContent = "Eye-level reference set. You can now mark the skyline.";
   goToStep(4);
 }
@@ -424,7 +417,7 @@ function clearPoints() {
   if (!state.samples.length) return;
   if (!confirm("Clear all captured points and start again?")) return;
   state.samples = [];
-  localStorage.removeItem("dits-calibration-draft");
+  localStorage.removeItem("dits-calibration-draft-v2");
   els.previewOutput.textContent = "Points cleared. Capture a new sweep.";
   render();
 }
@@ -656,15 +649,9 @@ function render() {
 
   els.pointsCount.textContent = String(state.samples.length);
   els.qualitySummary.textContent = getQualitySummary();
-  if (els.horizonValue) {
-    els.horizonValue.textContent = state.levelPitch == null ? "Not set" : `${state.levelPitch.toFixed(1)}°`;
-  }
 
-  if (els.cameraActions) {
-    els.cameraActions.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
-  }
-
-  els.setHorizonBtn.classList.toggle("hidden", state.currentStep !== 3);
+  els.enableMotionBtn.disabled = state.motionReady;
+  els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
 
   if (els.floatingPointsBadge) {
     const label = `${state.samples.length} point${state.samples.length === 1 ? "" : "s"}`;
@@ -672,14 +659,19 @@ function render() {
     els.floatingPointsBadge.classList.toggle("hidden", state.currentStep !== 4);
   }
 
-  if (els.captureBar) {
-    els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
+  if (els.cameraActions) {
+    els.cameraActions.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
   }
 
+  els.setHorizonBtn.classList.toggle("hidden", state.currentStep !== 3);
+  els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
+  els.captureMeta.classList.toggle("hidden", state.currentStep !== 4);
+  els.captureFooter.classList.toggle("hidden", state.currentStep !== 4);
+
   if (state.currentStep === 3) {
-    els.cameraHint.textContent = "Hold the phone straight ahead, then tap Set eye-level reference below.";
+    els.cameraHint.textContent = "Aim the centre marker at straight-ahead eye level.";
   } else if (state.currentStep === 4) {
-    els.cameraHint.textContent = "Mark the skyline using the buttons directly below the camera.";
+    els.cameraHint.textContent = "Mark the skyline using the buttons below.";
   }
 
   renderPoints();
@@ -712,9 +704,9 @@ function renderProfileGraph() {
   drawGraphFrame(ctx, width, height);
 
   if (profile.length < 2) {
-    drawGraphText(ctx, width, height, "Add at least 2 points");
     els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
     els.rangeInfo.textContent = "No heading ranges yet.";
+    drawGraphText(ctx, width, height, "Add at least 2 points");
     return;
   }
 
@@ -899,9 +891,6 @@ function loadDraft() {
     if (state.gpsReady) {
       const acc = Number.isFinite(state.gpsAccuracyM) ? `${Math.round(state.gpsAccuracyM)}m accuracy` : "saved";
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
-    }
-    if (state.levelPitch != null) {
-      if (els.horizonValue) els.horizonValue.textContent = `${state.levelPitch.toFixed(1)}°`;
     }
   } catch (err) {
     console.error("Draft load failed", err);
