@@ -32,21 +32,18 @@
       </div>
 
       <div id="cameraActions" class="camera-actions hidden">
+        <div id="levelStatusLine" class="capture-status-line hidden">Waiting for motion, GPS and camera.</div>
         <button id="setHorizonBtn" class="primary camera-action-btn hidden" disabled>Set eye-level reference</button>
 
         <div id="captureBar" class="capture-bar hidden">
           <button id="addPointBtn" class="primary capture-btn" disabled>Mark obstruction</button>
-          <button id="undoPointBtn" class="capture-btn secondary" disabled>Undo</button>
+          <button id="toStep5Btn" class="capture-btn review-btn" disabled>Review</button>
         </div>
 
-        <div id="captureMeta" class="capture-meta hidden">
-          <div class="meta-pill"><span>Points</span><strong id="pointsCount">0</strong></div>
-          <div class="meta-pill"><span>Quality</span><strong id="qualitySummary">Waiting</strong></div>
-        </div>
-
-        <div id="captureFooter" class="capture-footer hidden">
-          <button id="clearBtn" class="danger-lite footer-btn" disabled>Start again</button>
-          <button id="toStep5Btn" class="primary footer-btn" disabled>Review</button>
+        <div id="captureUtilityRow" class="capture-utility-row hidden">
+          <div class="meta-pill compact-meta-pill"><strong id="captureSummary">0 points • Low</strong></div>
+          <button id="undoPointBtn" class="small-btn" disabled>Undo</button>
+          <button id="clearBtn" class="small-btn danger-lite" disabled>Start again</button>
         </div>
       </div>
     </section>
@@ -74,7 +71,7 @@
 
     <section id="screen2" class="card screen hidden">
       <h2>Setup</h2>
-      <p class="subtle">First enable motion. Then load location and camera.</p>
+      <p class="subtle">Enable motion, then load location and camera.</p>
 
       <div class="status-stack compact-status">
         <div class="status-pill"><span>Motion</span><strong id="motionStatus">Not enabled</strong></div>
@@ -93,27 +90,23 @@
       </div>
     </section>
 
-    <section id="screen3" class="card screen hidden">
-      <h2>Set eye-level reference</h2>
-      <p class="subtle">Hold the phone straight ahead at eye level, then tap the button below the camera.</p>
-
-      <div class="status-stack compact-status">
-        <div class="status-pill"><span>Motion</span><strong id="motionStatusMirror">Waiting</strong></div>
-        <div class="status-pill"><span>GPS</span><strong id="gpsStatusMirror">Waiting</strong></div>
-        <div class="status-pill"><span>Camera</span><strong id="cameraStatusMirror">Waiting</strong></div>
-      </div>
-
-      <div class="nav-row single">
-        <button id="backTo2Btn">Back</button>
+    <section id="screen3" class="card screen hidden capture-header-card">
+      <div class="capture-head">
+        <div class="capture-head-copy">
+          <h2>Set eye-level reference</h2>
+          <p class="subtle">Hold the phone straight ahead at eye level, then tap the button below.</p>
+        </div>
+        <button id="backTo2Btn" class="top-back-btn">Back</button>
       </div>
     </section>
 
-    <section id="screen4" class="card screen hidden">
-      <h2>Mark the obstruction</h2>
-      <p class="subtle">Add more points where the skyline changes shape. Add extra points around trees, poles, chimneys, and roof corners.</p>
-
-      <div class="nav-row single">
-        <button id="backTo3Btn">Back</button>
+    <section id="screen4" class="card screen hidden capture-header-card">
+      <div class="capture-head">
+        <div class="capture-head-copy">
+          <h2>Mark obstruction</h2>
+          <p class="subtle">Tap where the skyline changes shape. Add extra points around trees, poles, chimneys, and roof corners.</p>
+        </div>
+        <button id="backTo3Btn" class="top-back-btn">Back</button>
       </div>
     </section>
 
