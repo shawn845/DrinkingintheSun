@@ -53,19 +53,15 @@ const els = {
   gpsStatus: document.getElementById("gpsStatus"),
   cameraStatus: document.getElementById("cameraStatus"),
   motionStatus: document.getElementById("motionStatus"),
-  gpsStatusMirror: document.getElementById("gpsStatusMirror"),
-  cameraStatusMirror: document.getElementById("cameraStatusMirror"),
-  motionStatusMirror: document.getElementById("motionStatusMirror"),
-  pointsCount: document.getElementById("pointsCount"),
   pointsList: document.getElementById("pointsList"),
   profileCanvas: document.getElementById("profileCanvas"),
   graphHint: document.getElementById("graphHint"),
   rangeInfo: document.getElementById("rangeInfo"),
-  qualitySummary: document.getElementById("qualitySummary"),
   floatingPointsBadge: document.getElementById("floatingPointsBadge"),
+  levelStatusLine: document.getElementById("levelStatusLine"),
+  captureSummary: document.getElementById("captureSummary"),
   captureBar: document.getElementById("captureBar"),
-  captureMeta: document.getElementById("captureMeta"),
-  captureFooter: document.getElementById("captureFooter"),
+  captureUtilityRow: document.getElementById("captureUtilityRow"),
   cameraActions: document.getElementById("cameraActions"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
@@ -670,8 +666,8 @@ function render() {
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
 
-  els.pointsCount.textContent = String(state.samples.length);
-  els.qualitySummary.textContent = getQualitySummary();
+  const quality = getQualitySummary();
+  if (els.captureSummary) els.captureSummary.textContent = `${state.samples.length} point${state.samples.length === 1 ? "" : "s"} • ${quality}`;
 
   els.enableMotionBtn.disabled = state.motionReady;
   els.enableMotionBtn.textContent = state.motionReady ? "Motion enabled" : "Enable motion";
@@ -688,8 +684,8 @@ function render() {
 
   els.setHorizonBtn.classList.toggle("hidden", state.currentStep !== 3);
   els.captureBar.classList.toggle("hidden", state.currentStep !== 4);
-  els.captureMeta.classList.toggle("hidden", state.currentStep !== 4);
-  els.captureFooter.classList.toggle("hidden", state.currentStep !== 4);
+  els.levelStatusLine.classList.toggle("hidden", state.currentStep !== 3);
+  els.captureUtilityRow.classList.toggle("hidden", state.currentStep !== 4);
 
   renderPoints();
   renderProfileGraph();
@@ -841,9 +837,25 @@ function drawGraphText(ctx, width, height, text) {
 }
 
 function syncMirrorStatuses() {
-  if (els.motionStatusMirror) els.motionStatusMirror.textContent = els.motionStatus.textContent;
-  if (els.gpsStatusMirror) els.gpsStatusMirror.textContent = els.gpsStatus.textContent;
-  if (els.cameraStatusMirror) els.cameraStatusMirror.textContent = els.cameraStatus.textContent;
+  if (!els.levelStatusLine) return;
+  const readyCount = [state.motionReady, state.gpsReady, state.cameraReady].filter(Boolean).length;
+  if (state.motionReady && state.gpsReady && state.cameraReady) {
+    if (state.pitchDeg == null || state.headingDeg == null) {
+      els.levelStatusLine.textContent = "Ready. Move the phone slightly if the reticle feels stuck.";
+    } else {
+      els.levelStatusLine.textContent = "Ready. Hold steady at eye level, then tap Set eye-level reference.";
+    }
+    return;
+  }
+  const missing = [];
+  if (!state.motionReady) missing.push("motion");
+  if (!state.gpsReady) missing.push("GPS");
+  if (!state.cameraReady) missing.push("camera");
+  if (!readyCount) {
+    els.levelStatusLine.textContent = "Waiting for motion, GPS and camera.";
+  } else {
+    els.levelStatusLine.textContent = `Still needed: ${missing.join(", ")}.`;
+  }
 }
 
 function canCapture() {
