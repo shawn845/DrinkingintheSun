@@ -3,6 +3,8 @@ const LEVEL_REFERENCE_WINDOW_MS = 900;
 const POINT_SAMPLE_WINDOW_MS = 350;
 const MOTION_SAMPLE_KEEP_MS = 2500;
 const MIN_MOTION_SAMPLES = 5;
+const MAX_CAPTURE_SWEEP_DEG = 160;
+const MIN_DOMINANT_CLUSTER_POINTS = 3;
 
 const state = {
   pubName: "",
@@ -434,7 +436,7 @@ function addPoint() {
   }
 
   const rawRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, reading.pitchDeg);
-  const relativeAltDeg = clampCapturedRelativeAltitude(rawRelativeAltDeg);
+  const relativeAltDeg = computeStoredRelativeAltitude(rawRelativeAltDeg);
   state.samples.push({
     headingDeg: round1(reading.headingDeg),
     pitchDeg: round1(reading.pitchDeg),
@@ -479,7 +481,8 @@ function calculatePreview() {
   const overlap = getHeadingOverlap(profile, sunPath);
   const windows = getSunWindowsForDate(selectedDate, profileBins);
 
-  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const capturedRange = getCapturedRangeText(profile);
+  const sweepWidth = getSweepWidthDeg(profile);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
 
   if (!sunPath.length) {
@@ -488,42 +491,52 @@ function calculatePreview() {
     return;
   }
   if (!overlap.hasOverlap) {
-    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sun path on this date: ${sunRange}`;
+    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}`;
     renderProfileGraph();
     return;
   }
   if (!windows.length) {
-    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sun path on this date: ${sunRange}`;
+    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}`;
     renderProfileGraph();
     return;
   }
 
   const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
-  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sun path:</strong> ${sunRange}`;
+  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sweep width:</strong> ${sweepWidth.toFixed(1)}°<br><strong>Sun path:</strong> ${sunRange}`;
   renderProfileGraph();
 }
 
 function buildProfile() {
-  const out = [];
-  let prevAdjusted = null;
-  for (const sample of state.samples) {
-    const raw = normalizeDeg(sample.headingDeg);
-    let adjusted = raw;
-    if (prevAdjusted != null) {
-      const candidates = [raw - 360, raw, raw + 360];
-      adjusted = candidates.reduce((best, candidate) => Math.abs(candidate - prevAdjusted) < Math.abs(best - prevAdjusted) ? candidate : best, candidates[0]);
-    }
-    out.push({
-      rawHeadingDeg: raw,
-      adjustedHeadingDeg: adjusted,
+  const entries = state.samples
+    .map((sample) => ({
+      rawHeadingDeg: normalizeDeg(sample.headingDeg),
       obstructionAltDeg: Number.isFinite(sample.relativeAltDeg)
         ? sample.relativeAltDeg
-        : clampCapturedRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg)),
-      pitchDeg: sample.pitchDeg
-    });
-    prevAdjusted = adjusted;
+        : computeStoredRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg)),
+      pitchDeg: sample.pitchDeg,
+      sample
+    }))
+    .filter((entry) => Number.isFinite(entry.rawHeadingDeg) && Number.isFinite(entry.obstructionAltDeg));
+
+  if (!entries.length) return [];
+  if (entries.length === 1) {
+    return [{
+      rawHeadingDeg: entries[0].rawHeadingDeg,
+      adjustedHeadingDeg: entries[0].rawHeadingDeg,
+      obstructionAltDeg: entries[0].obstructionAltDeg,
+      pitchDeg: entries[0].pitchDeg
+    }];
   }
-  return out.sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+
+  const wrapped = unwrapHeadingEntries(entries);
+  const dominant = selectDominantHeadingCluster(wrapped);
+
+  return dominant.map((entry) => ({
+    rawHeadingDeg: entry.rawHeadingDeg,
+    adjustedHeadingDeg: entry.adjustedHeadingDeg,
+    obstructionAltDeg: entry.obstructionAltDeg,
+    pitchDeg: entry.pitchDeg
+  }));
 }
 
 function buildProfileBins(profile, binSizeDeg = 1) {
@@ -620,8 +633,16 @@ function getObstructionAltitudeAtHeading(compassHeadingDeg, profileBins) {
 }
 
 function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
-  const mid = (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2;
   const candidates = [compassHeadingDeg - 720, compassHeadingDeg - 360, compassHeadingDeg, compassHeadingDeg + 360, compassHeadingDeg + 720];
+  const min = profile[0].adjustedHeadingDeg;
+  const max = profile[profile.length - 1].adjustedHeadingDeg;
+  const margin = 24;
+  const inRange = candidates.filter((candidate) => candidate >= min - margin && candidate <= max + margin);
+  if (inRange.length) {
+    const mid = (min + max) / 2;
+    return inRange.reduce((best, candidate) => Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best, inRange[0]);
+  }
+  const mid = (min + max) / 2;
   return candidates.reduce((best, candidate) => Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best, candidates[0]);
 }
 
@@ -647,10 +668,81 @@ function radToDeg(rad) {
   return (rad * 180) / Math.PI;
 }
 
+
+function unwrapHeadingEntries(entries) {
+  const sorted = [...entries].sort((a, b) => a.rawHeadingDeg - b.rawHeadingDeg);
+  if (sorted.length <= 1) {
+    return sorted.map((entry) => ({ ...entry, adjustedHeadingDeg: entry.rawHeadingDeg }));
+  }
+
+  let largestGap = -1;
+  let cutIndex = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const current = sorted[i].rawHeadingDeg;
+    const next = i === sorted.length - 1 ? sorted[0].rawHeadingDeg + 360 : sorted[i + 1].rawHeadingDeg;
+    const gap = next - current;
+    if (gap > largestGap) {
+      largestGap = gap;
+      cutIndex = i;
+    }
+  }
+
+  const start = sorted[(cutIndex + 1) % sorted.length].rawHeadingDeg;
+  return sorted
+    .map((entry) => ({
+      ...entry,
+      adjustedHeadingDeg: entry.rawHeadingDeg < start ? entry.rawHeadingDeg + 360 : entry.rawHeadingDeg
+    }))
+    .sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+}
+
+function selectDominantHeadingCluster(entries) {
+  if (entries.length <= 2) return entries;
+
+  const span = entries[entries.length - 1].adjustedHeadingDeg - entries[0].adjustedHeadingDeg;
+  if (span <= MAX_CAPTURE_SWEEP_DEG) return entries;
+
+  let bestStart = 0;
+  let bestEnd = entries.length - 1;
+  let bestCount = 0;
+  let bestWidth = Infinity;
+
+  for (let start = 0; start < entries.length; start++) {
+    let end = start;
+    while (end + 1 < entries.length && entries[end + 1].adjustedHeadingDeg - entries[start].adjustedHeadingDeg <= MAX_CAPTURE_SWEEP_DEG) {
+      end += 1;
+    }
+    const count = end - start + 1;
+    const width = entries[end].adjustedHeadingDeg - entries[start].adjustedHeadingDeg;
+    if (count > bestCount || (count === bestCount && width < bestWidth)) {
+      bestCount = count;
+      bestWidth = width;
+      bestStart = start;
+      bestEnd = end;
+    }
+  }
+
+  const minKeep = Math.max(MIN_DOMINANT_CLUSTER_POINTS, Math.ceil(entries.length * 0.6));
+  if (bestCount >= minKeep) {
+    return entries.slice(bestStart, bestEnd + 1);
+  }
+  return entries;
+}
+
+function getSweepWidthDeg(profile) {
+  if (!profile || profile.length < 2) return 0;
+  return round1(profile[profile.length - 1].adjustedHeadingDeg - profile[0].adjustedHeadingDeg);
+}
+
+function getCapturedRangeText(profile) {
+  if (!profile || !profile.length) return "No captured sweep";
+  return formatHeadingArrow(profile[0].rawHeadingDeg, profile[profile.length - 1].rawHeadingDeg);
+}
+
 function getQualitySummary() {
   if (state.samples.length < 4) return "Low";
   const profile = buildProfile();
-  const sweepWidth = Math.abs(profile[profile.length - 1].adjustedHeadingDeg - profile[0].adjustedHeadingDeg);
+  const sweepWidth = getSweepWidthDeg(profile);
   if (sweepWidth < 12) return "Low";
   if (hasLargeHeadingGap(profile)) return "Fair";
   return "Good";
@@ -661,9 +753,14 @@ function computeRawRelativeAltitude(levelPitch, pitchDeg) {
   return round1(pitchDeg - levelPitch);
 }
 
+function computeStoredRelativeAltitude(rawRelativeAltDeg) {
+  if (!Number.isFinite(rawRelativeAltDeg)) return 0;
+  return round1(clampRelativeAltitude(Math.abs(rawRelativeAltDeg)));
+}
+
 function clampCapturedRelativeAltitude(rawRelativeAltDeg) {
   if (!Number.isFinite(rawRelativeAltDeg)) return 0;
-  return round1(clampRelativeAltitude(rawRelativeAltDeg));
+  return computeStoredRelativeAltitude(rawRelativeAltDeg);
 }
 
 function formatSignedDeg(value) {
@@ -860,7 +957,8 @@ function renderProfileGraph() {
     ctx.setLineDash([]);
   }
 
-  const capturedRange = formatHeadingArrow(state.samples[0].headingDeg, state.samples[state.samples.length - 1].headingDeg);
+  const capturedRange = getCapturedRangeText(profile);
+  const sweepWidth = getSweepWidthDeg(profile);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
   const overlap = getHeadingOverlap(profile, sunPath);
   els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path inside the captured sweep.";
