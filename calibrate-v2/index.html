@@ -9,12 +9,9 @@
 </head>
 <body>
   <main class="wizard-page">
-    <header class="hero card">
-      <div class="eyebrow">Calibration v2</div>
-      <h1>Seat calibration</h1>
-      <p>Guided capture flow for contributors.</p>
+    <div class="top-progress">
       <div id="stepSummary" class="step-summary">Step 1 of 5</div>
-    </header>
+    </div>
 
     <nav class="step-strip card" aria-label="Progress">
       <div class="step-chip" id="chip1">Start</div>
@@ -113,8 +110,11 @@
     <section id="screen5" class="card screen hidden">
       <h2>Review</h2>
 
-      <label for="previewDate">Preview date</label>
-      <input id="previewDate" type="date" />
+      <div class="review-date-row">
+        <span class="meta-label">Calibration date</span>
+        <strong id="calibrationDateText">—</strong>
+      </div>
+      <input id="previewDate" type="hidden" />
       <button id="previewBtn" class="primary" disabled>Preview sun times</button>
 
       <div id="previewOutput" class="preview-output">No preview yet.</div>
