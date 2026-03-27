@@ -323,6 +323,17 @@ video {
   line-height: 1.25;
 }
 
+.capture-debug-line {
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: .86rem;
+  line-height: 1.2;
+}
+
+.capture-debug-line strong {
+  color: var(--text);
+}
+
 .camera-action-btn,
 .capture-btn,
 .small-btn {
