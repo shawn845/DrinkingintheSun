@@ -5,6 +5,9 @@ const MOTION_SAMPLE_KEEP_MS = 2500;
 const MIN_MOTION_SAMPLES = 5;
 const MAX_CAPTURE_SWEEP_DEG = 160;
 const MIN_DOMINANT_CLUSTER_POINTS = 3;
+const DRAFT_STORAGE_KEY = "dits-calibration-draft-v2";
+const DEVICE_ALIGNMENT_STORAGE_KEY = "dits-heading-default-v1";
+const SPOT_ALIGNMENT_STORAGE_KEY = "dits-spot-alignments-v1";
 
 const state = {
   pubName: "",
@@ -28,7 +31,9 @@ const state = {
   recentHeadingSamples: [],
   currentStep: 1,
   calibrationDate: null,
-  headingOffsetDeg: 0
+  headingOffsetDeg: 0,
+  deviceDefaultHeadingOffsetDeg: null,
+  alignmentSource: "none"
 };
 
 const els = {
@@ -58,6 +63,9 @@ const els = {
   headingMinusBtn: document.getElementById("headingMinusBtn"),
   headingResetBtn: document.getElementById("headingResetBtn"),
   headingPlusBtn: document.getElementById("headingPlusBtn"),
+  saveSpotAlignmentBtn: document.getElementById("saveSpotAlignmentBtn"),
+  saveDeviceDefaultBtn: document.getElementById("saveDeviceDefaultBtn"),
+  alignmentSourceLine: document.getElementById("alignmentSourceLine"),
   previewOutput: document.getElementById("previewOutput"),
   video: document.getElementById("video"),
   gpsStatus: document.getElementById("gpsStatus"),
@@ -109,8 +117,12 @@ document.addEventListener("gesturestart", (event) => {
 
 function init() {
   bindUI();
+  loadSavedHeadingPreferences();
   loadDraft();
   setDefaultPreviewDate();
+  if (state.alignmentSource !== "draft") {
+    applySavedAlignmentForCurrentSpot({ preserveCurrent: false });
+  }
   render();
 }
 
@@ -135,6 +147,8 @@ function bindUI() {
   els.headingMinusBtn.addEventListener("click", () => nudgeHeadingOffset(-1));
   els.headingResetBtn.addEventListener("click", resetHeadingOffset);
   els.headingPlusBtn.addEventListener("click", () => nudgeHeadingOffset(1));
+  els.saveSpotAlignmentBtn.addEventListener("click", saveSpotAlignment);
+  els.saveDeviceDefaultBtn.addEventListener("click", saveDeviceDefaultAlignment);
 
   els.pubName.addEventListener("input", () => {
     state.pubName = els.pubName.value.trim();
@@ -157,6 +171,7 @@ function startWizard() {
     alert("Add the pub name and seat name first.");
     return;
   }
+  applySavedAlignmentForCurrentSpot({ preserveCurrent: false });
   goToStep(2);
 }
 
@@ -188,6 +203,7 @@ function dateToLocalInputValue(date) {
 
 function onHeadingOffsetInput() {
   state.headingOffsetDeg = round1(Number(els.headingOffsetRange.value) || 0);
+  state.alignmentSource = "manual";
   syncHeadingOffsetUI();
   updateReviewFromHeadingOffset();
 }
@@ -195,12 +211,14 @@ function onHeadingOffsetInput() {
 function nudgeHeadingOffset(delta) {
   const next = clampHeadingOffset(state.headingOffsetDeg + delta);
   state.headingOffsetDeg = round1(next);
+  state.alignmentSource = "manual";
   syncHeadingOffsetUI();
   updateReviewFromHeadingOffset();
 }
 
 function resetHeadingOffset() {
   state.headingOffsetDeg = 0;
+  state.alignmentSource = "manual";
   syncHeadingOffsetUI();
   updateReviewFromHeadingOffset();
 }
@@ -214,6 +232,143 @@ function syncHeadingOffsetUI() {
   if (els.headingOffsetValue) {
     const val = Number(state.headingOffsetDeg) || 0;
     els.headingOffsetValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
+  }
+  updateAlignmentSourceLine();
+}
+
+function updateAlignmentSourceLine() {
+  if (!els.alignmentSourceLine) return;
+  const current = formatOffsetLabel(state.headingOffsetDeg);
+  const deviceSaved = Number.isFinite(state.deviceDefaultHeadingOffsetDeg) ? formatOffsetLabel(state.deviceDefaultHeadingOffsetDeg) : null;
+  const spotSaved = getSavedSpotAlignment();
+  const spotSavedLabel = spotSaved ? formatOffsetLabel(spotSaved.headingOffsetDeg) : null;
+
+  let text = `Current alignment ${current}. `;
+  if (state.alignmentSource === "spot") {
+    text += `Using saved spot alignment${spotSavedLabel ? ` ${spotSavedLabel}` : ""}.`;
+  } else if (state.alignmentSource === "device") {
+    text += `Using saved device default${deviceSaved ? ` ${deviceSaved}` : ""}.`;
+  } else if (state.alignmentSource === "draft") {
+    text += `Loaded from saved draft.`;
+  } else if (state.alignmentSource === "manual") {
+    text += `Adjusted manually.`;
+    if (spotSavedLabel) text += ` Saved spot alignment: ${spotSavedLabel}.`;
+    else if (deviceSaved) text += ` Saved device default: ${deviceSaved}.`;
+  } else {
+    if (spotSavedLabel) text += `Saved spot alignment available: ${spotSavedLabel}.`;
+    else if (deviceSaved) text += `Saved device default available: ${deviceSaved}.`;
+    else text += `No saved alignment yet.`;
+  }
+  els.alignmentSourceLine.textContent = text;
+}
+
+function formatOffsetLabel(value) {
+  const val = round1(Number(value) || 0);
+  return `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
+}
+
+function makeSpotKey(pubName = state.pubName, seatName = state.seatName) {
+  const pub = slugify(pubName || "");
+  const seat = slugify(seatName || "");
+  if (!pub || !seat) return "";
+  return `${pub}__${seat}`;
+}
+
+function readJsonStorage(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error(`Storage read failed for ${key}`, err);
+    return fallback;
+  }
+}
+
+function loadSavedHeadingPreferences() {
+  const deviceValue = readJsonStorage(DEVICE_ALIGNMENT_STORAGE_KEY, null);
+  if (typeof deviceValue === "number" && Number.isFinite(deviceValue)) {
+    state.deviceDefaultHeadingOffsetDeg = clampHeadingOffset(deviceValue);
+  } else if (deviceValue && typeof deviceValue.headingOffsetDeg === "number") {
+    state.deviceDefaultHeadingOffsetDeg = clampHeadingOffset(deviceValue.headingOffsetDeg);
+  } else {
+    state.deviceDefaultHeadingOffsetDeg = null;
+  }
+}
+
+function getSavedSpotAlignments() {
+  const data = readJsonStorage(SPOT_ALIGNMENT_STORAGE_KEY, {});
+  return data && typeof data === "object" ? data : {};
+}
+
+function getSavedSpotAlignment(pubName = state.pubName, seatName = state.seatName) {
+  const key = makeSpotKey(pubName, seatName);
+  if (!key) return null;
+  const map = getSavedSpotAlignments();
+  const entry = map[key];
+  if (!entry || typeof entry.headingOffsetDeg !== "number") return null;
+  return { ...entry, headingOffsetDeg: clampHeadingOffset(entry.headingOffsetDeg) };
+}
+
+function applySavedAlignmentForCurrentSpot(options = {}) {
+  const { preserveCurrent = false } = options;
+  const spotSaved = getSavedSpotAlignment();
+  if (spotSaved) {
+    state.headingOffsetDeg = clampHeadingOffset(spotSaved.headingOffsetDeg);
+    state.alignmentSource = "spot";
+    syncHeadingOffsetUI();
+    return true;
+  }
+  if (Number.isFinite(state.deviceDefaultHeadingOffsetDeg)) {
+    state.headingOffsetDeg = clampHeadingOffset(state.deviceDefaultHeadingOffsetDeg);
+    state.alignmentSource = "device";
+    syncHeadingOffsetUI();
+    return true;
+  }
+  if (!preserveCurrent) {
+    state.headingOffsetDeg = 0;
+    state.alignmentSource = "none";
+    syncHeadingOffsetUI();
+  }
+  return false;
+}
+
+function saveSpotAlignment() {
+  const pubName = (state.pubName || els.pubName.value || "").trim();
+  const seatName = (state.seatName || els.seatName.value || "").trim();
+  if (!pubName || !seatName) {
+    alert("Add the pub name and seat name first.");
+    return;
+  }
+  try {
+    const key = makeSpotKey(pubName, seatName);
+    const map = getSavedSpotAlignments();
+    map[key] = {
+      pubName,
+      seatName,
+      headingOffsetDeg: clampHeadingOffset(state.headingOffsetDeg),
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(SPOT_ALIGNMENT_STORAGE_KEY, JSON.stringify(map));
+    state.alignmentSource = "spot";
+    syncHeadingOffsetUI();
+    alert(`Saved spot alignment ${formatOffsetLabel(state.headingOffsetDeg)} for this calibration.`);
+  } catch (err) {
+    console.error(err);
+    alert("Could not save the spot alignment.");
+  }
+}
+
+function saveDeviceDefaultAlignment() {
+  try {
+    const value = clampHeadingOffset(state.headingOffsetDeg);
+    localStorage.setItem(DEVICE_ALIGNMENT_STORAGE_KEY, JSON.stringify({ headingOffsetDeg: value, savedAt: new Date().toISOString() }));
+    state.deviceDefaultHeadingOffsetDeg = value;
+    syncHeadingOffsetUI();
+    alert(`Saved device default ${formatOffsetLabel(value)} for future calibrations on this phone.`);
+  } catch (err) {
+    console.error(err);
+    alert("Could not save the device default.");
   }
 }
 
@@ -509,7 +664,7 @@ function clearPoints() {
   if (!state.samples.length) return;
   if (!confirm("Clear all captured points and start again?")) return;
   state.samples = [];
-  localStorage.removeItem("dits-calibration-draft-v2");
+  localStorage.removeItem(DRAFT_STORAGE_KEY);
   els.previewOutput.textContent = "Points cleared. Capture a new sweep.";
   render();
 }
@@ -871,6 +1026,8 @@ function render() {
   els.previewBtn.disabled = !hasPreviewInputs();
   els.saveDraftBtn.disabled = !hasMinimumData();
   els.exportBtn.disabled = !hasMinimumData();
+  els.saveSpotAlignmentBtn.disabled = !(state.pubName && state.seatName);
+  els.saveDeviceDefaultBtn.disabled = false;
 
   const quality = getQualitySummary();
   if (els.captureSummary) els.captureSummary.textContent = `${state.samples.length} point${state.samples.length === 1 ? "" : "s"} • ${quality}`;
@@ -1186,6 +1343,8 @@ function buildRecord() {
     gpsTimestamp: state.gpsTimestamp,
     calibrationDate: state.calibrationDate,
     headingOffsetDeg: state.headingOffsetDeg,
+    headingAlignmentSource: state.alignmentSource,
+    deviceDefaultHeadingOffsetDeg: state.deviceDefaultHeadingOffsetDeg,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
     levelPitch: state.levelPitch,
@@ -1197,7 +1356,7 @@ function buildRecord() {
 function saveDraft() {
   try {
     const draft = buildRecord();
-    localStorage.setItem("dits-calibration-draft-v2", JSON.stringify(draft));
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
     alert("Draft saved on this device.");
   } catch (err) {
     console.error(err);
@@ -1207,7 +1366,7 @@ function saveDraft() {
 
 function loadDraft() {
   try {
-    const raw = localStorage.getItem("dits-calibration-draft-v2");
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
     if (!raw) return;
     const draft = JSON.parse(raw);
     state.pubName = draft.pubName || "";
@@ -1219,6 +1378,7 @@ function loadDraft() {
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
     state.calibrationDate = draft.calibrationDate || state.calibrationDate || dateToLocalInputValue(new Date());
     state.headingOffsetDeg = clampHeadingOffset(draft.headingOffsetDeg ?? 0);
+    state.alignmentSource = draft.headingAlignmentSource || "draft";
     state.levelPitch = draft.levelPitch ?? null;
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
