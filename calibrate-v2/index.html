@@ -24,8 +24,10 @@
     <section id="cameraStage" class="card camera-stage-card hidden">
       <div class="video-wrap large">
         <video id="video" autoplay playsinline muted></video>
+        <canvas id="cameraOverlay" class="camera-overlay" aria-hidden="true"></canvas>
         <div class="reticle" aria-hidden="true"></div>
         <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
+        <div id="sunOverlayBadge" class="sun-overlay-badge hidden">Live sun overlay</div>
       </div>
 
       <div id="cameraActions" class="camera-actions hidden">
@@ -41,6 +43,13 @@
           <div class="meta-pill compact-meta-pill"><strong id="captureSummary">0 points • Low</strong></div>
           <button id="undoPointBtn" class="small-btn" disabled>Undo</button>
           <button id="clearBtn" class="small-btn danger-lite" disabled>Start again</button>
+        </div>
+
+        <div id="overlayAlignRow" class="overlay-align-row hidden">
+          <div class="meta-pill compact-meta-pill overlay-align-pill"><strong id="overlayAlignValue">Overlay align 0.0°</strong></div>
+          <button id="overlayMinusBtn" class="small-btn overlay-align-btn" type="button">← 1°</button>
+          <button id="overlayResetBtn" class="small-btn overlay-align-btn" type="button">Reset</button>
+          <button id="overlayPlusBtn" class="small-btn overlay-align-btn" type="button">1° →</button>
         </div>
 
         <div id="captureDebugLine" class="capture-debug-line hidden">Live relative —</div>
