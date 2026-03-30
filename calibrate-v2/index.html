@@ -118,19 +118,39 @@
       </div>
 
       <div class="heading-adjust-card">
-        <div class="heading-adjust-top">
+        <div class="heading-adjust-top two-point-top">
           <div>
-            <div class="meta-label">Heading alignment</div>
-            <div class="heading-adjust-help">Nudge the skyline left or right until it matches Sun Seeker / PhotoPills.</div>
+            <div class="meta-label">Two-point heading alignment</div>
+            <div class="heading-adjust-help">Set the start edge and end edge separately so both ends of the sun window can line up.</div>
           </div>
-          <strong id="headingOffsetValue">0.0°</strong>
         </div>
-        <input id="headingOffsetRange" class="heading-slider" type="range" min="-40" max="40" step="0.5" value="0" />
-        <div class="heading-adjust-actions">
-          <button id="headingMinusBtn" class="small-btn" type="button">−1°</button>
-          <button id="headingResetBtn" class="small-btn" type="button">Reset</button>
-          <button id="headingPlusBtn" class="small-btn" type="button">+1°</button>
+
+        <div class="alignment-control-block">
+          <div class="alignment-control-header">
+            <div class="meta-label">Start edge</div>
+            <strong id="headingStartValue">0.0°</strong>
+          </div>
+          <input id="headingStartRange" class="heading-slider" type="range" min="-40" max="40" step="0.5" value="0" />
+          <div class="heading-adjust-actions">
+            <button id="headingStartMinusBtn" class="small-btn" type="button">−1°</button>
+            <button id="headingStartResetBtn" class="small-btn" type="button">Reset</button>
+            <button id="headingStartPlusBtn" class="small-btn" type="button">+1°</button>
+          </div>
         </div>
+
+        <div class="alignment-control-block end-control-block">
+          <div class="alignment-control-header">
+            <div class="meta-label">End edge</div>
+            <strong id="headingEndValue">0.0°</strong>
+          </div>
+          <input id="headingEndRange" class="heading-slider" type="range" min="-40" max="40" step="0.5" value="0" />
+          <div class="heading-adjust-actions">
+            <button id="headingEndMinusBtn" class="small-btn" type="button">−1°</button>
+            <button id="headingEndResetBtn" class="small-btn" type="button">Reset</button>
+            <button id="headingEndPlusBtn" class="small-btn" type="button">+1°</button>
+          </div>
+        </div>
+
         <div id="alignmentSourceLine" class="meta-line saved-alignment-line">No saved alignment yet.</div>
         <div class="button-grid alignment-save-grid">
           <button id="saveSpotAlignmentBtn" class="small-btn" type="button">Save for this spot</button>
