@@ -751,45 +751,36 @@ function calculatePreview(silent = false) {
 
 function buildProfile() {
   const entries = state.samples
-    .map((sample) => ({
+    .map((sample, index) => ({
       rawHeadingDeg: normalizeDeg(sample.headingDeg),
       originalHeadingDeg: normalizeDeg(sample.headingDeg),
       obstructionAltDeg: Number.isFinite(sample.relativeAltDeg)
         ? sample.relativeAltDeg
         : computeStoredRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg)),
       pitchDeg: sample.pitchDeg,
+      captureIndex: index,
       sample
     }))
     .filter((entry) => Number.isFinite(entry.rawHeadingDeg) && Number.isFinite(entry.obstructionAltDeg));
 
   if (!entries.length) return [];
-  if (entries.length === 1) {
-    const adjusted = round1(entries[0].rawHeadingDeg + (state.headingStartOffsetDeg || 0));
-    return [{
-      originalHeadingDeg: entries[0].originalHeadingDeg,
-      rawHeadingDeg: entries[0].rawHeadingDeg,
-      baseAdjustedHeadingDeg: entries[0].rawHeadingDeg,
-      adjustedHeadingDeg: adjusted,
-      obstructionAltDeg: entries[0].obstructionAltDeg,
-      pitchDeg: entries[0].pitchDeg
-    }];
-  }
 
-  const wrapped = unwrapHeadingEntries(entries);
-  const dominant = selectDominantHeadingCluster(wrapped);
-  const baseStart = dominant[0].adjustedHeadingDeg;
-  const baseEnd = dominant[dominant.length - 1].adjustedHeadingDeg;
+  const sequenceUnwrapped = unwrapEntriesByCaptureSequence(entries);
+  const ordered = [...sequenceUnwrapped].sort((a, b) => a.sequenceHeadingDeg - b.sequenceHeadingDeg);
+  const baseStart = ordered[0].sequenceHeadingDeg;
+  const baseEnd = ordered[ordered.length - 1].sequenceHeadingDeg;
   const baseSpan = Math.max(0.0001, baseEnd - baseStart);
   const alignedStart = baseStart + (state.headingStartOffsetDeg || 0);
   const alignedEnd = baseEnd + (state.headingEndOffsetDeg || 0);
-  const alignedSpan = Math.max(1, alignedEnd - alignedStart);
+  const alignedSpan = Math.max(0.0001, alignedEnd - alignedStart);
 
-  return dominant.map((entry) => {
-    const t = (entry.adjustedHeadingDeg - baseStart) / baseSpan;
+  return ordered.map((entry) => {
+    const t = (entry.sequenceHeadingDeg - baseStart) / baseSpan;
     return {
       originalHeadingDeg: entry.originalHeadingDeg,
       rawHeadingDeg: entry.rawHeadingDeg,
-      baseAdjustedHeadingDeg: entry.adjustedHeadingDeg,
+      captureIndex: entry.captureIndex,
+      baseAdjustedHeadingDeg: entry.sequenceHeadingDeg,
       adjustedHeadingDeg: alignedStart + t * alignedSpan,
       obstructionAltDeg: entry.obstructionAltDeg,
       pitchDeg: entry.pitchDeg
@@ -828,13 +819,17 @@ function interpolateObstructionAtHeading(targetHeading, profile) {
 function buildSunPath(dateStr, profile) {
   if (!window.SunCalc || state.lat == null || state.lng == null) return [];
   const points = [];
+  const worldCenter = profile && profile.length
+    ? (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2
+    : 180;
+
   for (let minutes = 4 * 60; minutes <= 22 * 60; minutes += 5) {
     const dt = localDateAtMinutes(dateStr, minutes);
     const pos = window.SunCalc.getPosition(dt, state.lat, state.lng);
     const altDeg = radToDeg(pos.altitude);
     if (altDeg <= 0) continue;
     const rawHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-    const adjustedHeadingDeg = profile && profile.length ? mapCompassToAdjustedHeading(rawHeadingDeg, profile) : rawHeadingDeg;
+    const adjustedHeadingDeg = unwrapHeadingNear(worldCenter, rawHeadingDeg);
     points.push({ date: dt, rawHeadingDeg, adjustedHeadingDeg, altDeg });
   }
   return points;
@@ -876,34 +871,17 @@ function isSunVisibleAt(dateObj, profileBins) {
   const sunAltDeg = radToDeg(pos.altitude);
   if (sunAltDeg <= 0) return false;
   const sunHeadingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const obstructionAltDeg = getObstructionAltitudeAtHeading(sunHeadingDeg, profileBins);
+  const obstructionAltDeg = getObstructionAltitudeAtWorldHeading(sunHeadingDeg, profileBins);
   if (obstructionAltDeg == null) return false;
   return sunAltDeg > obstructionAltDeg + 0.5;
 }
 
-function getObstructionAltitudeAtHeading(compassHeadingDeg, profileBins) {
+function getObstructionAltitudeAtWorldHeading(compassHeadingDeg, profileBins) {
   if (!profileBins || !profileBins.bins.length) return null;
-  const targetAdjusted = mapCompassToAdjustedHeading(compassHeadingDeg, profileBins.profile);
-  if (targetAdjusted < profileBins.minHeading || targetAdjusted > profileBins.maxHeading) return null;
-  const idx = Math.round((targetAdjusted - profileBins.minHeading) / profileBins.binSizeDeg);
-  const clampedIdx = Math.max(0, Math.min(profileBins.bins.length - 1, idx));
-  return profileBins.bins[clampedIdx].obstructionAltDeg;
-}
-
-function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
-  const baseMin = profile[0].baseAdjustedHeadingDeg ?? profile[0].adjustedHeadingDeg;
-  const baseMax = profile[profile.length - 1].baseAdjustedHeadingDeg ?? profile[profile.length - 1].adjustedHeadingDeg;
-  const adjustedMin = profile[0].adjustedHeadingDeg;
-  const adjustedMax = profile[profile.length - 1].adjustedHeadingDeg;
-  const candidates = [compassHeadingDeg - 720, compassHeadingDeg - 360, compassHeadingDeg, compassHeadingDeg + 360, compassHeadingDeg + 720];
-  const margin = 24;
-  const inRange = candidates.filter((candidate) => candidate >= baseMin - margin && candidate <= baseMax + margin);
-  const pool = inRange.length ? inRange : candidates;
-  const baseMid = (baseMin + baseMax) / 2;
-  const baseHeading = pool.reduce((best, candidate) => Math.abs(candidate - baseMid) < Math.abs(best - baseMid) ? candidate : best, pool[0]);
-  const baseSpan = Math.max(0.0001, baseMax - baseMin);
-  const t = (baseHeading - baseMin) / baseSpan;
-  return adjustedMin + t * (adjustedMax - adjustedMin);
+  const worldCenter = (profileBins.minHeading + profileBins.maxHeading) / 2;
+  const targetWorldHeading = unwrapHeadingNear(worldCenter, compassHeadingDeg);
+  if (targetWorldHeading < profileBins.minHeading || targetWorldHeading > profileBins.maxHeading) return null;
+  return interpolateObstructionAtHeading(targetWorldHeading, profileBins.profile);
 }
 
 function getHeadingOverlap(profile, sunPath) {
@@ -928,32 +906,40 @@ function radToDeg(rad) {
   return (rad * 180) / Math.PI;
 }
 
+function shortestAngleDelta(fromDeg, toDeg) {
+  let delta = normalizeDeg(toDeg) - normalizeDeg(fromDeg);
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return delta;
+}
 
-function unwrapHeadingEntries(entries) {
-  const sorted = [...entries].sort((a, b) => a.rawHeadingDeg - b.rawHeadingDeg);
-  if (sorted.length <= 1) {
-    return sorted.map((entry) => ({ ...entry, adjustedHeadingDeg: entry.rawHeadingDeg }));
+function unwrapHeadingNear(referenceDeg, headingDeg) {
+  const candidates = [headingDeg - 720, headingDeg - 360, headingDeg, headingDeg + 360, headingDeg + 720];
+  return candidates.reduce((best, candidate) => (
+    Math.abs(candidate - referenceDeg) < Math.abs(best - referenceDeg) ? candidate : best
+  ), candidates[0]);
+}
+
+
+function unwrapEntriesByCaptureSequence(entries) {
+  if (entries.length <= 1) {
+    return entries.map((entry) => ({ ...entry, sequenceHeadingDeg: entry.rawHeadingDeg }));
   }
 
-  let largestGap = -1;
-  let cutIndex = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    const current = sorted[i].rawHeadingDeg;
-    const next = i === sorted.length - 1 ? sorted[0].rawHeadingDeg + 360 : sorted[i + 1].rawHeadingDeg;
-    const gap = next - current;
-    if (gap > largestGap) {
-      largestGap = gap;
-      cutIndex = i;
-    }
+  const unwrapped = [];
+  let previousRaw = entries[0].rawHeadingDeg;
+  let currentWorld = entries[0].rawHeadingDeg;
+  unwrapped.push({ ...entries[0], sequenceHeadingDeg: currentWorld });
+
+  for (let i = 1; i < entries.length; i++) {
+    const entry = entries[i];
+    const delta = shortestAngleDelta(previousRaw, entry.rawHeadingDeg);
+    currentWorld += delta;
+    unwrapped.push({ ...entry, sequenceHeadingDeg: currentWorld });
+    previousRaw = entry.rawHeadingDeg;
   }
 
-  const start = sorted[(cutIndex + 1) % sorted.length].rawHeadingDeg;
-  return sorted
-    .map((entry) => ({
-      ...entry,
-      adjustedHeadingDeg: entry.rawHeadingDeg < start ? entry.rawHeadingDeg + 360 : entry.rawHeadingDeg
-    }))
-    .sort((a, b) => a.adjustedHeadingDeg - b.adjustedHeadingDeg);
+  return unwrapped;
 }
 
 function selectDominantHeadingCluster(entries) {
@@ -1031,7 +1017,14 @@ function formatSignedDeg(value) {
 function getAlignedHeadingForRawHeading(rawHeadingDeg) {
   const profile = buildProfile();
   if (!profile.length) return normalizeDeg(rawHeadingDeg);
-  return normalizeDeg(mapCompassToAdjustedHeading(normalizeDeg(rawHeadingDeg), profile));
+  const baseStart = profile[0].baseAdjustedHeadingDeg ?? profile[0].adjustedHeadingDeg;
+  const baseEnd = profile[profile.length - 1].baseAdjustedHeadingDeg ?? profile[profile.length - 1].adjustedHeadingDeg;
+  const alignedStart = profile[0].adjustedHeadingDeg;
+  const alignedEnd = profile[profile.length - 1].adjustedHeadingDeg;
+  const baseCenter = (baseStart + baseEnd) / 2;
+  const worldRawHeading = unwrapHeadingNear(baseCenter, normalizeDeg(rawHeadingDeg));
+  const t = (worldRawHeading - baseStart) / Math.max(0.0001, baseEnd - baseStart);
+  return normalizeDeg(alignedStart + t * (alignedEnd - alignedStart));
 }
 
 function getCaptureDebugLine() {
