@@ -122,7 +122,13 @@
       <div id="previewOutput" class="preview-output">No preview yet.</div>
 
       <div class="graph-block">
-        <canvas id="profileCanvas" width="640" height="260"></canvas>
+        <canvas id="profileCanvas" width="640" height="320"></canvas>
+        <div class="graph-legend" aria-label="Skyline and sun legend">
+          <span class="legend-item"><span class="legend-swatch skyline-line"></span>Skyline outline</span>
+          <span class="legend-item"><span class="legend-swatch skyline-fill"></span>Blocked area</span>
+          <span class="legend-item"><span class="legend-swatch sun-path"></span>Sun path</span>
+          <span class="legend-item"><span class="legend-swatch sun-visible"></span>Visible sun</span>
+        </div>
         <div id="graphHint" class="meta-line">Add at least 2 points to see the obstruction profile.</div>
         <div id="rangeInfo" class="meta-line">No heading ranges yet.</div>
       </div>
