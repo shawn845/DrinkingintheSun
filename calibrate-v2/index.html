@@ -28,6 +28,7 @@
         <div class="reticle" aria-hidden="true"></div>
         <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
         <div id="sunOverlayBadge" class="sun-overlay-badge hidden">Live sun overlay</div>
+        <button id="cameraBackBtn" class="camera-back-btn hidden" type="button">Back</button>
       </div>
 
       <div id="cameraActions" class="camera-actions hidden">
@@ -43,6 +44,13 @@
           <div class="meta-pill compact-meta-pill"><strong id="captureSummary">0 points • Low</strong></div>
           <button id="undoPointBtn" class="small-btn" disabled>Undo</button>
           <button id="clearBtn" class="small-btn danger-lite" disabled>Start again</button>
+        </div>
+
+        <div id="arPreviewRow" class="overlay-align-row ar-preview-row hidden">
+          <div class="meta-pill compact-meta-pill overlay-align-pill"><strong id="arPreviewValue">AR preview now</strong></div>
+          <button id="arPreviewMinusBtn" class="small-btn overlay-align-btn" type="button">← 1h</button>
+          <button id="arPreviewNowBtn" class="small-btn overlay-align-btn" type="button">Now</button>
+          <button id="arPreviewPlusBtn" class="small-btn overlay-align-btn" type="button">1h →</button>
         </div>
 
         <div id="overlayAlignRow" class="overlay-align-row hidden">
