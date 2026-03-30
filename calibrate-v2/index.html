@@ -116,6 +116,23 @@
         <span class="meta-label">Calibration date</span>
         <strong id="calibrationDateText">—</strong>
       </div>
+
+      <div class="heading-adjust-card">
+        <div class="heading-adjust-top">
+          <div>
+            <div class="meta-label">Heading alignment</div>
+            <div class="heading-adjust-help">Nudge the skyline left or right until it matches Sun Seeker / PhotoPills.</div>
+          </div>
+          <strong id="headingOffsetValue">0.0°</strong>
+        </div>
+        <input id="headingOffsetRange" class="heading-slider" type="range" min="-40" max="40" step="0.5" value="0" />
+        <div class="heading-adjust-actions">
+          <button id="headingMinusBtn" class="small-btn" type="button">−1°</button>
+          <button id="headingResetBtn" class="small-btn" type="button">Reset</button>
+          <button id="headingPlusBtn" class="small-btn" type="button">+1°</button>
+        </div>
+      </div>
+
       <input id="previewDate" type="hidden" />
       <button id="previewBtn" class="primary" disabled>Preview sun times</button>
 
