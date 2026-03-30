@@ -1491,15 +1491,7 @@ function drawOverlayAlwaysOnUI(ctx, width, height) {
   ctx.textBaseline = "middle";
   ctx.fillText("AR overlay live", 20, 22);
   ctx.restore();
-  if (!visibleCount) {
-    ctx.save();
-    ctx.fillStyle = "rgba(255,255,255,0.96)";
-    ctx.font = "600 12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Sun arc off screen", view.width / 2, Math.max(78, view.height * 0.16));
-    ctx.restore();
-  }
+  return visibleCount;
 }
 
 function drawOverlayStatusRibbon(ctx, width, text) {
@@ -1574,7 +1566,10 @@ function renderCameraOverlay() {
   drawOverlayStatusRibbon(ctx, width, "Use AR preview or align overlay");
   const todayStr = state.calibrationDate || dateToLocalInputValue(new Date());
   const arcPoints = buildCameraOverlaySunArc(todayStr, overlayHeadingOffsetDeg);
-  drawCameraOverlaySunArc(ctx, arcPoints, view);
+  const visibleArcCount = drawCameraOverlaySunArc(ctx, arcPoints, view);
+  if (!visibleArcCount) {
+    drawOverlayStatusRibbon(ctx, width, "Sun arc off screen — tilt or turn");
+  }
 
   const previewDate = getOverlayPreviewDate();
   const previewLabel = getOverlayPreviewMinutes() == null ? `Sun ${formatClock(previewDate)}` : `Preview ${formatClock(previewDate)}`;
@@ -1741,7 +1736,7 @@ function drawCaptureGuide(ctx, width, height) {
 }
 
 function drawCameraOverlaySunArc(ctx, arcPoints, view) {
-  if (!arcPoints.length) return;
+  if (!arcPoints.length) return 0;
   let visibleCount = 0;
   let started = false;
   ctx.save();
