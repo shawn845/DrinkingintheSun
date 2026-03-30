@@ -38,7 +38,8 @@ const state = {
   headingEndOffsetDeg: 0,
   deviceDefaultHeadingStartOffsetDeg: null,
   deviceDefaultHeadingEndOffsetDeg: null,
-  alignmentSource: "none"
+  alignmentSource: "none",
+  overlayPreviewMinutes: null
 };
 
 const els = {
@@ -85,6 +86,7 @@ const els = {
   profileCanvas: document.getElementById("profileCanvas"),
   cameraOverlay: document.getElementById("cameraOverlay"),
   sunOverlayBadge: document.getElementById("sunOverlayBadge"),
+  cameraBackBtn: document.getElementById("cameraBackBtn"),
   graphHint: document.getElementById("graphHint"),
   rangeInfo: document.getElementById("rangeInfo"),
   floatingPointsBadge: document.getElementById("floatingPointsBadge"),
@@ -93,6 +95,11 @@ const els = {
   captureBar: document.getElementById("captureBar"),
   captureUtilityRow: document.getElementById("captureUtilityRow"),
   captureDebugLine: document.getElementById("captureDebugLine"),
+  arPreviewRow: document.getElementById("arPreviewRow"),
+  arPreviewValue: document.getElementById("arPreviewValue"),
+  arPreviewMinusBtn: document.getElementById("arPreviewMinusBtn"),
+  arPreviewNowBtn: document.getElementById("arPreviewNowBtn"),
+  arPreviewPlusBtn: document.getElementById("arPreviewPlusBtn"),
   overlayAlignRow: document.getElementById("overlayAlignRow"),
   overlayAlignValue: document.getElementById("overlayAlignValue"),
   overlayMinusBtn: document.getElementById("overlayMinusBtn"),
@@ -141,9 +148,7 @@ function init() {
     applySavedAlignmentForCurrentSpot({ preserveCurrent: false });
   }
   render();
-  window.setInterval(() => {
-    if (state.currentStep === 3 || state.currentStep === 4) renderCameraOverlay();
-  }, CAMERA_OVERLAY_TICK_MS);
+  renderCameraOverlay();
 }
 
 function bindUI() {
@@ -173,6 +178,10 @@ function bindUI() {
   els.headingEndPlusBtn.addEventListener("click", () => nudgeAlignment("end", 1));
   els.saveSpotAlignmentBtn.addEventListener("click", saveSpotAlignment);
   els.saveDeviceDefaultBtn.addEventListener("click", saveDeviceDefaultAlignment);
+  els.arPreviewMinusBtn.addEventListener("click", () => shiftOverlayPreview(-60));
+  els.arPreviewNowBtn.addEventListener("click", resetOverlayPreviewToNow);
+  els.arPreviewPlusBtn.addEventListener("click", () => shiftOverlayPreview(60));
+  els.cameraBackBtn.addEventListener("click", () => goToStep(3));
   els.overlayMinusBtn.addEventListener("click", () => shiftOverlayAlignment(-1));
   els.overlayResetBtn.addEventListener("click", resetOverlayAlignment);
   els.overlayPlusBtn.addEventListener("click", () => shiftOverlayAlignment(1));
@@ -204,6 +213,7 @@ function startWizard() {
 
 function goToStep(step) {
   state.currentStep = step;
+  if (step === 4) maybeSeedOverlayPreview();
   render();
   if (state.stream) {
     requestAnimationFrame(() => ensureVideoPlayback());
@@ -228,6 +238,61 @@ function dateToLocalInputValue(date) {
   return `${y}-${m}-${d}`;
 }
 
+
+function maybeSeedOverlayPreview() {
+  if (state.overlayPreviewMinutes != null) return;
+  if (state.lat == null || state.lng == null || !window.SunCalc) return;
+  const now = new Date();
+  const pos = window.SunCalc.getPosition(now, state.lat, state.lng);
+  const altDeg = radToDeg(pos.altitude);
+  if (altDeg > 0) return;
+  state.overlayPreviewMinutes = 14 * 60;
+}
+
+function getOverlayPreviewMinutes() {
+  return Number.isFinite(state.overlayPreviewMinutes) ? state.overlayPreviewMinutes : null;
+}
+
+function getOverlayPreviewDate() {
+  const previewMinutes = getOverlayPreviewMinutes();
+  if (previewMinutes == null) return new Date();
+  return localDateAtMinutes(state.calibrationDate || dateToLocalInputValue(new Date()), previewMinutes);
+}
+
+function syncOverlayPreviewUI() {
+  if (!els.arPreviewValue) return;
+  const previewMinutes = getOverlayPreviewMinutes();
+  els.arPreviewValue.textContent = previewMinutes == null ? 'AR preview now' : `AR preview ${formatMinutesClock(previewMinutes)}`;
+}
+
+function shiftOverlayPreview(deltaMinutes) {
+  const current = getOverlayPreviewMinutes();
+  const base = current == null ? roundToNearestMinutes(new Date().getHours() * 60 + new Date().getMinutes(), 60) : current;
+  state.overlayPreviewMinutes = clampPreviewMinutes(base + deltaMinutes);
+  syncOverlayPreviewUI();
+  renderCameraOverlay();
+}
+
+function resetOverlayPreviewToNow() {
+  state.overlayPreviewMinutes = null;
+  syncOverlayPreviewUI();
+  renderCameraOverlay();
+}
+
+function clampPreviewMinutes(value) {
+  return Math.max(5 * 60, Math.min(21 * 60, Math.round(Number(value) || 0)));
+}
+
+function roundToNearestMinutes(value, step) {
+  return Math.round(value / step) * step;
+}
+
+function formatMinutesClock(totalMinutes) {
+  const mins = ((totalMinutes % (24*60)) + 24*60) % (24*60);
+  const h = String(Math.floor(mins / 60)).padStart(2, '0');
+  const m = String(mins % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
 function onAlignmentInput(which) {
   if (which === "start") state.headingStartOffsetDeg = round1(clampAlignmentOffset(els.headingStartRange.value));
   else state.headingEndOffsetDeg = round1(clampAlignmentOffset(els.headingEndRange.value));
@@ -268,6 +333,7 @@ function syncAlignmentUI() {
     els.headingEndValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
   }
   syncOverlayAlignmentUI();
+  syncOverlayPreviewUI();
   updateAlignmentSourceLine();
 }
 
@@ -727,9 +793,7 @@ function addPoint() {
   });
   els.previewOutput.textContent = "Points updated. Tap Preview sun times.";
   render();
-  window.setInterval(() => {
-    if (state.currentStep === 3 || state.currentStep === 4) renderCameraOverlay();
-  }, CAMERA_OVERLAY_TICK_MS);
+  renderCameraOverlay();
 }
 
 function undoPoint() {
@@ -1102,6 +1166,7 @@ function render() {
   });
 
   document.body.classList.toggle("capture-focus", state.currentStep === 3 || state.currentStep === 4);
+  document.body.classList.toggle("capture-step4", state.currentStep === 4);
 
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
   updateCalibrationDateText();
@@ -1144,11 +1209,17 @@ function render() {
     els.captureDebugLine.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
     els.captureDebugLine.innerHTML = getCaptureDebugLine();
   }
+  if (els.arPreviewRow) {
+    els.arPreviewRow.classList.toggle("hidden", state.currentStep !== 4);
+  }
   if (els.overlayAlignRow) {
     els.overlayAlignRow.classList.toggle("hidden", state.currentStep !== 4);
   }
   if (els.sunOverlayBadge) {
     els.sunOverlayBadge.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
+  }
+  if (els.cameraBackBtn) {
+    els.cameraBackBtn.classList.toggle("hidden", state.currentStep !== 4);
   }
 
   renderPoints();
@@ -1443,19 +1514,32 @@ function renderCameraOverlay() {
   };
 
   drawCaptureGuide(ctx, width, height);
-  const todayStr = dateToLocalInputValue(new Date());
+  const todayStr = state.calibrationDate || dateToLocalInputValue(new Date());
   const arcPoints = buildCameraOverlaySunArc(todayStr, overlayHeadingOffsetDeg);
   drawCameraOverlaySunArc(ctx, arcPoints, view);
-  drawCameraOverlayCurrentSun(ctx, view, overlayHeadingOffsetDeg);
+
+  const previewDate = getOverlayPreviewDate();
+  const previewMeta = drawCameraOverlaySunMarker(ctx, view, previewDate, {
+    label: getOverlayPreviewMinutes() == null ? `Sun ${formatClock(previewDate)}` : `Preview ${formatClock(previewDate)}`,
+    markerColor: getOverlayPreviewMinutes() == null ? "rgba(241, 199, 76, 1)" : "rgba(96, 201, 255, 0.98)",
+    glowColor: getOverlayPreviewMinutes() == null ? "rgba(241, 199, 76, 0.22)" : "rgba(96, 201, 255, 0.20)",
+    arrowColor: getOverlayPreviewMinutes() == null ? "rgba(241, 199, 76, 0.98)" : "rgba(96, 201, 255, 0.98)"
+  });
+
   if (state.currentStep === 4) drawCameraOverlaySkyline(ctx, view, overlayHeadingOffsetDeg);
 
   if (badge) {
-    const now = new Date();
-    const pos = window.SunCalc.getPosition(now, state.lat, state.lng);
-    const altDeg = radToDeg(pos.altitude);
-    const headingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-    const status = altDeg > 0 ? `Sun now ${formatClock(now)} • ${headingDeg.toFixed(0)}° • ${altDeg.toFixed(0)}°` : `Sun below horizon now`;
-    badge.textContent = `${status} • overlay ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
+    const previewMinutes = getOverlayPreviewMinutes();
+    const previewMode = previewMinutes == null ? "now" : `preview ${formatMinutesClock(previewMinutes)}`;
+    if (!previewMeta) {
+      badge.textContent = `Overlay ${previewMode} • no sun position available • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
+    } else if (previewMeta.altDeg <= 0) {
+      badge.textContent = `Overlay ${previewMode} • sun below horizon • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
+    } else if (previewMeta.visible) {
+      badge.textContent = `${previewMode} • ${previewMeta.headingDeg.toFixed(0)}° • ${previewMeta.altDeg.toFixed(0)}° • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
+    } else {
+      badge.textContent = `${previewMode} • off screen ${previewMeta.dxDeg > 0 ? 'right' : 'left'} • ${previewMeta.altDeg.toFixed(0)}° • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
+    }
   }
 }
 
@@ -1553,32 +1637,73 @@ function drawCameraOverlaySunArc(ctx, arcPoints, view) {
   ctx.restore();
 }
 
-function drawCameraOverlayCurrentSun(ctx, view, overlayHeadingOffsetDeg) {
-  const now = new Date();
-  const pos = window.SunCalc.getPosition(now, state.lat, state.lng);
+function drawCameraOverlaySunMarker(ctx, view, dateObj, options = {}) {
+  const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
   const altDeg = radToDeg(pos.altitude);
-  if (altDeg <= 0) return;
   const headingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const p = projectOverlayPoint(view, headingDeg, altDeg);
-  if (!p.visible) return;
+  const projected = projectOverlayPoint(view, headingDeg, altDeg);
+  const label = options.label || `Sun ${formatClock(dateObj)}`;
+  const markerColor = options.markerColor || "rgba(241, 199, 76, 1)";
+  const glowColor = options.glowColor || "rgba(241, 199, 76, 0.22)";
+  const arrowColor = options.arrowColor || markerColor;
+
+  if (altDeg <= 0) {
+    drawOffscreenIndicator(ctx, view, projected, `${label} below`, arrowColor);
+    return { headingDeg, altDeg, visible: false, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
+  }
+
+  if (!projected.visible) {
+    drawOffscreenIndicator(ctx, view, projected, label, arrowColor);
+    return { headingDeg, altDeg, visible: false, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
+  }
+
   ctx.save();
   ctx.beginPath();
-  ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(241, 199, 76, 0.22)";
+  ctx.arc(projected.x, projected.y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = glowColor;
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(241, 199, 76, 1)";
+  ctx.arc(projected.x, projected.y, 5.5, 0, Math.PI * 2);
+  ctx.fillStyle = markerColor;
   ctx.fill();
   ctx.lineWidth = 2;
   ctx.strokeStyle = "rgba(255,255,255,0.95)";
   ctx.stroke();
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.font = "12px sans-serif";
-  ctx.textAlign = p.x > view.width - 54 ? "right" : "left";
+  ctx.textAlign = projected.x > view.width - 80 ? "right" : "left";
   ctx.textBaseline = "middle";
-  const labelX = p.x > view.width - 54 ? p.x - 12 : p.x + 12;
-  ctx.fillText(`Sun ${formatClock(now)}`, labelX, p.y);
+  const labelX = projected.x > view.width - 80 ? projected.x - 12 : projected.x + 12;
+  ctx.fillText(label, labelX, projected.y);
+  ctx.restore();
+  return { headingDeg, altDeg, visible: true, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
+}
+
+function drawOffscreenIndicator(ctx, view, projected, label, color) {
+  const margin = 18;
+  const x = Math.min(view.width - margin, Math.max(margin, projected.x));
+  const y = Math.min(view.height - margin, Math.max(margin, projected.y));
+  const angle = Math.atan2(projected.y - view.height / 2, projected.x - view.width / 2);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-14, -8);
+  ctx.lineTo(-14, 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = x > view.width / 2 ? "right" : "left";
+  ctx.textBaseline = y > view.height / 2 ? "bottom" : "top";
+  const labelX = x > view.width / 2 ? x - 16 : x + 16;
+  const labelY = y > view.height / 2 ? y - 4 : y + 4;
+  ctx.fillText(label, labelX, labelY);
   ctx.restore();
 }
 
