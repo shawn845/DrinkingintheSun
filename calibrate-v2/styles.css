@@ -424,6 +424,46 @@ video {
   margin-top: 8px;
 }
 
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .88rem;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.legend-swatch.skyline-line {
+  background: #1f1f1f;
+}
+
+.legend-swatch.skyline-fill {
+  background: rgba(31,31,31,.16);
+  border: 1px solid rgba(31,31,31,.18);
+}
+
+.legend-swatch.sun-path {
+  background: linear-gradient(90deg, rgba(208,106,0,.55), rgba(208,106,0,.95));
+}
+
+.legend-swatch.sun-visible {
+  background: linear-gradient(90deg, #f3c64a, #d89a00);
+}
+
 .points-list { margin: 0; padding-left: 20px; }
 .points-list li { margin-bottom: 8px; }
 .review-actions { margin-top: 12px; }
