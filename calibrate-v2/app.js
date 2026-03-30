@@ -868,7 +868,7 @@ function renderProfileGraph() {
   drawGraphFrame(ctx, width, height);
 
   if (profile.length < 2) {
-    els.graphHint.textContent = "Add at least 2 points to see the obstruction profile.";
+    els.graphHint.textContent = "Add at least 2 points to draw the skyline outline.";
     els.rangeInfo.textContent = "No heading ranges yet.";
     drawGraphText(ctx, width, height, "Add at least 2 points");
     return;
@@ -879,90 +879,31 @@ function renderProfileGraph() {
   const graphH = height - pad.top - pad.bottom;
   const xMin = profile[0].adjustedHeadingDeg;
   const xMax = profile[profile.length - 1].adjustedHeadingDeg;
+  const sunInSweep = sunPath.filter((p) => p.adjustedHeadingDeg >= xMin && p.adjustedHeadingDeg <= xMax);
+
   let yMax = 0;
   for (const p of profile) yMax = Math.max(yMax, p.obstructionAltDeg);
-  const sunInSweep = sunPath.filter((p) => p.adjustedHeadingDeg >= xMin && p.adjustedHeadingDeg <= xMax);
   for (const p of sunInSweep) yMax = Math.max(yMax, p.altDeg);
   yMax = Math.max(10, Math.ceil(yMax / 5) * 5);
 
-  ctx.fillStyle = "#6c6c6c";
-  ctx.font = "12px sans-serif";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  for (let i = 0; i <= 4; i++) {
-    const value = (yMax / 4) * i;
-    const y = pad.top + graphH - (value / yMax) * graphH;
-    ctx.strokeStyle = "#eee7d9";
-    ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(pad.left + graphW, y);
-    ctx.stroke();
-    ctx.fillStyle = "#6c6c6c";
-    ctx.fillText(`${Math.round(value)}°`, pad.left - 6, y);
-  }
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "#6c6c6c";
-  ctx.fillText(`${normalizeDeg(profile[0].rawHeadingDeg).toFixed(0)}°`, pad.left, pad.top + graphH + 8);
-  ctx.fillText(`${normalizeDeg(profile[profile.length - 1].rawHeadingDeg).toFixed(0)}°`, pad.left + graphW, pad.top + graphH + 8);
-
-  ctx.beginPath();
-  profile.forEach((p, i) => {
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-  const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-  ctx.lineTo(lastX, pad.top + graphH);
-  ctx.lineTo(firstX, pad.top + graphH);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(227, 185, 60, 0.22)";
-  ctx.fill();
-
-  ctx.beginPath();
-  profile.forEach((p, i) => {
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = "#1f1f1f";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  for (const p of profile) {
-    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
-    ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
-    ctx.fillStyle = "#1f1f1f";
-    ctx.fill();
-  }
+  drawGraphGrid(ctx, pad, graphW, graphH, yMax);
+  drawHeadingLabels(ctx, profile, pad, graphW, graphH);
+  drawSkylineFill(ctx, profile, xMin, xMax, yMax, pad, graphW, graphH);
+  drawSkylineLine(ctx, profile, xMin, xMax, yMax, pad, graphW, graphH);
 
   if (sunInSweep.length) {
-    ctx.beginPath();
-    sunInSweep.forEach((p, i) => {
-      const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
-      const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = "#d06a00";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 5]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    drawSunPathLine(ctx, sunInSweep, xMin, xMax, yMax, pad, graphW, graphH);
+    drawVisibleSunSegments(ctx, sunInSweep, profile, xMin, xMax, yMax, pad, graphW, graphH);
+    drawSunHourMarkers(ctx, sunInSweep, xMin, xMax, yMax, pad, graphW, graphH);
   }
 
   const capturedRange = getCapturedRangeText(profile);
   const sweepWidth = getSweepWidthDeg(profile);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
   const overlap = getHeadingOverlap(profile, sunPath);
-  els.graphHint.textContent = "Black line = sampled obstruction. Orange dashed line = sun path inside the captured sweep.";
-  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sun path: ${sunRange} | Overlap: ${overlap.hasOverlap ? "Yes" : "No"}`;
+  const visibleWindows = buildVisibleWindowSummary(sunInSweep, profile);
+  els.graphHint.textContent = "Skyline points are joined into the black outline. The dashed line is the full sun path. The gold line shows where the sun stays above the skyline.";
+  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sweep width: ${sweepWidth.toFixed(1)}° | Sun path: ${sunRange} | Visible inside sweep: ${visibleWindows || (overlap.hasOverlap ? "None" : "No overlap")}`;
 }
 
 function toGraphX(value, min, max, left, width) {
@@ -986,6 +927,157 @@ function drawGraphText(ctx, width, height, text) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, width / 2, height / 2);
+}
+
+function drawGraphGrid(ctx, pad, graphW, graphH, yMax) {
+  ctx.fillStyle = "#6c6c6c";
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const value = (yMax / 4) * i;
+    const y = pad.top + graphH - (value / yMax) * graphH;
+    ctx.strokeStyle = "#eee7d9";
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + graphW, y);
+    ctx.stroke();
+    ctx.fillStyle = "#6c6c6c";
+    ctx.fillText(`${Math.round(value)}°`, pad.left - 6, y);
+  }
+}
+
+function drawHeadingLabels(ctx, profile, pad, graphW, graphH) {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#6c6c6c";
+  ctx.fillText(`${normalizeDeg(profile[0].rawHeadingDeg).toFixed(0)}°`, pad.left, pad.top + graphH + 8);
+  ctx.fillText(`${normalizeDeg(profile[profile.length - 1].rawHeadingDeg).toFixed(0)}°`, pad.left + graphW, pad.top + graphH + 8);
+  const midHeading = (profile[0].adjustedHeadingDeg + profile[profile.length - 1].adjustedHeadingDeg) / 2;
+  const midX = toGraphX(midHeading, profile[0].adjustedHeadingDeg, profile[profile.length - 1].adjustedHeadingDeg, pad.left, graphW);
+  ctx.fillText(`${normalizeDeg(midHeading).toFixed(0)}°`, midX, pad.top + graphH + 8);
+}
+
+function drawSkylineFill(ctx, profile, xMin, xMax, yMax, pad, graphW, graphH) {
+  ctx.beginPath();
+  profile.forEach((p, i) => {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  const lastX = toGraphX(profile[profile.length - 1].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  const firstX = toGraphX(profile[0].adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+  ctx.lineTo(lastX, pad.top + graphH);
+  ctx.lineTo(firstX, pad.top + graphH);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(31, 31, 31, 0.14)";
+  ctx.fill();
+}
+
+function drawSkylineLine(ctx, profile, xMin, xMax, yMax, pad, graphW, graphH) {
+  for (const p of profile) {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    ctx.strokeStyle = "rgba(31,31,31,0.08)";
+    ctx.beginPath();
+    ctx.moveTo(x, pad.top);
+    ctx.lineTo(x, pad.top + graphH);
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  profile.forEach((p, i) => {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#1f1f1f";
+  ctx.lineWidth = 2.25;
+  ctx.stroke();
+  ctx.lineWidth = 1;
+
+  for (const p of profile) {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.obstructionAltDeg, yMax, pad.top, graphH);
+    ctx.beginPath();
+    ctx.arc(x, y, 3.25, 0, Math.PI * 2);
+    ctx.fillStyle = "#1f1f1f";
+    ctx.fill();
+  }
+}
+
+function drawSunPathLine(ctx, sunInSweep, xMin, xMax, yMax, pad, graphW, graphH) {
+  ctx.beginPath();
+  sunInSweep.forEach((p, i) => {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = "#d06a00";
+  ctx.lineWidth = 1.8;
+  ctx.setLineDash([7, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1;
+}
+
+function drawVisibleSunSegments(ctx, sunInSweep, profile, xMin, xMax, yMax, pad, graphW, graphH) {
+  const segments = getVisibleSunSegments(sunInSweep, profile);
+  for (const segment of segments) {
+    if (segment.length < 2) continue;
+    ctx.beginPath();
+    segment.forEach((p, i) => {
+      const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+      const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#f1c74c";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
+function drawSunHourMarkers(ctx, sunInSweep, xMin, xMax, yMax, pad, graphW, graphH) {
+  const hourPoints = sunInSweep.filter((p) => p.date.getMinutes() === 0);
+  ctx.font = "12px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  for (const p of hourPoints) {
+    const x = toGraphX(p.adjustedHeadingDeg, xMin, xMax, pad.left, graphW);
+    const y = toGraphY(p.altDeg, yMax, pad.top, graphH);
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#d06a00";
+    ctx.fill();
+    ctx.fillStyle = "#8b5200";
+    ctx.fillText(`${String(p.date.getHours()).padStart(2, "0")}:00`, x, y - 6);
+  }
+}
+
+function getVisibleSunSegments(sunInSweep, profile) {
+  const segments = [];
+  let current = [];
+  for (const p of sunInSweep) {
+    const obstruction = interpolateObstructionAtHeading(p.adjustedHeadingDeg, profile);
+    const visible = p.altDeg > obstruction + 0.5;
+    if (visible) current.push(p);
+    else if (current.length) {
+      segments.push(current);
+      current = [];
+    }
+  }
+  if (current.length) segments.push(current);
+  return segments;
+}
+
+function buildVisibleWindowSummary(sunInSweep, profile) {
+  const segments = getVisibleSunSegments(sunInSweep, profile);
+  if (!segments.length) return "";
+  return segments.map((segment) => `${formatClock(segment[0].date)}–${formatClock(segment[segment.length - 1].date)}`).join(", ");
 }
 
 function syncMirrorStatuses() {
