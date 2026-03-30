@@ -31,8 +31,10 @@ const state = {
   recentHeadingSamples: [],
   currentStep: 1,
   calibrationDate: null,
-  headingOffsetDeg: 0,
-  deviceDefaultHeadingOffsetDeg: null,
+  headingStartOffsetDeg: 0,
+  headingEndOffsetDeg: 0,
+  deviceDefaultHeadingStartOffsetDeg: null,
+  deviceDefaultHeadingEndOffsetDeg: null,
   alignmentSource: "none"
 };
 
@@ -58,11 +60,16 @@ const els = {
   previewBtn: document.getElementById("previewBtn"),
   previewDate: document.getElementById("previewDate"),
   calibrationDateText: document.getElementById("calibrationDateText"),
-  headingOffsetRange: document.getElementById("headingOffsetRange"),
-  headingOffsetValue: document.getElementById("headingOffsetValue"),
-  headingMinusBtn: document.getElementById("headingMinusBtn"),
-  headingResetBtn: document.getElementById("headingResetBtn"),
-  headingPlusBtn: document.getElementById("headingPlusBtn"),
+  headingStartRange: document.getElementById("headingStartRange"),
+  headingStartValue: document.getElementById("headingStartValue"),
+  headingStartMinusBtn: document.getElementById("headingStartMinusBtn"),
+  headingStartResetBtn: document.getElementById("headingStartResetBtn"),
+  headingStartPlusBtn: document.getElementById("headingStartPlusBtn"),
+  headingEndRange: document.getElementById("headingEndRange"),
+  headingEndValue: document.getElementById("headingEndValue"),
+  headingEndMinusBtn: document.getElementById("headingEndMinusBtn"),
+  headingEndResetBtn: document.getElementById("headingEndResetBtn"),
+  headingEndPlusBtn: document.getElementById("headingEndPlusBtn"),
   saveSpotAlignmentBtn: document.getElementById("saveSpotAlignmentBtn"),
   saveDeviceDefaultBtn: document.getElementById("saveDeviceDefaultBtn"),
   alignmentSourceLine: document.getElementById("alignmentSourceLine"),
@@ -143,10 +150,14 @@ function bindUI() {
   els.saveDraftBtn.addEventListener("click", saveDraft);
   els.exportBtn.addEventListener("click", exportJson);
   els.previewBtn.addEventListener("click", () => calculatePreview(false));
-  els.headingOffsetRange.addEventListener("input", onHeadingOffsetInput);
-  els.headingMinusBtn.addEventListener("click", () => nudgeHeadingOffset(-1));
-  els.headingResetBtn.addEventListener("click", resetHeadingOffset);
-  els.headingPlusBtn.addEventListener("click", () => nudgeHeadingOffset(1));
+  els.headingStartRange.addEventListener("input", () => onAlignmentInput("start"));
+  els.headingStartMinusBtn.addEventListener("click", () => nudgeAlignment("start", -1));
+  els.headingStartResetBtn.addEventListener("click", () => resetAlignment("start"));
+  els.headingStartPlusBtn.addEventListener("click", () => nudgeAlignment("start", 1));
+  els.headingEndRange.addEventListener("input", () => onAlignmentInput("end"));
+  els.headingEndMinusBtn.addEventListener("click", () => nudgeAlignment("end", -1));
+  els.headingEndResetBtn.addEventListener("click", () => resetAlignment("end"));
+  els.headingEndPlusBtn.addEventListener("click", () => nudgeAlignment("end", 1));
   els.saveSpotAlignmentBtn.addEventListener("click", saveSpotAlignment);
   els.saveDeviceDefaultBtn.addEventListener("click", saveDeviceDefaultAlignment);
 
@@ -191,7 +202,7 @@ function setDefaultPreviewDate() {
     els.previewDate.value = state.calibrationDate;
   }
   updateCalibrationDateText();
-  syncHeadingOffsetUI();
+  syncAlignmentUI();
 }
 
 function dateToLocalInputValue(date) {
@@ -201,53 +212,62 @@ function dateToLocalInputValue(date) {
   return `${y}-${m}-${d}`;
 }
 
-function onHeadingOffsetInput() {
-  state.headingOffsetDeg = round1(Number(els.headingOffsetRange.value) || 0);
+function onAlignmentInput(which) {
+  if (which === "start") state.headingStartOffsetDeg = round1(clampAlignmentOffset(els.headingStartRange.value));
+  else state.headingEndOffsetDeg = round1(clampAlignmentOffset(els.headingEndRange.value));
   state.alignmentSource = "manual";
-  syncHeadingOffsetUI();
-  updateReviewFromHeadingOffset();
+  syncAlignmentUI();
+  updateReviewFromAlignment();
 }
 
-function nudgeHeadingOffset(delta) {
-  const next = clampHeadingOffset(state.headingOffsetDeg + delta);
-  state.headingOffsetDeg = round1(next);
+function nudgeAlignment(which, delta) {
+  if (which === "start") state.headingStartOffsetDeg = round1(clampAlignmentOffset(state.headingStartOffsetDeg + delta));
+  else state.headingEndOffsetDeg = round1(clampAlignmentOffset(state.headingEndOffsetDeg + delta));
   state.alignmentSource = "manual";
-  syncHeadingOffsetUI();
-  updateReviewFromHeadingOffset();
+  syncAlignmentUI();
+  updateReviewFromAlignment();
 }
 
-function resetHeadingOffset() {
-  state.headingOffsetDeg = 0;
+function resetAlignment(which) {
+  if (which === "start") state.headingStartOffsetDeg = 0;
+  else state.headingEndOffsetDeg = 0;
   state.alignmentSource = "manual";
-  syncHeadingOffsetUI();
-  updateReviewFromHeadingOffset();
+  syncAlignmentUI();
+  updateReviewFromAlignment();
 }
 
-function clampHeadingOffset(value) {
+function clampAlignmentOffset(value) {
   return Math.max(-40, Math.min(40, Number(value) || 0));
 }
 
-function syncHeadingOffsetUI() {
-  if (els.headingOffsetRange) els.headingOffsetRange.value = String(state.headingOffsetDeg || 0);
-  if (els.headingOffsetValue) {
-    const val = Number(state.headingOffsetDeg) || 0;
-    els.headingOffsetValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
+function syncAlignmentUI() {
+  if (els.headingStartRange) els.headingStartRange.value = String(state.headingStartOffsetDeg || 0);
+  if (els.headingStartValue) {
+    const val = Number(state.headingStartOffsetDeg) || 0;
+    els.headingStartValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
+  }
+  if (els.headingEndRange) els.headingEndRange.value = String(state.headingEndOffsetDeg || 0);
+  if (els.headingEndValue) {
+    const val = Number(state.headingEndOffsetDeg) || 0;
+    els.headingEndValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
   }
   updateAlignmentSourceLine();
 }
 
 function updateAlignmentSourceLine() {
   if (!els.alignmentSourceLine) return;
-  const current = formatOffsetLabel(state.headingOffsetDeg);
-  const deviceSaved = Number.isFinite(state.deviceDefaultHeadingOffsetDeg) ? formatOffsetLabel(state.deviceDefaultHeadingOffsetDeg) : null;
+  const current = `start ${formatOffsetLabel(state.headingStartOffsetDeg)}, end ${formatOffsetLabel(state.headingEndOffsetDeg)}`;
+  const deviceSaved = Number.isFinite(state.deviceDefaultHeadingStartOffsetDeg) || Number.isFinite(state.deviceDefaultHeadingEndOffsetDeg)
+    ? `start ${formatOffsetLabel(state.deviceDefaultHeadingStartOffsetDeg || 0)}, end ${formatOffsetLabel(state.deviceDefaultHeadingEndOffsetDeg || 0)}`
+    : null;
   const spotSaved = getSavedSpotAlignment();
-  const spotSavedLabel = spotSaved ? formatOffsetLabel(spotSaved.headingOffsetDeg) : null;
+  const spotSavedLabel = spotSaved ? `start ${formatOffsetLabel(spotSaved.headingStartOffsetDeg)}, end ${formatOffsetLabel(spotSaved.headingEndOffsetDeg)}` : null;
 
   let text = `Current alignment ${current}. `;
   if (state.alignmentSource === "spot") {
-    text += `Using saved spot alignment${spotSavedLabel ? ` ${spotSavedLabel}` : ""}.`;
+    text += `Using saved spot alignment${spotSavedLabel ? ` (${spotSavedLabel})` : ""}.`;
   } else if (state.alignmentSource === "device") {
-    text += `Using saved device default${deviceSaved ? ` ${deviceSaved}` : ""}.`;
+    text += `Using saved device default${deviceSaved ? ` (${deviceSaved})` : ""}.`;
   } else if (state.alignmentSource === "draft") {
     text += `Loaded from saved draft.`;
   } else if (state.alignmentSource === "manual") {
@@ -288,11 +308,15 @@ function readJsonStorage(key, fallback) {
 function loadSavedHeadingPreferences() {
   const deviceValue = readJsonStorage(DEVICE_ALIGNMENT_STORAGE_KEY, null);
   if (typeof deviceValue === "number" && Number.isFinite(deviceValue)) {
-    state.deviceDefaultHeadingOffsetDeg = clampHeadingOffset(deviceValue);
-  } else if (deviceValue && typeof deviceValue.headingOffsetDeg === "number") {
-    state.deviceDefaultHeadingOffsetDeg = clampHeadingOffset(deviceValue.headingOffsetDeg);
+    state.deviceDefaultHeadingStartOffsetDeg = clampAlignmentOffset(deviceValue);
+    state.deviceDefaultHeadingEndOffsetDeg = clampAlignmentOffset(deviceValue);
+  } else if (deviceValue && (typeof deviceValue.headingStartOffsetDeg === "number" || typeof deviceValue.headingEndOffsetDeg === "number" || typeof deviceValue.headingOffsetDeg === "number")) {
+    const legacy = typeof deviceValue.headingOffsetDeg === "number" ? deviceValue.headingOffsetDeg : 0;
+    state.deviceDefaultHeadingStartOffsetDeg = clampAlignmentOffset(deviceValue.headingStartOffsetDeg ?? legacy);
+    state.deviceDefaultHeadingEndOffsetDeg = clampAlignmentOffset(deviceValue.headingEndOffsetDeg ?? legacy);
   } else {
-    state.deviceDefaultHeadingOffsetDeg = null;
+    state.deviceDefaultHeadingStartOffsetDeg = null;
+    state.deviceDefaultHeadingEndOffsetDeg = null;
   }
 }
 
@@ -306,29 +330,33 @@ function getSavedSpotAlignment(pubName = state.pubName, seatName = state.seatNam
   if (!key) return null;
   const map = getSavedSpotAlignments();
   const entry = map[key];
-  if (!entry || typeof entry.headingOffsetDeg !== "number") return null;
-  return { ...entry, headingOffsetDeg: clampHeadingOffset(entry.headingOffsetDeg) };
+  if (!entry) return null;
+  const legacy = typeof entry.headingOffsetDeg === "number" ? entry.headingOffsetDeg : 0;
+  return { ...entry, headingStartOffsetDeg: clampAlignmentOffset(entry.headingStartOffsetDeg ?? legacy), headingEndOffsetDeg: clampAlignmentOffset(entry.headingEndOffsetDeg ?? legacy) };
 }
 
 function applySavedAlignmentForCurrentSpot(options = {}) {
   const { preserveCurrent = false } = options;
   const spotSaved = getSavedSpotAlignment();
   if (spotSaved) {
-    state.headingOffsetDeg = clampHeadingOffset(spotSaved.headingOffsetDeg);
+    state.headingStartOffsetDeg = clampAlignmentOffset(spotSaved.headingStartOffsetDeg);
+    state.headingEndOffsetDeg = clampAlignmentOffset(spotSaved.headingEndOffsetDeg);
     state.alignmentSource = "spot";
-    syncHeadingOffsetUI();
+    syncAlignmentUI();
     return true;
   }
-  if (Number.isFinite(state.deviceDefaultHeadingOffsetDeg)) {
-    state.headingOffsetDeg = clampHeadingOffset(state.deviceDefaultHeadingOffsetDeg);
+  if (Number.isFinite(state.deviceDefaultHeadingStartOffsetDeg) || Number.isFinite(state.deviceDefaultHeadingEndOffsetDeg)) {
+    state.headingStartOffsetDeg = clampAlignmentOffset(state.deviceDefaultHeadingStartOffsetDeg || 0);
+    state.headingEndOffsetDeg = clampAlignmentOffset(state.deviceDefaultHeadingEndOffsetDeg || 0);
     state.alignmentSource = "device";
-    syncHeadingOffsetUI();
+    syncAlignmentUI();
     return true;
   }
   if (!preserveCurrent) {
-    state.headingOffsetDeg = 0;
+    state.headingStartOffsetDeg = 0;
+    state.headingEndOffsetDeg = 0;
     state.alignmentSource = "none";
-    syncHeadingOffsetUI();
+    syncAlignmentUI();
   }
   return false;
 }
@@ -346,13 +374,14 @@ function saveSpotAlignment() {
     map[key] = {
       pubName,
       seatName,
-      headingOffsetDeg: clampHeadingOffset(state.headingOffsetDeg),
+      headingStartOffsetDeg: clampAlignmentOffset(state.headingStartOffsetDeg),
+      headingEndOffsetDeg: clampAlignmentOffset(state.headingEndOffsetDeg),
       savedAt: new Date().toISOString()
     };
     localStorage.setItem(SPOT_ALIGNMENT_STORAGE_KEY, JSON.stringify(map));
     state.alignmentSource = "spot";
-    syncHeadingOffsetUI();
-    alert(`Saved spot alignment ${formatOffsetLabel(state.headingOffsetDeg)} for this calibration.`);
+    syncAlignmentUI();
+    alert(`Saved spot alignment: start ${formatOffsetLabel(state.headingStartOffsetDeg)}, end ${formatOffsetLabel(state.headingEndOffsetDeg)}.`);
   } catch (err) {
     console.error(err);
     alert("Could not save the spot alignment.");
@@ -361,18 +390,21 @@ function saveSpotAlignment() {
 
 function saveDeviceDefaultAlignment() {
   try {
-    const value = clampHeadingOffset(state.headingOffsetDeg);
-    localStorage.setItem(DEVICE_ALIGNMENT_STORAGE_KEY, JSON.stringify({ headingOffsetDeg: value, savedAt: new Date().toISOString() }));
-    state.deviceDefaultHeadingOffsetDeg = value;
-    syncHeadingOffsetUI();
-    alert(`Saved device default ${formatOffsetLabel(value)} for future calibrations on this phone.`);
+    const startValue = clampAlignmentOffset(state.headingStartOffsetDeg);
+    const endValue = clampAlignmentOffset(state.headingEndOffsetDeg);
+    localStorage.setItem(DEVICE_ALIGNMENT_STORAGE_KEY, JSON.stringify({ headingStartOffsetDeg: startValue, headingEndOffsetDeg: endValue, savedAt: new Date().toISOString() }));
+    state.deviceDefaultHeadingStartOffsetDeg = startValue;
+    state.deviceDefaultHeadingEndOffsetDeg = endValue;
+    state.alignmentSource = "device";
+    syncAlignmentUI();
+    alert(`Saved device default: start ${formatOffsetLabel(startValue)}, end ${formatOffsetLabel(endValue)}.`);
   } catch (err) {
     console.error(err);
     alert("Could not save the device default.");
   }
 }
 
-function updateReviewFromHeadingOffset() {
+function updateReviewFromAlignment() {
   renderProfileGraph();
   if (state.currentStep === 5 && hasPreviewInputs()) {
     calculatePreview(true);
@@ -694,33 +726,33 @@ function calculatePreview(silent = false) {
   const sweepWidth = getSweepWidthDeg(profile);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
 
-  const headingOffsetText = `${state.headingOffsetDeg > 0 ? '+' : ''}${(state.headingOffsetDeg || 0).toFixed(1)}°`;
+  const alignmentText = `start ${formatOffsetLabel(state.headingStartOffsetDeg)}, end ${formatOffsetLabel(state.headingEndOffsetDeg)}`;
 
   if (!sunPath.length) {
-    els.previewOutput.innerHTML = `<strong>No sun above horizon</strong><br>No solar path was found above the horizon for this date at this location.<br><br><strong>Heading alignment:</strong> ${headingOffsetText}`;
+    els.previewOutput.innerHTML = `<strong>No sun above horizon</strong><br>No solar path was found above the horizon for this date at this location.<br><br><strong>Two-point alignment:</strong> ${alignmentText}`;
     renderProfileGraph();
     return;
   }
   if (!overlap.hasOverlap) {
-    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
+    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Two-point alignment:</strong> ${alignmentText}`;
     renderProfileGraph();
     return;
   }
   if (!windows.length) {
-    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
+    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Two-point alignment:</strong> ${alignmentText}`;
     renderProfileGraph();
     return;
   }
 
   const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
-  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sweep width:</strong> ${sweepWidth.toFixed(1)}°<br><strong>Sun path:</strong> ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
+  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sweep width:</strong> ${sweepWidth.toFixed(1)}°<br><strong>Sun path:</strong> ${sunRange}<br><strong>Two-point alignment:</strong> ${alignmentText}`;
   renderProfileGraph();
 }
 
 function buildProfile() {
   const entries = state.samples
     .map((sample) => ({
-      rawHeadingDeg: normalizeDeg(sample.headingDeg + (state.headingOffsetDeg || 0)),
+      rawHeadingDeg: normalizeDeg(sample.headingDeg),
       originalHeadingDeg: normalizeDeg(sample.headingDeg),
       obstructionAltDeg: Number.isFinite(sample.relativeAltDeg)
         ? sample.relativeAltDeg
@@ -732,10 +764,12 @@ function buildProfile() {
 
   if (!entries.length) return [];
   if (entries.length === 1) {
+    const adjusted = round1(entries[0].rawHeadingDeg + (state.headingStartOffsetDeg || 0));
     return [{
       originalHeadingDeg: entries[0].originalHeadingDeg,
       rawHeadingDeg: entries[0].rawHeadingDeg,
-      adjustedHeadingDeg: entries[0].rawHeadingDeg,
+      baseAdjustedHeadingDeg: entries[0].rawHeadingDeg,
+      adjustedHeadingDeg: adjusted,
       obstructionAltDeg: entries[0].obstructionAltDeg,
       pitchDeg: entries[0].pitchDeg
     }];
@@ -743,14 +777,24 @@ function buildProfile() {
 
   const wrapped = unwrapHeadingEntries(entries);
   const dominant = selectDominantHeadingCluster(wrapped);
+  const baseStart = dominant[0].adjustedHeadingDeg;
+  const baseEnd = dominant[dominant.length - 1].adjustedHeadingDeg;
+  const baseSpan = Math.max(0.0001, baseEnd - baseStart);
+  const alignedStart = baseStart + (state.headingStartOffsetDeg || 0);
+  const alignedEnd = baseEnd + (state.headingEndOffsetDeg || 0);
+  const alignedSpan = Math.max(1, alignedEnd - alignedStart);
 
-  return dominant.map((entry) => ({
-    originalHeadingDeg: normalizeDeg(entry.rawHeadingDeg - (state.headingOffsetDeg || 0)),
-    rawHeadingDeg: entry.rawHeadingDeg,
-    adjustedHeadingDeg: entry.adjustedHeadingDeg,
-    obstructionAltDeg: entry.obstructionAltDeg,
-    pitchDeg: entry.pitchDeg
-  }));
+  return dominant.map((entry) => {
+    const t = (entry.adjustedHeadingDeg - baseStart) / baseSpan;
+    return {
+      originalHeadingDeg: entry.originalHeadingDeg,
+      rawHeadingDeg: entry.rawHeadingDeg,
+      baseAdjustedHeadingDeg: entry.adjustedHeadingDeg,
+      adjustedHeadingDeg: alignedStart + t * alignedSpan,
+      obstructionAltDeg: entry.obstructionAltDeg,
+      pitchDeg: entry.pitchDeg
+    };
+  });
 }
 
 function buildProfileBins(profile, binSizeDeg = 1) {
@@ -847,17 +891,19 @@ function getObstructionAltitudeAtHeading(compassHeadingDeg, profileBins) {
 }
 
 function mapCompassToAdjustedHeading(compassHeadingDeg, profile) {
+  const baseMin = profile[0].baseAdjustedHeadingDeg ?? profile[0].adjustedHeadingDeg;
+  const baseMax = profile[profile.length - 1].baseAdjustedHeadingDeg ?? profile[profile.length - 1].adjustedHeadingDeg;
+  const adjustedMin = profile[0].adjustedHeadingDeg;
+  const adjustedMax = profile[profile.length - 1].adjustedHeadingDeg;
   const candidates = [compassHeadingDeg - 720, compassHeadingDeg - 360, compassHeadingDeg, compassHeadingDeg + 360, compassHeadingDeg + 720];
-  const min = profile[0].adjustedHeadingDeg;
-  const max = profile[profile.length - 1].adjustedHeadingDeg;
   const margin = 24;
-  const inRange = candidates.filter((candidate) => candidate >= min - margin && candidate <= max + margin);
-  if (inRange.length) {
-    const mid = (min + max) / 2;
-    return inRange.reduce((best, candidate) => Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best, inRange[0]);
-  }
-  const mid = (min + max) / 2;
-  return candidates.reduce((best, candidate) => Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best, candidates[0]);
+  const inRange = candidates.filter((candidate) => candidate >= baseMin - margin && candidate <= baseMax + margin);
+  const pool = inRange.length ? inRange : candidates;
+  const baseMid = (baseMin + baseMax) / 2;
+  const baseHeading = pool.reduce((best, candidate) => Math.abs(candidate - baseMid) < Math.abs(best - baseMid) ? candidate : best, pool[0]);
+  const baseSpan = Math.max(0.0001, baseMax - baseMin);
+  const t = (baseHeading - baseMin) / baseSpan;
+  return adjustedMin + t * (adjustedMax - adjustedMin);
 }
 
 function getHeadingOverlap(profile, sunPath) {
@@ -982,6 +1028,12 @@ function formatSignedDeg(value) {
   return `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}°`;
 }
 
+function getAlignedHeadingForRawHeading(rawHeadingDeg) {
+  const profile = buildProfile();
+  if (!profile.length) return normalizeDeg(rawHeadingDeg);
+  return normalizeDeg(mapCompassToAdjustedHeading(normalizeDeg(rawHeadingDeg), profile));
+}
+
 function getCaptureDebugLine() {
   const pitchText = Number.isFinite(state.pitchDeg) ? `${state.pitchDeg.toFixed(1)}°` : "—";
   if (state.currentStep === 3) {
@@ -1014,7 +1066,7 @@ function render() {
 
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
   updateCalibrationDateText();
-  syncHeadingOffsetUI();
+  syncAlignmentUI();
   els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
 
   els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
@@ -1064,7 +1116,7 @@ function renderPoints() {
   state.samples.forEach((sample, index) => {
     const li = document.createElement("li");
     const rawInfo = Number.isFinite(sample.rawRelativeAltDeg) ? ` (raw ${formatSignedDeg(sample.rawRelativeAltDeg)})` : "";
-    const alignedHeading = normalizeDeg(sample.headingDeg + (state.headingOffsetDeg || 0));
+    const alignedHeading = getAlignedHeadingForRawHeading(sample.headingDeg);
     li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}° → aligned ${alignedHeading.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°${rawInfo}</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
     els.pointsList.appendChild(li);
   });
@@ -1121,7 +1173,7 @@ function renderProfileGraph() {
   const overlap = getHeadingOverlap(profile, sunPath);
   const visibleWindows = buildVisibleWindowSummary(sunInSweep, profile);
   els.graphHint.textContent = "Skyline points are joined into the black outline. The dashed line is the full sun path. The gold line shows where the sun stays above the skyline.";
-  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sweep width: ${sweepWidth.toFixed(1)}° | Sun path: ${sunRange} | Heading alignment: ${state.headingOffsetDeg > 0 ? '+' : ''}${(state.headingOffsetDeg || 0).toFixed(1)}° | Visible inside sweep: ${visibleWindows || (overlap.hasOverlap ? "None" : "No overlap")}`;
+  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sweep width: ${sweepWidth.toFixed(1)}° | Sun path: ${sunRange} | Start align: ${formatOffsetLabel(state.headingStartOffsetDeg)} | End align: ${formatOffsetLabel(state.headingEndOffsetDeg)} | Visible inside sweep: ${visibleWindows || (overlap.hasOverlap ? "None" : "No overlap")}`;
 }
 
 function toGraphX(value, min, max, left, width) {
@@ -1342,9 +1394,11 @@ function buildRecord() {
     gpsAccuracyM: state.gpsAccuracyM,
     gpsTimestamp: state.gpsTimestamp,
     calibrationDate: state.calibrationDate,
-    headingOffsetDeg: state.headingOffsetDeg,
+    headingStartOffsetDeg: state.headingStartOffsetDeg,
+    headingEndOffsetDeg: state.headingEndOffsetDeg,
     headingAlignmentSource: state.alignmentSource,
-    deviceDefaultHeadingOffsetDeg: state.deviceDefaultHeadingOffsetDeg,
+    deviceDefaultHeadingStartOffsetDeg: state.deviceDefaultHeadingStartOffsetDeg,
+    deviceDefaultHeadingEndOffsetDeg: state.deviceDefaultHeadingEndOffsetDeg,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
     levelPitch: state.levelPitch,
@@ -1377,7 +1431,9 @@ function loadDraft() {
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
     state.calibrationDate = draft.calibrationDate || state.calibrationDate || dateToLocalInputValue(new Date());
-    state.headingOffsetDeg = clampHeadingOffset(draft.headingOffsetDeg ?? 0);
+    const legacyOffset = draft.headingOffsetDeg ?? 0;
+    state.headingStartOffsetDeg = clampAlignmentOffset(draft.headingStartOffsetDeg ?? legacyOffset);
+    state.headingEndOffsetDeg = clampAlignmentOffset(draft.headingEndOffsetDeg ?? legacyOffset);
     state.alignmentSource = draft.headingAlignmentSource || "draft";
     state.levelPitch = draft.levelPitch ?? null;
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
@@ -1391,7 +1447,7 @@ function loadDraft() {
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
     }
     updateCalibrationDateText();
-    syncHeadingOffsetUI();
+    syncAlignmentUI();
   } catch (err) {
     console.error("Draft load failed", err);
   }
