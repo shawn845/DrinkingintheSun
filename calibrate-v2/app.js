@@ -1491,7 +1491,6 @@ function drawOverlayAlwaysOnUI(ctx, width, height) {
   ctx.textBaseline = "middle";
   ctx.fillText("AR overlay live", 20, 22);
   ctx.restore();
-  return visibleCount;
 }
 
 function drawOverlayStatusRibbon(ctx, width, text) {
