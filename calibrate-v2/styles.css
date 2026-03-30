@@ -401,6 +401,44 @@ video {
   font-size: .9rem;
 }
 
+
+.heading-adjust-card {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #faf8f2;
+}
+
+.heading-adjust-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.heading-adjust-help {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .88rem;
+  line-height: 1.25;
+}
+
+.heading-slider {
+  margin: 12px 0 8px;
+  padding: 0;
+}
+
+.heading-adjust-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.heading-adjust-actions .small-btn {
+  min-height: 42px;
+}
+
 .preview-output {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -594,6 +632,10 @@ body.capture-focus .floating-points {
 }
 
 @media (max-width: 420px) {
+  .heading-adjust-actions {
+    gap: 6px;
+  }
+
   .step-chip {
     font-size: .72rem;
     padding: 6px 4px;
