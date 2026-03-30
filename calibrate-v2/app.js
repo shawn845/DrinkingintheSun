@@ -762,9 +762,11 @@ function getStabilizedReading() {
 
 function setLevelReference() {
   if (!state.motionReady) return alert("Enable motion first.");
-  const levelPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
+  const medianPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
+  const livePitch = Number.isFinite(state.pitchDeg) ? state.pitchDeg : null;
+  const levelPitch = medianPitch ?? livePitch;
   if (levelPitch == null) {
-    return alert("Hold the phone level and steady for a moment, then try again.");
+    return alert("Move the phone slightly, hold it level, then try again.");
   }
   state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
