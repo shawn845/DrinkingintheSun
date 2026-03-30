@@ -651,6 +651,11 @@ body.capture-focus #screen4 {
 
 body.capture-focus.capture-step4 #screen4 {
   display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
 }
 
 body.capture-focus.capture-step4 .camera-stage-card {
@@ -689,7 +694,7 @@ body.capture-focus .video-wrap.large {
 }
 
 body.capture-focus.capture-step4 .video-wrap.large {
-  min-height: 62svh;
+  min-height: 70svh;
 }
 
 body.capture-focus .camera-back-btn {
@@ -702,6 +707,7 @@ body.capture-focus .camera-back-btn {
 body.capture-focus .camera-actions {
   flex: 0 0 auto;
   min-height: 0;
+  gap: 6px;
 }
 
 body.capture-focus .capture-status-line {
@@ -716,6 +722,11 @@ body.capture-focus .sun-overlay-badge {
 
 body.capture-focus .overlay-align-row {
   gap: 6px;
+}
+
+body.capture-focus.capture-step4 .top-progress,
+body.capture-focus.capture-step4 .step-strip {
+  display: none !important;
 }
 
 
@@ -854,4 +865,47 @@ body.capture-focus .floating-points {
   body.capture-focus .video-wrap.large {
     min-height: 0;
   }
+
+  body.capture-focus.capture-step4 .video-wrap.large {
+    min-height: 64svh;
+  }
+}
+
+
+.screen4-placeholder { display:none !important; }
+body.capture-focus.capture-step4 .camera-stage-card {
+  padding: 4px;
+  gap: 6px;
+}
+body.capture-focus.capture-step4 .camera-actions {
+  gap: 5px;
+  margin-top: 6px;
+}
+body.capture-focus.capture-step4 .video-wrap.large {
+  min-height: 78svh;
+  border-radius: 20px;
+}
+body.capture-focus.capture-step4 .capture-bar,
+body.capture-focus.capture-step4 .capture-utility-row,
+body.capture-focus.capture-step4 .overlay-align-row {
+  gap: 6px;
+}
+body.capture-focus.capture-step4 .capture-btn,
+body.capture-focus.capture-step4 .small-btn,
+body.capture-focus.capture-step4 .compact-meta-pill,
+body.capture-focus.capture-step4 .overlay-align-btn,
+body.capture-focus.capture-step4 .overlay-align-pill {
+  min-height: 40px;
+  font-size: .9rem;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+body.capture-focus.capture-step4 .capture-debug-line {
+  font-size: .8rem;
+}
+body.capture-focus.capture-step4 .sun-overlay-badge {
+  left: 8px;
+  right: 8px;
+  max-width: none;
+  bottom: 8px;
 }
