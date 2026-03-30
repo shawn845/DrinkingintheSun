@@ -27,7 +27,8 @@ const state = {
   recentPitchSamples: [],
   recentHeadingSamples: [],
   currentStep: 1,
-  calibrationDate: null
+  calibrationDate: null,
+  headingOffsetDeg: 0
 };
 
 const els = {
@@ -52,6 +53,11 @@ const els = {
   previewBtn: document.getElementById("previewBtn"),
   previewDate: document.getElementById("previewDate"),
   calibrationDateText: document.getElementById("calibrationDateText"),
+  headingOffsetRange: document.getElementById("headingOffsetRange"),
+  headingOffsetValue: document.getElementById("headingOffsetValue"),
+  headingMinusBtn: document.getElementById("headingMinusBtn"),
+  headingResetBtn: document.getElementById("headingResetBtn"),
+  headingPlusBtn: document.getElementById("headingPlusBtn"),
   previewOutput: document.getElementById("previewOutput"),
   video: document.getElementById("video"),
   gpsStatus: document.getElementById("gpsStatus"),
@@ -124,7 +130,11 @@ function bindUI() {
   els.clearBtn.addEventListener("click", clearPoints);
   els.saveDraftBtn.addEventListener("click", saveDraft);
   els.exportBtn.addEventListener("click", exportJson);
-  els.previewBtn.addEventListener("click", calculatePreview);
+  els.previewBtn.addEventListener("click", () => calculatePreview(false));
+  els.headingOffsetRange.addEventListener("input", onHeadingOffsetInput);
+  els.headingMinusBtn.addEventListener("click", () => nudgeHeadingOffset(-1));
+  els.headingResetBtn.addEventListener("click", resetHeadingOffset);
+  els.headingPlusBtn.addEventListener("click", () => nudgeHeadingOffset(1));
 
   els.pubName.addEventListener("input", () => {
     state.pubName = els.pubName.value.trim();
@@ -166,6 +176,7 @@ function setDefaultPreviewDate() {
     els.previewDate.value = state.calibrationDate;
   }
   updateCalibrationDateText();
+  syncHeadingOffsetUI();
 }
 
 function dateToLocalInputValue(date) {
@@ -173,6 +184,46 @@ function dateToLocalInputValue(date) {
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function onHeadingOffsetInput() {
+  state.headingOffsetDeg = round1(Number(els.headingOffsetRange.value) || 0);
+  syncHeadingOffsetUI();
+  updateReviewFromHeadingOffset();
+}
+
+function nudgeHeadingOffset(delta) {
+  const next = clampHeadingOffset(state.headingOffsetDeg + delta);
+  state.headingOffsetDeg = round1(next);
+  syncHeadingOffsetUI();
+  updateReviewFromHeadingOffset();
+}
+
+function resetHeadingOffset() {
+  state.headingOffsetDeg = 0;
+  syncHeadingOffsetUI();
+  updateReviewFromHeadingOffset();
+}
+
+function clampHeadingOffset(value) {
+  return Math.max(-40, Math.min(40, Number(value) || 0));
+}
+
+function syncHeadingOffsetUI() {
+  if (els.headingOffsetRange) els.headingOffsetRange.value = String(state.headingOffsetDeg || 0);
+  if (els.headingOffsetValue) {
+    const val = Number(state.headingOffsetDeg) || 0;
+    els.headingOffsetValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
+  }
+}
+
+function updateReviewFromHeadingOffset() {
+  renderProfileGraph();
+  if (state.currentStep === 5 && hasPreviewInputs()) {
+    calculatePreview(true);
+  } else {
+    render();
+  }
 }
 
 function formatDateLabel(value) {
@@ -463,17 +514,20 @@ function clearPoints() {
   render();
 }
 
-function calculatePreview() {
+function calculatePreview(silent = false) {
   if (!window.SunCalc) {
     els.previewOutput.textContent = "SunCalc did not load.";
     return;
   }
   if (!hasPreviewInputs()) {
-    alert("You need an eye-level reference, location, and at least 2 points before preview will work.");
+    if (!silent) alert("You need an eye-level reference, location, and at least 2 points before preview will work.");
     return;
   }
   const selectedDate = state.calibrationDate || els.previewDate.value;
-  if (!selectedDate) return alert("No calibration date found.");
+  if (!selectedDate) {
+    if (!silent) alert("No calibration date found.");
+    return;
+  }
 
   const profile = buildProfile();
   const profileBins = buildProfileBins(profile, 1);
@@ -485,31 +539,34 @@ function calculatePreview() {
   const sweepWidth = getSweepWidthDeg(profile);
   const sunRange = sunPath.length ? formatHeadingArrow(sunPath[0].rawHeadingDeg, sunPath[sunPath.length - 1].rawHeadingDeg) : "No sun above horizon";
 
+  const headingOffsetText = `${state.headingOffsetDeg > 0 ? '+' : ''}${(state.headingOffsetDeg || 0).toFixed(1)}°`;
+
   if (!sunPath.length) {
-    els.previewOutput.innerHTML = `<strong>No sun above horizon</strong><br>No solar path was found above the horizon for this date at this location.`;
+    els.previewOutput.innerHTML = `<strong>No sun above horizon</strong><br>No solar path was found above the horizon for this date at this location.<br><br><strong>Heading alignment:</strong> ${headingOffsetText}`;
     renderProfileGraph();
     return;
   }
   if (!overlap.hasOverlap) {
-    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}`;
+    els.previewOutput.innerHTML = `<strong>No overlap between the captured sweep and the sun path</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
     renderProfileGraph();
     return;
   }
   if (!windows.length) {
-    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}`;
+    els.previewOutput.innerHTML = `<strong>No direct sun detected inside the captured sweep</strong><br>Captured sweep: ${capturedRange}<br>Sweep width: ${sweepWidth.toFixed(1)}°<br>Sun path on this date: ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
     renderProfileGraph();
     return;
   }
 
   const list = windows.map((w) => `${formatClock(w.start)}–${formatClock(w.end)}`).join("<br>");
-  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sweep width:</strong> ${sweepWidth.toFixed(1)}°<br><strong>Sun path:</strong> ${sunRange}`;
+  els.previewOutput.innerHTML = `<strong>Sun windows</strong><br>${list}<br><br><strong>Captured sweep:</strong> ${capturedRange}<br><strong>Sweep width:</strong> ${sweepWidth.toFixed(1)}°<br><strong>Sun path:</strong> ${sunRange}<br><strong>Heading alignment:</strong> ${headingOffsetText}`;
   renderProfileGraph();
 }
 
 function buildProfile() {
   const entries = state.samples
     .map((sample) => ({
-      rawHeadingDeg: normalizeDeg(sample.headingDeg),
+      rawHeadingDeg: normalizeDeg(sample.headingDeg + (state.headingOffsetDeg || 0)),
+      originalHeadingDeg: normalizeDeg(sample.headingDeg),
       obstructionAltDeg: Number.isFinite(sample.relativeAltDeg)
         ? sample.relativeAltDeg
         : computeStoredRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg)),
@@ -521,6 +578,7 @@ function buildProfile() {
   if (!entries.length) return [];
   if (entries.length === 1) {
     return [{
+      originalHeadingDeg: entries[0].originalHeadingDeg,
       rawHeadingDeg: entries[0].rawHeadingDeg,
       adjustedHeadingDeg: entries[0].rawHeadingDeg,
       obstructionAltDeg: entries[0].obstructionAltDeg,
@@ -532,6 +590,7 @@ function buildProfile() {
   const dominant = selectDominantHeadingCluster(wrapped);
 
   return dominant.map((entry) => ({
+    originalHeadingDeg: normalizeDeg(entry.rawHeadingDeg - (state.headingOffsetDeg || 0)),
     rawHeadingDeg: entry.rawHeadingDeg,
     adjustedHeadingDeg: entry.adjustedHeadingDeg,
     obstructionAltDeg: entry.obstructionAltDeg,
@@ -800,6 +859,7 @@ function render() {
 
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
   updateCalibrationDateText();
+  syncHeadingOffsetUI();
   els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
 
   els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
@@ -847,7 +907,8 @@ function renderPoints() {
   state.samples.forEach((sample, index) => {
     const li = document.createElement("li");
     const rawInfo = Number.isFinite(sample.rawRelativeAltDeg) ? ` (raw ${formatSignedDeg(sample.rawRelativeAltDeg)})` : "";
-    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°${rawInfo}</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
+    const alignedHeading = normalizeDeg(sample.headingDeg + (state.headingOffsetDeg || 0));
+    li.innerHTML = `<div><strong>Point ${index + 1}</strong></div><div class="meta-line">Heading ${sample.headingDeg.toFixed(1)}° → aligned ${alignedHeading.toFixed(1)}°, pitch ${sample.pitchDeg.toFixed(1)}°</div><div class="meta-line">Relative obstruction ${sample.relativeAltDeg.toFixed(1)}°${rawInfo}</div><div class="meta-line">${formatTime(sample.capturedAt)}</div>`;
     els.pointsList.appendChild(li);
   });
 }
@@ -903,7 +964,7 @@ function renderProfileGraph() {
   const overlap = getHeadingOverlap(profile, sunPath);
   const visibleWindows = buildVisibleWindowSummary(sunInSweep, profile);
   els.graphHint.textContent = "Skyline points are joined into the black outline. The dashed line is the full sun path. The gold line shows where the sun stays above the skyline.";
-  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sweep width: ${sweepWidth.toFixed(1)}° | Sun path: ${sunRange} | Visible inside sweep: ${visibleWindows || (overlap.hasOverlap ? "None" : "No overlap")}`;
+  els.rangeInfo.textContent = `Captured sweep: ${capturedRange} | Sweep width: ${sweepWidth.toFixed(1)}° | Sun path: ${sunRange} | Heading alignment: ${state.headingOffsetDeg > 0 ? '+' : ''}${(state.headingOffsetDeg || 0).toFixed(1)}° | Visible inside sweep: ${visibleWindows || (overlap.hasOverlap ? "None" : "No overlap")}`;
 }
 
 function toGraphX(value, min, max, left, width) {
@@ -1124,6 +1185,7 @@ function buildRecord() {
     gpsAccuracyM: state.gpsAccuracyM,
     gpsTimestamp: state.gpsTimestamp,
     calibrationDate: state.calibrationDate,
+    headingOffsetDeg: state.headingOffsetDeg,
     createdAt: new Date().toISOString(),
     deviceOrientationAvailable: state.motionReady,
     levelPitch: state.levelPitch,
@@ -1156,6 +1218,7 @@ function loadDraft() {
     state.gpsAccuracyM = draft.gpsAccuracyM ?? null;
     state.gpsTimestamp = draft.gpsTimestamp ?? null;
     state.calibrationDate = draft.calibrationDate || state.calibrationDate || dateToLocalInputValue(new Date());
+    state.headingOffsetDeg = clampHeadingOffset(draft.headingOffsetDeg ?? 0);
     state.levelPitch = draft.levelPitch ?? null;
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.samples = Array.isArray(draft.samples) ? draft.samples : [];
@@ -1168,6 +1231,7 @@ function loadDraft() {
       els.gpsStatus.textContent = `Draft loaded (${acc})`;
     }
     updateCalibrationDateText();
+    syncHeadingOffsetUI();
   } catch (err) {
     console.error("Draft load failed", err);
   }
