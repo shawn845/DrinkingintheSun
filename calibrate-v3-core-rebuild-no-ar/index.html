@@ -2,178 +2,153 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="theme-color" content="#f6f1e6" />
-  <title>Calibration rebuild | Drinking in the Sun</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Drinking in the Sun • Skyline Mapper</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+  <script defer src="app.js"></script>
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div class="step-kicker" id="stepSummary">Step 1 of 5</div>
-      <h1>Sun calibration</h1>
+  <div class="app-shell">
+    <header class="page-header" id="pageHeader">
+      <div class="brand-kicker">Drinking in the Sun</div>
+      <h1>Skyline mapper</h1>
+      <p>Map the relevant skyline from a seating area, then compare it against the sun path for that position.</p>
+      <div class="step-line" id="stepLine">Step 1 of 5</div>
+      <div class="step-pills">
+        <span class="step-pill" id="pill1">Start</span>
+        <span class="step-pill" id="pill2">Setup</span>
+        <span class="step-pill" id="pill3">Level</span>
+        <span class="step-pill" id="pill4">Skyline</span>
+        <span class="step-pill" id="pill5">Review</span>
+      </div>
     </header>
 
-    <nav class="step-strip" aria-label="Progress">
-      <div id="chip1" class="step-chip active">Start</div>
-      <div id="chip2" class="step-chip">Setup</div>
-      <div id="chip3" class="step-chip">Level</div>
-      <div id="chip4" class="step-chip">Skyline</div>
-      <div id="chip5" class="step-chip">Review</div>
-    </nav>
+    <main class="main-stack" id="mainStack">
+      <section class="card screen" id="screen1">
+        <h2>Start calibration</h2>
+        <p class="muted">Use one average point for the seating area. Hold the phone in portrait at seated eye level.</p>
+        <label class="field">
+          <span>Pub name</span>
+          <input id="pubName" type="text" placeholder="The Martin">
+        </label>
+        <label class="field">
+          <span>Seating area</span>
+          <input id="seatName" type="text" placeholder="Beer garden bench">
+        </label>
+        <label class="field">
+          <span>Notes</span>
+          <textarea id="notes" rows="3" placeholder="Relevant skyline only. Average point for this seating area."></textarea>
+        </label>
+        <button class="btn btn-primary" id="startBtn">Start calibration</button>
+      </section>
 
-    <section id="screen1" class="panel">
-      <h2>Start</h2>
-      <p class="subtle">Capture the skyline from the exact seat, then compare the sun path against it.</p>
-
-      <label for="pubName">Pub name</label>
-      <input id="pubName" type="text" placeholder="The Example Inn" />
-
-      <label for="seatName">Seat / spot name</label>
-      <input id="seatName" type="text" placeholder="Front bench by wall" />
-
-      <label for="notes">Notes (optional)</label>
-      <textarea id="notes" rows="3" placeholder="Tree branch blocks part of the south-west sky"></textarea>
-
-      <div class="info-list">
-        <div>Hold the phone at eye level.</div>
-        <div>Scan in one direction only.</div>
-        <div>Use the graph trim only for small final correction.</div>
-      </div>
-
-      <button id="startBtn" class="primary wide-btn">Start calibration</button>
-    </section>
-
-    <section id="screen2" class="panel hidden">
-      <h2>Setup</h2>
-      <p class="subtle">Enable motion first, then load location and camera.</p>
-
-      <div class="status-row">
-        <div class="status-pill"><span>Motion</span><strong id="motionStatus">Not enabled</strong></div>
-        <div class="status-pill"><span>GPS</span><strong id="gpsStatus">Not started</strong></div>
-        <div class="status-pill"><span>Camera</span><strong id="cameraStatus">Not started</strong></div>
-      </div>
-
-      <div class="button-stack">
-        <button id="enableMotionBtn" class="primary wide-btn">Enable motion</button>
-        <button id="loadSiteBtn" class="wide-btn">Use my location and camera</button>
-      </div>
-
-      <div id="setupStatus" class="inline-note">When all three are ready, continue to eye-level capture.</div>
-
-      <div class="nav-row">
-        <button id="backTo1Btn">Back</button>
-        <button id="toStep3Btn" class="primary" disabled>Continue</button>
-      </div>
-    </section>
-
-    <section id="cameraScreen" class="camera-panel hidden">
-      <div class="camera-head">
-        <div>
-          <div class="camera-step" id="cameraStepLabel">Set eye-level</div>
-          <div class="camera-help" id="cameraHelp">Hold the phone straight ahead at eye level, then tap the button.</div>
+      <section class="card screen hidden" id="screen2">
+        <h2>Setup</h2>
+        <p class="muted">No arrows, no extra steps. Enable motion, then load location and camera.</p>
+        <div class="button-stack">
+          <button class="btn btn-secondary" id="enableMotionBtn">Enable motion</button>
+          <button class="btn btn-primary" id="loadCameraGpsBtn">Use my location and camera</button>
         </div>
-        <button id="cameraBackBtn" class="secondary-btn">Back</button>
-      </div>
-
-      <div class="video-shell">
-        <video id="video" autoplay playsinline muted></video>
-        <div class="reticle" aria-hidden="true"></div>
-        <div id="floatingBadge" class="floating-badge">0 points</div>
-      </div>
-
-      <div class="camera-meta-row">
-        <div class="meta-chip" id="sensorLine">Waiting for motion, GPS and camera.</div>
-        <div class="meta-chip" id="directionLine">Direction not locked yet.</div>
-      </div>
-
-      <div class="camera-actions" id="levelActions">
-        <button id="setLevelBtn" class="primary wide-btn" disabled>Set eye-level reference</button>
-        <button id="retakeLevelBtn" class="secondary-btn hidden">Retake level</button>
-      </div>
-
-      <div class="camera-actions hidden" id="captureActions">
-        <div class="capture-primary-row">
-          <button id="markPointBtn" class="primary wide-btn" disabled>Mark skyline point</button>
-          <button id="toReviewBtn" class="secondary-btn" disabled>Review</button>
+        <div class="status-row compact-status">
+          <span class="status-chip" id="motionChip">Motion • waiting</span>
+          <span class="status-chip" id="gpsChip">GPS • waiting</span>
+          <span class="status-chip" id="cameraChip">Camera • waiting</span>
         </div>
-        <div class="capture-secondary-row">
-          <button id="undoBtn" class="secondary-btn" disabled>Undo</button>
-          <button id="clearBtn" class="secondary-btn danger-soft" disabled>Start again</button>
+        <p class="muted" id="setupHint">When all three are ready, continue.</p>
+        <div class="footer-actions">
+          <button class="btn btn-ghost" id="backTo1Btn">Back</button>
+          <button class="btn btn-primary" id="continueToLevelBtn" disabled>Continue</button>
         </div>
-      </div>
+      </section>
 
-      <div id="captureMessage" class="capture-message">No capture yet.</div>
-      <div id="liveReadout" class="live-readout">Live heading — • pitch —</div>
-    </section>
+      <section class="screen hidden" id="captureShell" aria-live="polite">
+        <div class="capture-shell-inner">
+          <div class="capture-topline">
+            <div class="capture-title" id="captureTitle">Set eye-level reference</div>
+            <div class="capture-meta" id="captureMeta">Portrait only</div>
+          </div>
 
-    <section id="screen5" class="panel hidden">
-      <h2>Review</h2>
-
-      <div class="review-topline">
-        <div>
-          <div class="meta-label">Calibration date</div>
-          <strong id="calibrationDateText">—</strong>
-        </div>
-        <div>
-          <div class="meta-label">Confidence</div>
-          <strong id="confidenceValue">Not enough data</strong>
-        </div>
-      </div>
-
-      <input id="previewDate" type="hidden" />
-
-      <button id="previewBtn" class="primary wide-btn" disabled>Preview sun window</button>
-      <div id="previewOutput" class="preview-output">No preview yet.</div>
-
-      <div class="graph-panel">
-        <canvas id="profileCanvas" width="700" height="340"></canvas>
-        <div class="graph-legend">
-          <span class="legend-item"><span class="swatch skyline-fill"></span>Blocked area</span>
-          <span class="legend-item"><span class="swatch skyline-line"></span>Skyline</span>
-          <span class="legend-item"><span class="swatch sun-path"></span>Sun path</span>
-          <span class="legend-item"><span class="swatch sun-visible"></span>Visible sun</span>
-        </div>
-        <div class="trim-block">
-          <div class="trim-head">
-            <div>
-              <div class="meta-label">Graph trim</div>
-              <div class="trim-help">Small final correction only. If this needs a big shift, the capture is not reliable.</div>
+          <div class="camera-frame" id="cameraFrame">
+            <video id="video" playsinline autoplay muted></video>
+            <div class="camera-overlay">
+              <div class="crosshair crosshair-h"></div>
+              <div class="crosshair crosshair-v"></div>
+              <div class="reticle"></div>
             </div>
-            <strong id="trimValue">0.0°</strong>
           </div>
-          <input id="trimRange" type="range" min="-8" max="8" step="0.5" value="0" />
-          <div class="trim-actions">
-            <button id="trimMinusBtn" class="secondary-btn" type="button">−1°</button>
-            <button id="trimResetBtn" class="secondary-btn" type="button">Reset</button>
-            <button id="trimPlusBtn" class="secondary-btn" type="button">+1°</button>
+
+          <div class="capture-panel">
+            <p class="capture-instruction" id="captureInstruction">Hold the phone at seated eye level and aim the reticle at the true horizon/level reference.</p>
+            <p class="capture-reading" id="captureReading">Waiting for motion…</p>
+            <div class="capture-actions" id="levelActions">
+              <button class="btn btn-ghost" id="backToSetupBtn">Back</button>
+              <button class="btn btn-primary" id="setLevelBtn">Set eye-level reference</button>
+            </div>
+            <div class="capture-actions hidden" id="skylineActions">
+              <button class="btn btn-ghost small-btn" id="undoPointBtn">Undo</button>
+              <button class="btn btn-primary" id="markPointBtn">Mark skyline point</button>
+              <button class="btn btn-ghost small-btn" id="clearPointsBtn">Start again</button>
+            </div>
+            <div class="capture-actions hidden" id="skylineFooterActions">
+              <button class="btn btn-ghost" id="backToLevelBtn">Back</button>
+              <button class="btn btn-primary" id="toReviewBtn">Review</button>
+            </div>
           </div>
-          <div id="trimWarning" class="inline-note">Trim within a few degrees is acceptable.</div>
         </div>
-        <div id="graphHint" class="inline-note">Add at least 2 points to draw the skyline profile.</div>
-        <div id="rangeInfo" class="inline-note">No heading ranges yet.</div>
-      </div>
+      </section>
 
-      <details class="debug-panel">
-        <summary>Captured points</summary>
-        <ol id="pointsList" class="points-list"></ol>
-      </details>
-
-      <div class="review-actions">
-        <button id="saveDraftBtn">Save draft</button>
-        <button id="exportBtn" class="primary">Export JSON</button>
-      </div>
-
-      <div class="nav-row">
-        <button id="backTo4Btn">Back</button>
-      </div>
-    </section>
-  </main>
-
-  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
-  <script src="./app.js"></script>
+      <section class="card screen hidden" id="screen5">
+        <h2>Review</h2>
+        <p class="muted" id="reviewSummary">Skyline mapped from the seating area point.</p>
+        <canvas id="reviewCanvas" width="920" height="460"></canvas>
+        <div class="legend-row">
+          <span><i class="legend-swatch skyline"></i>Skyline</span>
+          <span><i class="legend-swatch sunpath"></i>Sun path</span>
+          <span><i class="legend-swatch visible"></i>Sun above skyline</span>
+        </div>
+        <div class="trim-card">
+          <div class="trim-head">
+            <strong>Small graph trim</strong>
+            <span id="trimValue">0.0°</span>
+          </div>
+          <input id="trimRange" type="range" min="-8" max="8" step="0.5" value="0">
+          <p class="muted" id="trimHint">Use this only for a small final correction. If you need a large trim, the capture is unreliable.</p>
+        </div>
+        <div class="review-grid">
+          <div class="mini-card">
+            <div class="label">Calibration date</div>
+            <div class="value" id="calibrationDateText">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Confidence</div>
+            <div class="value" id="confidenceText">—</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">Point count</div>
+            <div class="value" id="pointCountText">0</div>
+          </div>
+          <div class="mini-card">
+            <div class="label">GPS accuracy</div>
+            <div class="value" id="gpsAccuracyText">—</div>
+          </div>
+        </div>
+        <div class="result-card" id="windowOutput">Add at least two points to calculate the sun window.</div>
+        <details class="details-card">
+          <summary>Captured points</summary>
+          <ul class="points-list" id="pointsList"></ul>
+        </details>
+        <div class="footer-actions">
+          <button class="btn btn-ghost" id="backToSkylineBtn">Back</button>
+          <button class="btn btn-secondary" id="saveDraftBtn">Save draft</button>
+          <button class="btn btn-primary" id="exportBtn">Export JSON</button>
+        </div>
+      </section>
+    </main>
+  </div>
 </body>
 </html>
