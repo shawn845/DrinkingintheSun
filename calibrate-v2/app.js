@@ -8,9 +8,6 @@ const MIN_DOMINANT_CLUSTER_POINTS = 3;
 const DRAFT_STORAGE_KEY = "dits-calibration-draft-v2";
 const DEVICE_ALIGNMENT_STORAGE_KEY = "dits-heading-default-v1";
 const SPOT_ALIGNMENT_STORAGE_KEY = "dits-spot-alignments-v1";
-const CAMERA_OVERLAY_HORIZONTAL_FOV_DEG = 62;
-const CAMERA_OVERLAY_ARC_STEP_MINUTES = 10;
-const CAMERA_OVERLAY_TICK_MS = 30000;
 
 const state = {
   pubName: "",
@@ -38,8 +35,7 @@ const state = {
   headingEndOffsetDeg: 0,
   deviceDefaultHeadingStartOffsetDeg: null,
   deviceDefaultHeadingEndOffsetDeg: null,
-  alignmentSource: "none",
-  overlayPreviewMinutes: null
+  alignmentSource: "none"
 };
 
 const els = {
@@ -84,9 +80,6 @@ const els = {
   motionStatus: document.getElementById("motionStatus"),
   pointsList: document.getElementById("pointsList"),
   profileCanvas: document.getElementById("profileCanvas"),
-  cameraOverlay: document.getElementById("cameraOverlay"),
-  sunOverlayBadge: document.getElementById("sunOverlayBadge"),
-  cameraBackBtn: document.getElementById("cameraBackBtn"),
   graphHint: document.getElementById("graphHint"),
   rangeInfo: document.getElementById("rangeInfo"),
   floatingPointsBadge: document.getElementById("floatingPointsBadge"),
@@ -95,16 +88,6 @@ const els = {
   captureBar: document.getElementById("captureBar"),
   captureUtilityRow: document.getElementById("captureUtilityRow"),
   captureDebugLine: document.getElementById("captureDebugLine"),
-  arPreviewRow: document.getElementById("arPreviewRow"),
-  arPreviewValue: document.getElementById("arPreviewValue"),
-  arPreviewMinusBtn: document.getElementById("arPreviewMinusBtn"),
-  arPreviewNowBtn: document.getElementById("arPreviewNowBtn"),
-  arPreviewPlusBtn: document.getElementById("arPreviewPlusBtn"),
-  overlayAlignRow: document.getElementById("overlayAlignRow"),
-  overlayAlignValue: document.getElementById("overlayAlignValue"),
-  overlayMinusBtn: document.getElementById("overlayMinusBtn"),
-  overlayResetBtn: document.getElementById("overlayResetBtn"),
-  overlayPlusBtn: document.getElementById("overlayPlusBtn"),
   cameraActions: document.getElementById("cameraActions"),
   stepSummary: document.getElementById("stepSummary"),
   screen1: document.getElementById("screen1"),
@@ -148,7 +131,6 @@ function init() {
     applySavedAlignmentForCurrentSpot({ preserveCurrent: false });
   }
   render();
-  renderCameraOverlay();
 }
 
 function bindUI() {
@@ -178,13 +160,6 @@ function bindUI() {
   els.headingEndPlusBtn.addEventListener("click", () => nudgeAlignment("end", 1));
   els.saveSpotAlignmentBtn.addEventListener("click", saveSpotAlignment);
   els.saveDeviceDefaultBtn.addEventListener("click", saveDeviceDefaultAlignment);
-  els.arPreviewMinusBtn.addEventListener("click", () => shiftOverlayPreview(-60));
-  els.arPreviewNowBtn.addEventListener("click", resetOverlayPreviewToNow);
-  els.arPreviewPlusBtn.addEventListener("click", () => shiftOverlayPreview(60));
-  els.cameraBackBtn.addEventListener("click", () => goToStep(3));
-  els.overlayMinusBtn.addEventListener("click", () => shiftOverlayAlignment(-1));
-  els.overlayResetBtn.addEventListener("click", resetOverlayAlignment);
-  els.overlayPlusBtn.addEventListener("click", () => shiftOverlayAlignment(1));
 
   els.pubName.addEventListener("input", () => {
     state.pubName = els.pubName.value.trim();
@@ -213,7 +188,6 @@ function startWizard() {
 
 function goToStep(step) {
   state.currentStep = step;
-  if (step === 4) maybeSeedOverlayPreview();
   render();
   if (state.stream) {
     requestAnimationFrame(() => ensureVideoPlayback());
@@ -238,61 +212,6 @@ function dateToLocalInputValue(date) {
   return `${y}-${m}-${d}`;
 }
 
-
-function maybeSeedOverlayPreview() {
-  if (state.overlayPreviewMinutes != null) return;
-  if (state.lat == null || state.lng == null || !window.SunCalc) return;
-  const now = new Date();
-  const pos = window.SunCalc.getPosition(now, state.lat, state.lng);
-  const altDeg = radToDeg(pos.altitude);
-  if (altDeg > 0) return;
-  state.overlayPreviewMinutes = 14 * 60;
-}
-
-function getOverlayPreviewMinutes() {
-  return Number.isFinite(state.overlayPreviewMinutes) ? state.overlayPreviewMinutes : null;
-}
-
-function getOverlayPreviewDate() {
-  const previewMinutes = getOverlayPreviewMinutes();
-  if (previewMinutes == null) return new Date();
-  return localDateAtMinutes(state.calibrationDate || dateToLocalInputValue(new Date()), previewMinutes);
-}
-
-function syncOverlayPreviewUI() {
-  if (!els.arPreviewValue) return;
-  const previewMinutes = getOverlayPreviewMinutes();
-  els.arPreviewValue.textContent = previewMinutes == null ? 'AR preview now' : `AR preview ${formatMinutesClock(previewMinutes)}`;
-}
-
-function shiftOverlayPreview(deltaMinutes) {
-  const current = getOverlayPreviewMinutes();
-  const base = current == null ? roundToNearestMinutes(new Date().getHours() * 60 + new Date().getMinutes(), 60) : current;
-  state.overlayPreviewMinutes = clampPreviewMinutes(base + deltaMinutes);
-  syncOverlayPreviewUI();
-  renderCameraOverlay();
-}
-
-function resetOverlayPreviewToNow() {
-  state.overlayPreviewMinutes = null;
-  syncOverlayPreviewUI();
-  renderCameraOverlay();
-}
-
-function clampPreviewMinutes(value) {
-  return Math.max(5 * 60, Math.min(21 * 60, Math.round(Number(value) || 0)));
-}
-
-function roundToNearestMinutes(value, step) {
-  return Math.round(value / step) * step;
-}
-
-function formatMinutesClock(totalMinutes) {
-  const mins = ((totalMinutes % (24*60)) + 24*60) % (24*60);
-  const h = String(Math.floor(mins / 60)).padStart(2, '0');
-  const m = String(mins % 60).padStart(2, '0');
-  return `${h}:${m}`;
-}
 function onAlignmentInput(which) {
   if (which === "start") state.headingStartOffsetDeg = round1(clampAlignmentOffset(els.headingStartRange.value));
   else state.headingEndOffsetDeg = round1(clampAlignmentOffset(els.headingEndRange.value));
@@ -332,8 +251,6 @@ function syncAlignmentUI() {
     const val = Number(state.headingEndOffsetDeg) || 0;
     els.headingEndValue.textContent = `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
   }
-  syncOverlayAlignmentUI();
-  syncOverlayPreviewUI();
   updateAlignmentSourceLine();
 }
 
@@ -368,32 +285,6 @@ function updateAlignmentSourceLine() {
 function formatOffsetLabel(value) {
   const val = round1(Number(value) || 0);
   return `${val > 0 ? '+' : ''}${val.toFixed(1)}°`;
-}
-
-function getOverlayHeadingOffsetDeg() {
-  return round1(((Number(state.headingStartOffsetDeg) || 0) + (Number(state.headingEndOffsetDeg) || 0)) / 2);
-}
-
-function syncOverlayAlignmentUI() {
-  if (!els.overlayAlignValue) return;
-  els.overlayAlignValue.textContent = `Overlay align ${formatOffsetLabel(getOverlayHeadingOffsetDeg())}`;
-}
-
-function shiftOverlayAlignment(delta) {
-  state.headingStartOffsetDeg = round1(clampAlignmentOffset((Number(state.headingStartOffsetDeg) || 0) + delta));
-  state.headingEndOffsetDeg = round1(clampAlignmentOffset((Number(state.headingEndOffsetDeg) || 0) + delta));
-  state.alignmentSource = "manual";
-  syncAlignmentUI();
-  updateReviewFromAlignment();
-}
-
-function resetOverlayAlignment() {
-  const center = getOverlayHeadingOffsetDeg();
-  state.headingStartOffsetDeg = round1(clampAlignmentOffset((Number(state.headingStartOffsetDeg) || 0) - center));
-  state.headingEndOffsetDeg = round1(clampAlignmentOffset((Number(state.headingEndOffsetDeg) || 0) - center));
-  state.alignmentSource = "manual";
-  syncAlignmentUI();
-  updateReviewFromAlignment();
 }
 
 function makeSpotKey(pubName = state.pubName, seatName = state.seatName) {
@@ -762,11 +653,9 @@ function getStabilizedReading() {
 
 function setLevelReference() {
   if (!state.motionReady) return alert("Enable motion first.");
-  const medianPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
-  const livePitch = Number.isFinite(state.pitchDeg) ? state.pitchDeg : null;
-  const levelPitch = medianPitch ?? livePitch;
+  const levelPitch = getRecentPitchMedian(LEVEL_REFERENCE_WINDOW_MS);
   if (levelPitch == null) {
-    return alert("Move the phone slightly, hold it level, then try again.");
+    return alert("Hold the phone level and steady for a moment, then try again.");
   }
   state.levelPitch = round1(levelPitch);
   state.levelCapturedAt = new Date().toISOString();
@@ -795,7 +684,6 @@ function addPoint() {
   });
   els.previewOutput.textContent = "Points updated. Tap Preview sun times.";
   render();
-  renderCameraOverlay();
 }
 
 function undoPoint() {
@@ -1159,11 +1047,7 @@ function hasLargeHeadingGap(profile) {
 
 function render() {
   const screens = [els.screen1, els.screen2, els.screen3, els.screen4, els.screen5];
-  screens.forEach((screen, idx) => {
-    const step = idx + 1;
-    const shouldShow = step === state.currentStep && !(state.currentStep === 4 && step === 4);
-    screen.classList.toggle("hidden", !shouldShow);
-  });
+  screens.forEach((screen, idx) => screen.classList.toggle("hidden", idx + 1 !== state.currentStep));
 
   const chips = [els.chip1, els.chip2, els.chip3, els.chip4, els.chip5];
   chips.forEach((chip, idx) => {
@@ -1172,17 +1056,11 @@ function render() {
   });
 
   document.body.classList.toggle("capture-focus", state.currentStep === 3 || state.currentStep === 4);
-  document.body.classList.toggle("capture-step4", state.currentStep === 4);
 
   els.stepSummary.textContent = `Step ${state.currentStep} of 5`;
   updateCalibrationDateText();
   syncAlignmentUI();
   els.cameraStage.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
-  if (els.screen4) {
-    els.screen4.style.display = state.currentStep === 4 ? "none" : "";
-    if (state.currentStep === 4) els.screen4.setAttribute("hidden", "hidden");
-    else els.screen4.removeAttribute("hidden");
-  }
 
   els.toStep3Btn.disabled = !(state.motionReady && state.gpsReady && state.cameraReady);
   els.setHorizonBtn.disabled = !(state.motionReady && state.pitchDeg != null);
@@ -1220,23 +1098,10 @@ function render() {
     els.captureDebugLine.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
     els.captureDebugLine.innerHTML = getCaptureDebugLine();
   }
-  if (els.arPreviewRow) {
-    els.arPreviewRow.classList.toggle("hidden", state.currentStep !== 4);
-  }
-  if (els.overlayAlignRow) {
-    els.overlayAlignRow.classList.toggle("hidden", state.currentStep !== 4);
-  }
-  if (els.sunOverlayBadge) {
-    els.sunOverlayBadge.classList.toggle("hidden", !(state.currentStep === 3 || state.currentStep === 4));
-  }
-  if (els.cameraBackBtn) {
-    els.cameraBackBtn.classList.toggle("hidden", state.currentStep !== 4);
-  }
 
   renderPoints();
   renderProfileGraph();
   syncMirrorStatuses();
-  renderCameraOverlay();
 }
 
 function renderPoints() {
@@ -1476,442 +1341,6 @@ function buildVisibleWindowSummary(sunInSweep, profile) {
   const segments = getVisibleSunSegments(sunInSweep, profile);
   if (!segments.length) return "";
   return segments.map((segment) => `${formatClock(segment[0].date)}–${formatClock(segment[segment.length - 1].date)}`).join(", ");
-}
-
-
-function drawOverlayAlwaysOnUI(ctx, width, height) {
-  ctx.save();
-  ctx.strokeStyle = "rgba(96, 201, 255, 0.95)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(3, 3, width - 6, height - 6);
-  ctx.fillStyle = "rgba(0,0,0,0.42)";
-  roundRect(ctx, 10, 10, 86, 24, 12);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.font = "700 12px sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("AR overlay live", 20, 22);
-  ctx.restore();
-}
-
-function drawOverlayStatusRibbon(ctx, width, text) {
-  if (!text) return;
-  ctx.save();
-  const padX = 10;
-  const y = 42;
-  ctx.font = "600 12px sans-serif";
-  const textW = Math.min(width - 20, ctx.measureText(text).width + 20);
-  const x = (width - textW) / 2;
-  ctx.fillStyle = "rgba(0,0,0,0.46)";
-  roundRect(ctx, x, y, textW, 24, 12);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, width / 2, y + 12);
-  ctx.restore();
-}
-
-function renderCameraOverlay() {
-  const canvas = els.cameraOverlay;
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const width = Math.max(1, Math.round(canvas.clientWidth || 0));
-  const height = Math.max(1, Math.round(canvas.clientHeight || 0));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  ctx.clearRect(0, 0, width, height);
-
-  if (!(state.currentStep === 3 || state.currentStep === 4)) return;
-
-  drawOverlayAlwaysOnUI(ctx, width, height);
-  const badge = els.sunOverlayBadge;
-  if (!state.motionReady || !state.gpsReady || !state.cameraReady) {
-    drawOverlayStatusRibbon(ctx, width, "Enable motion, GPS and camera");
-    if (badge) badge.textContent = "Enable motion, GPS and camera for live sun overlay.";
-    return;
-  }
-  if (state.headingDeg == null || state.pitchDeg == null) {
-    drawOverlayStatusRibbon(ctx, width, "Move the phone to wake the overlay");
-    if (badge) badge.textContent = "Move the phone slightly to wake the live overlay.";
-    return;
-  }
-  if (state.levelPitch == null) {
-    drawCaptureGuide(ctx, width, height);
-    drawOverlayStatusRibbon(ctx, width, "Set eye-level reference first");
-    if (badge) badge.textContent = "Set eye-level reference to unlock today’s sun overlay.";
-    return;
-  }
-  if (!window.SunCalc) {
-    drawOverlayStatusRibbon(ctx, width, "SunCalc failed to load");
-    if (badge) badge.textContent = "Sun overlay unavailable: SunCalc did not load.";
-    return;
-  }
-
-  const overlayHeadingOffsetDeg = getOverlayHeadingOffsetDeg();
-  const viewHeadingDeg = normalizeDeg(state.headingDeg + overlayHeadingOffsetDeg);
-  const cameraRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, state.pitchDeg) || 0;
-  const view = {
-    headingDeg: viewHeadingDeg,
-    cameraRelativeAltDeg,
-    width,
-    height,
-    hFovDeg: CAMERA_OVERLAY_HORIZONTAL_FOV_DEG,
-    vFovDeg: getOverlayVerticalFovDeg(width, height)
-  };
-
-  drawCaptureGuide(ctx, width, height);
-  drawOverlayStatusRibbon(ctx, width, "Use AR preview or align overlay");
-  const todayStr = state.calibrationDate || dateToLocalInputValue(new Date());
-  const arcPoints = buildCameraOverlaySunArc(todayStr, overlayHeadingOffsetDeg);
-  const visibleArcCount = drawCameraOverlaySunArc(ctx, arcPoints, view);
-  if (!visibleArcCount) {
-    drawOverlayStatusRibbon(ctx, width, "Sun arc off screen — tilt or turn");
-  }
-
-  const previewDate = getOverlayPreviewDate();
-  const previewLabel = getOverlayPreviewMinutes() == null ? `Sun ${formatClock(previewDate)}` : `Preview ${formatClock(previewDate)}`;
-  const previewColor = getOverlayPreviewMinutes() == null ? "rgba(241, 199, 76, 1)" : "rgba(96, 201, 255, 0.98)";
-  const previewMeta = drawCameraOverlaySunMarker(ctx, view, previewDate, {
-    label: previewLabel,
-    markerColor: previewColor,
-    glowColor: getOverlayPreviewMinutes() == null ? "rgba(241, 199, 76, 0.22)" : "rgba(96, 201, 255, 0.20)",
-    arrowColor: previewColor
-  });
-  drawOverlayBearingStrip(ctx, view, previewMeta, previewLabel, previewColor);
-
-  if (state.currentStep === 4) drawCameraOverlaySkyline(ctx, view, overlayHeadingOffsetDeg);
-
-  if (badge) {
-    const previewMinutes = getOverlayPreviewMinutes();
-    const previewMode = previewMinutes == null ? "now" : `preview ${formatMinutesClock(previewMinutes)}`;
-    if (!previewMeta) {
-      badge.textContent = `Overlay ${previewMode} • no sun position available • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
-    } else if (previewMeta.altDeg <= 0) {
-      badge.textContent = `Overlay ${previewMode} • sun below horizon • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
-    } else if (previewMeta.visible) {
-      badge.textContent = `${previewMode} • ${previewMeta.headingDeg.toFixed(0)}° • ${previewMeta.altDeg.toFixed(0)}° • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
-    } else {
-      badge.textContent = `${previewMode} • off screen ${previewMeta.dxDeg > 0 ? 'right' : 'left'} • ${previewMeta.altDeg.toFixed(0)}° • align ${formatOffsetLabel(overlayHeadingOffsetDeg)}`;
-    }
-  }
-}
-
-function getOverlayVerticalFovDeg(width, height) {
-  const hFovRad = (CAMERA_OVERLAY_HORIZONTAL_FOV_DEG * Math.PI) / 180;
-  const vFovRad = 2 * Math.atan(Math.tan(hFovRad / 2) * (height / Math.max(1, width)));
-  return (vFovRad * 180) / Math.PI;
-}
-
-function buildCameraOverlaySunArc(dateStr, overlayHeadingOffsetDeg = 0) {
-  const points = [];
-  if (state.lat == null || state.lng == null || !window.SunCalc) return points;
-  for (let minutes = 0; minutes <= 24 * 60; minutes += CAMERA_OVERLAY_ARC_STEP_MINUTES) {
-    const date = localDateAtMinutes(dateStr, Math.min(minutes, 23 * 60 + 59));
-    const pos = window.SunCalc.getPosition(date, state.lat, state.lng);
-    const altDeg = radToDeg(pos.altitude);
-    if (altDeg <= -1) continue;
-    const headingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-    points.push({
-      date,
-      headingDeg,
-      displayHeadingDeg: normalizeDeg(headingDeg),
-      altDeg
-    });
-  }
-  return points;
-}
-
-function projectOverlayPoint(view, targetHeadingDeg, targetAltDeg) {
-  const dxDeg = shortestAngleDelta(view.headingDeg, targetHeadingDeg);
-  const dyDeg = targetAltDeg - view.cameraRelativeAltDeg;
-  const halfH = view.hFovDeg / 2;
-  const halfV = view.vFovDeg / 2;
-  const x = view.width / 2 + (dxDeg / halfH) * (view.width / 2);
-  const y = view.height / 2 - (dyDeg / halfV) * (view.height / 2);
-  return {
-    x,
-    y,
-    dxDeg,
-    dyDeg,
-    visible: Math.abs(dxDeg) <= halfH * 1.1 && Math.abs(dyDeg) <= halfV * 1.2
-  };
-}
-
-function drawOverlayBearingStrip(ctx, view, meta, label, color) {
-  if (!meta) return;
-  const pad = 12;
-  const barW = Math.max(140, Math.min(view.width - 24, 260));
-  const barH = 22;
-  const x = (view.width - barW) / 2;
-  const y = 12;
-  const halfH = view.hFovDeg / 2;
-  const ratio = Math.max(-1, Math.min(1, meta.dxDeg / Math.max(1, halfH)));
-  const markerX = x + ((ratio + 1) / 2) * barW;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.36)";
-  roundRect(ctx, x, y, barW, barH, 11);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.24)";
-  ctx.lineWidth = 1;
-  roundRect(ctx, x, y, barW, barH, 11);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(x + barW / 2, y + 4);
-  ctx.lineTo(x + barW / 2, y + barH - 4);
-  ctx.strokeStyle = "rgba(255,255,255,0.32)";
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(markerX, y + barH / 2, 5, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.stroke();
-
-  if (!meta.visible) {
-    ctx.fillStyle = color;
-    if (ratio < 0) {
-      ctx.beginPath();
-      ctx.moveTo(x + 5, y + barH / 2);
-      ctx.lineTo(x + 14, y + 5);
-      ctx.lineTo(x + 14, y + barH - 5);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(x + barW - 5, y + barH / 2);
-      ctx.lineTo(x + barW - 14, y + 5);
-      ctx.lineTo(x + barW - 14, y + barH - 5);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.font = "12px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  const status = meta.altDeg <= 0 ? `${label} below horizon` : meta.visible ? label : `${label} off screen`;
-  ctx.fillText(status, view.width / 2, y + barH + 4);
-  ctx.restore();
-}
-
-function roundRect(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + height, r);
-  ctx.arcTo(x + width, y + height, x, y + height, r);
-  ctx.arcTo(x, y + height, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
-}
-
-function drawCaptureGuide(ctx, width, height) {
-  ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.38)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([6, 8]);
-  ctx.beginPath();
-  ctx.moveTo(0, height / 2);
-  ctx.lineTo(width, height / 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(width / 2, 0);
-  ctx.lineTo(width / 2, height);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.beginPath();
-  ctx.arc(width / 2, height / 2, 12, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(96, 201, 255, 0.9)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawCameraOverlaySunArc(ctx, arcPoints, view) {
-  if (!arcPoints.length) return 0;
-  let visibleCount = 0;
-  let started = false;
-  ctx.save();
-  ctx.strokeStyle = "rgba(241, 199, 76, 0.95)";
-  ctx.lineWidth = 2.5;
-  ctx.setLineDash([8, 6]);
-  ctx.beginPath();
-  for (const point of arcPoints) {
-    const p = projectOverlayPoint(view, point.headingDeg, point.altDeg);
-    if (!p.visible) {
-      started = false;
-      continue;
-    }
-    if (!started) {
-      ctx.moveTo(p.x, p.y);
-      started = true;
-    } else {
-      ctx.lineTo(p.x, p.y);
-    }
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.font = "12px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  for (const point of arcPoints) {
-    if (point.date.getMinutes() !== 0) continue;
-    const p = projectOverlayPoint(view, point.headingDeg, point.altDeg);
-    if (!p.visible) continue;
-    visibleCount += 1;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(208, 106, 0, 0.95)";
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.fillText(`${String(point.date.getHours()).padStart(2, "0")}:00`, p.x, p.y - 6);
-  }
-  ctx.restore();
-}
-
-function drawCameraOverlaySunMarker(ctx, view, dateObj, options = {}) {
-  const pos = window.SunCalc.getPosition(dateObj, state.lat, state.lng);
-  const altDeg = radToDeg(pos.altitude);
-  const headingDeg = normalizeDeg(180 + radToDeg(pos.azimuth));
-  const projected = projectOverlayPoint(view, headingDeg, altDeg);
-  const label = options.label || `Sun ${formatClock(dateObj)}`;
-  const markerColor = options.markerColor || "rgba(241, 199, 76, 1)";
-  const glowColor = options.glowColor || "rgba(241, 199, 76, 0.22)";
-  const arrowColor = options.arrowColor || markerColor;
-
-  if (altDeg <= 0) {
-    drawOffscreenIndicator(ctx, view, projected, `${label} below`, arrowColor);
-    return { headingDeg, altDeg, visible: false, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
-  }
-
-  if (!projected.visible) {
-    drawOffscreenIndicator(ctx, view, projected, label, arrowColor);
-    return { headingDeg, altDeg, visible: false, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
-  }
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(projected.x, projected.y, 10, 0, Math.PI * 2);
-  ctx.fillStyle = glowColor;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(projected.x, projected.y, 5.5, 0, Math.PI * 2);
-  ctx.fillStyle = markerColor;
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.font = "12px sans-serif";
-  ctx.textAlign = projected.x > view.width - 80 ? "right" : "left";
-  ctx.textBaseline = "middle";
-  const labelX = projected.x > view.width - 80 ? projected.x - 12 : projected.x + 12;
-  ctx.fillText(label, labelX, projected.y);
-  ctx.restore();
-  return { headingDeg, altDeg, visible: true, dxDeg: projected.dxDeg, dyDeg: projected.dyDeg };
-}
-
-function drawOffscreenIndicator(ctx, view, projected, label, color) {
-  const margin = 28;
-  const x = Math.min(view.width - margin, Math.max(margin, projected.x));
-  const y = Math.min(view.height - margin, Math.max(margin, projected.y));
-  const angle = Math.atan2(projected.y - view.height / 2, projected.x - view.width / 2);
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.beginPath();
-  ctx.arc(0, 0, 15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(8, 0);
-  ctx.lineTo(-9, -9);
-  ctx.lineTo(-9, 9);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-  ctx.save();
-  ctx.font = "700 12px sans-serif";
-  const textW = Math.min(view.width - 20, ctx.measureText(label).width + 18);
-  const labelX = x > view.width / 2 ? Math.max(10, x - textW - 16) : Math.min(view.width - textW - 10, x + 16);
-  const labelY = y > view.height / 2 ? y - 24 : y + 8;
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  roundRect(ctx, labelX, labelY, textW, 22, 11);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, labelX + textW / 2, labelY + 11);
-  ctx.restore();
-}
-
-function drawCameraOverlaySkyline(ctx, view, overlayHeadingOffsetDeg) {
-  if (!state.samples.length) return;
-  const projected = state.samples.map((sample) => {
-    const headingDeg = normalizeDeg(sample.headingDeg + overlayHeadingOffsetDeg);
-    const altDeg = Number.isFinite(sample.relativeAltDeg)
-      ? sample.relativeAltDeg
-      : computeStoredRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchDeg));
-    return {
-      sample,
-      headingDeg,
-      altDeg,
-      point: projectOverlayPoint(view, headingDeg, altDeg)
-    };
-  });
-
-  ctx.save();
-  ctx.strokeStyle = "rgba(52, 208, 235, 0.95)";
-  ctx.lineWidth = 2.5;
-  let started = false;
-  ctx.beginPath();
-  for (const item of projected) {
-    if (!item.point.visible) {
-      started = false;
-      continue;
-    }
-    if (!started) {
-      ctx.moveTo(item.point.x, item.point.y);
-      started = true;
-    } else {
-      ctx.lineTo(item.point.x, item.point.y);
-    }
-  }
-  ctx.stroke();
-
-  for (const item of projected) {
-    if (!item.point.visible) continue;
-    ctx.beginPath();
-    ctx.arc(item.point.x, item.point.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(52, 208, 235, 0.98)";
-    ctx.fill();
-  }
-
-  const liveRelativeAltDeg = computeRawRelativeAltitude(state.levelPitch, state.pitchDeg);
-  if (Number.isFinite(liveRelativeAltDeg) && Number.isFinite(state.headingDeg)) {
-    const targetHeadingDeg = normalizeDeg(state.headingDeg + overlayHeadingOffsetDeg);
-    const point = projectOverlayPoint(view, targetHeadingDeg, clampCapturedRelativeAltitude(liveRelativeAltDeg));
-    if (point.visible) {
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(52, 208, 235, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
 }
 
 function syncMirrorStatuses() {
