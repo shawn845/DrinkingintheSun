@@ -33,8 +33,6 @@ const state = {
   points: [],
   trimDeg: 0,
   lastMessage: "No capture yet.",
-  directionLock: 0, // 0 none, 1 positive, -1 negative
-  reversedCount: 0,
   rejectedCount: 0,
   lastPreviewHtml: "No preview yet.",
   previewWindows: [],
@@ -199,10 +197,9 @@ function buildSensorLine() {
 }
 
 function buildDirectionLine() {
-  if (state.points.length < 2) return "Direction not locked yet.";
+  if (state.points.length < 2) return "No skyline sweep yet.";
   const sweep = getSweepWidthFromPoints(state.points);
-  if (state.directionLock === 0) return `Direction still settling • sweep ${sweep.toFixed(1)}° • keep moving one way.`;
-  return `Direction locked • sweep ${sweep.toFixed(1)}° • keep scanning the same way.`;
+  return `Captured sweep ${sweep.toFixed(1)}° • keep marking the relevant skyline only.`;
 }
 
 function buildSetupStatus() {
@@ -354,15 +351,9 @@ async function setLevelReference() {
     alert("Enable motion, GPS and camera first.");
     return;
   }
-  const sample = collectStableSample(LEVEL_SAMPLE_MS);
-  if (!sample.ok) {
-    state.lastMessage = sample.message;
-    render();
-    alert(sample.message);
-    return;
-  }
-  if (sample.pitchSpreadDeg > MAX_LEVEL_PITCH_SPREAD_DEG) {
-    const msg = `Level reference rejected. Hold the phone steadier. Pitch spread was ${sample.pitchSpreadDeg.toFixed(1)}°.`;
+  const sample = collectStableSample(LEVEL_SAMPLE_MS, { allowFallback: true });
+  if (!sample.ok || !Number.isFinite(sample.pitchMedianDeg)) {
+    const msg = sample.message || "Could not read the phone tilt. Hold the phone steady for a moment and try again.";
     state.lastMessage = msg;
     render();
     alert(msg);
@@ -386,18 +377,10 @@ function addSkylinePoint() {
     alert("Load motion, GPS, camera and eye-level first.");
     return;
   }
-  const sample = collectStableSample(POINT_SAMPLE_MS);
-  if (!sample.ok) {
-    state.lastMessage = sample.message;
-    state.rejectedCount += 1;
-    render();
-    alert(sample.message);
-    return;
-  }
-  if (sample.headingSpreadDeg > MAX_POINT_HEADING_SPREAD_DEG || sample.pitchSpreadDeg > MAX_POINT_PITCH_SPREAD_DEG) {
-    const msg = `Point rejected. Hold the phone steadier. Heading spread ${sample.headingSpreadDeg.toFixed(1)}°, pitch spread ${sample.pitchSpreadDeg.toFixed(1)}°.`;
+  const sample = collectStableSample(POINT_SAMPLE_MS, { allowFallback: true });
+  if (!sample.ok || !Number.isFinite(sample.headingMedianDeg) || !Number.isFinite(sample.pitchMedianDeg)) {
+    const msg = sample.message || "Could not read a stable skyline point. Hold the phone steady for a moment and try again.";
     state.lastMessage = msg;
-    state.rejectedCount += 1;
     render();
     alert(msg);
     return;
@@ -410,76 +393,22 @@ function addSkylinePoint() {
     eyeLevelPitchDeg: round1(state.levelPitch),
     rawRelativeAltDeg: round1(computeRawRelativeAltitude(state.levelPitch, sample.pitchMedianDeg)),
     relativeAltDeg: round1(clampRelativeAltitude(computeRawRelativeAltitude(state.levelPitch, sample.pitchMedianDeg))),
-    headingSpreadDeg: round1(sample.headingSpreadDeg),
-    pitchSpreadDeg: round1(sample.pitchSpreadDeg),
-    sampleCount: sample.count,
+    headingSpreadDeg: round1(sample.headingSpreadDeg || 0),
+    pitchSpreadDeg: round1(sample.pitchSpreadDeg || 0),
+    sampleCount: sample.count || 1,
   };
 
-  const directionCheck = validateDirectionForNewPoint(point);
-  if (!directionCheck.ok) {
-    state.lastMessage = directionCheck.message;
-    state.reversedCount += 1;
-    render();
-    alert(directionCheck.message);
-    return;
-  }
-
   state.points.push(point);
-  if (directionCheck.lockDirection) state.directionLock = directionCheck.lockDirection;
   state.lastMessage = `Point ${state.points.length} saved. Heading spread ${point.headingSpreadDeg.toFixed(1)}°, pitch spread ${point.pitchSpreadDeg.toFixed(1)}°.`;
   calculatePreview(true);
   render();
 }
 
-function validateDirectionForNewPoint(point) {
-  if (state.points.length === 0) return { ok: true, lockDirection: 0 };
 
-  const candidate = [...state.points, point];
-  const unwrapped = unwrapHeadingSequence(candidate.map((entry) => entry.rawHeadingDeg));
-  const totalSweep = Math.abs(unwrapped[unwrapped.length - 1] - unwrapped[0]);
-  if (totalSweep > MAX_TOTAL_SWEEP_DEG) {
-    return { ok: false, message: `Capture rejected. Total sweep would be ${totalSweep.toFixed(1)}°, which is too wide.` };
-  }
-
-  const prevUnwrapped = unwrapHeadingSequence(state.points.map((entry) => entry.rawHeadingDeg));
-  const prevLast = prevUnwrapped[prevUnwrapped.length - 1];
-  const nextLast = unwrapped[unwrapped.length - 1];
-  const delta = nextLast - prevLast;
-
-  if (Math.abs(delta) < 0.8) {
-    return { ok: false, message: "Point rejected. Move a bit further along the skyline before saving another point." };
-  }
-
-  if (state.points.length === 1) {
-    return { ok: true, lockDirection: 0 };
-  }
-
-  if (state.points.length === 2) {
-    const candidateLock = inferDirectionLockFromPoints(candidate);
-    return { ok: true, lockDirection: candidateLock };
-  }
-
-  const direction = state.directionLock || inferDirectionLockFromPoints(state.points);
-  if (!direction) {
-    return { ok: true, lockDirection: inferDirectionLockFromPoints(candidate) };
-  }
-
-  const reverseThreshold = 2.0;
-  if (direction === 1 && delta < -reverseThreshold) {
-    return { ok: false, message: "Direction reversed. Keep scanning the same way or start again." };
-  }
-  if (direction === -1 && delta > reverseThreshold) {
-    return { ok: false, message: "Direction reversed. Keep scanning the same way or start again." };
-  }
-
-  return { ok: true, lockDirection: direction };
-}
 
 function undoPoint() {
   if (!state.points.length) return;
   state.points.pop();
-  if (state.points.length < 2) state.directionLock = 0;
-  else state.directionLock = inferDirectionLockFromPoints(state.points);
   state.lastMessage = "Last point removed.";
   calculatePreview(true);
   render();
@@ -489,7 +418,6 @@ function clearPoints() {
   if (!state.points.length) return;
   if (!confirm("Clear all skyline points and start again?")) return;
   state.points = [];
-  state.directionLock = 0;
   state.trimDeg = 0;
   state.previewWindows = [];
   state.lastPreviewHtml = "No preview yet.";
@@ -501,26 +429,30 @@ function canCapturePoint() {
   return state.motionReady && state.gpsReady && state.cameraReady && Number.isFinite(state.levelPitch) && Number.isFinite(state.headingDeg) && Number.isFinite(state.pitchDeg);
 }
 
-function collectStableSample(windowMs) {
+function collectStableSample(windowMs, options = {}) {
+  const { allowFallback = false } = options;
   const headingSamples = recentWithin(state.recentHeadingSamples, windowMs);
   const pitchSamples = recentWithin(state.recentPitchSamples, windowMs);
 
+  const enoughHeading = headingSamples.length >= MIN_SAMPLE_COUNT;
+  const enoughPitch = pitchSamples.length >= MIN_SAMPLE_COUNT;
+
+  const headingValues = enoughHeading ? headingSamples.map((sample) => sample.value) : [];
+  const pitchValues = enoughPitch ? pitchSamples.map((sample) => sample.value) : [];
+
+  const headingMedianDeg = enoughHeading ? circularMeanDeg(headingValues) : (allowFallback ? state.headingDeg : null);
+  const pitchMedianDeg = enoughPitch ? median(pitchValues) : (allowFallback ? state.pitchDeg : null);
+  const headingSpreadDeg = enoughHeading ? circularSpreadDeg(headingValues, headingMedianDeg) : 0;
+  const pitchSpreadDeg = enoughPitch ? spreadDeg(pitchValues) : 0;
   const count = Math.min(headingSamples.length, pitchSamples.length);
-  if (count < MIN_SAMPLE_COUNT) {
+
+  if (!Number.isFinite(headingMedianDeg) || !Number.isFinite(pitchMedianDeg)) {
     return { ok: false, message: "Not enough fresh motion samples. Hold the phone steady for a moment and try again." };
   }
 
-  const headingValues = headingSamples.map((sample) => sample.value);
-  const pitchValues = pitchSamples.map((sample) => sample.value);
-
-  const headingMedianDeg = circularMeanDeg(headingValues);
-  const pitchMedianDeg = median(pitchValues);
-  const headingSpreadDeg = circularSpreadDeg(headingValues, headingMedianDeg);
-  const pitchSpreadDeg = spreadDeg(pitchValues);
-
   return {
     ok: true,
-    count,
+    count: Math.max(1, count),
     headingMedianDeg,
     pitchMedianDeg,
     headingSpreadDeg,
@@ -915,9 +847,6 @@ function getConfidenceSummary() {
   else if (sweep >= 10 && sweep <= 140) score += 10;
   else notes.push("Sweep width is unusual.");
 
-  if (state.reversedCount === 0) score += 8;
-  else notes.push("Direction was reversed during capture.");
-
   if (state.rejectedCount === 0) score += 5;
   else if (state.rejectedCount > 2) notes.push("Several unstable points were rejected.");
 
@@ -983,9 +912,7 @@ function loadDraft() {
     state.levelCapturedAt = draft.levelCapturedAt ?? null;
     state.points = Array.isArray(draft.points) ? draft.points : [];
     state.trimDeg = clampTrim(draft.trimDeg ?? 0);
-    state.reversedCount = draft.reversedCount ?? 0;
     state.rejectedCount = draft.rejectedCount ?? 0;
-    state.directionLock = inferDirectionLockFromPoints(state.points);
     state.lastPreviewHtml = draft.lastPreviewHtml || "No preview yet.";
     els.previewOutput.innerHTML = state.lastPreviewHtml;
     els.pubName.value = state.pubName;
@@ -1028,8 +955,6 @@ function buildRecord() {
     levelPitch: state.levelPitch,
     levelCapturedAt: state.levelCapturedAt,
     trimDeg: state.trimDeg,
-    directionLock: state.directionLock,
-    reversedCount: state.reversedCount,
     rejectedCount: state.rejectedCount,
     confidence,
     points: state.points,
