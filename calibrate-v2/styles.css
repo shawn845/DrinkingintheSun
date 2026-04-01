@@ -241,7 +241,6 @@ button:disabled { opacity: .5; }
   overflow: hidden;
   border-radius: 16px;
   background: #111;
-  isolation: isolate;
 }
 
 .video-wrap.large {
@@ -308,51 +307,6 @@ video {
   font-weight: 700;
 }
 
-.camera-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.sun-overlay-badge {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  z-index: 4;
-  max-width: calc(100% - 20px);
-  padding: 7px 9px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.62);
-  color: #fff;
-  font-size: .78rem;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.camera-back-btn {
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  z-index: 4;
-  min-height: 40px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.92);
-  color: var(--text);
-  border: 1px solid rgba(0,0,0,.08);
-  font-weight: 700;
-}
-
-.ar-preview-row .overlay-align-pill {
-  background: #f7f1db;
-}
-
-
 .camera-actions {
   display: grid;
   gap: 8px;
@@ -405,28 +359,6 @@ video {
   gap: 8px;
   align-items: stretch;
 }
-
-.overlay-align-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) auto auto auto;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.overlay-align-pill {
-  min-width: 0;
-}
-
-.overlay-align-pill strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.overlay-align-btn {
-  min-width: 0;
-  white-space: nowrap;
-}
-
 
 .meta-pill {
   padding: 10px 12px;
@@ -649,19 +581,6 @@ body.capture-focus #screen4 {
   padding: 10px;
 }
 
-body.capture-focus.capture-step4 #screen4 {
-  display: none !important;
-  height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: 0 !important;
-  overflow: hidden !important;
-}
-
-body.capture-focus.capture-step4 .camera-stage-card {
-  order: 1;
-}
-
 body.capture-focus .capture-head-copy h2 {
   font-size: 1rem;
   margin-bottom: 2px;
@@ -693,21 +612,9 @@ body.capture-focus .video-wrap.large {
   height: auto;
 }
 
-body.capture-focus.capture-step4 .video-wrap.large {
-  min-height: 70svh;
-}
-
-body.capture-focus .camera-back-btn {
-  font-size: .88rem;
-  min-height: 36px;
-  padding: 7px 10px;
-}
-
-
 body.capture-focus .camera-actions {
   flex: 0 0 auto;
   min-height: 0;
-  gap: 6px;
 }
 
 body.capture-focus .capture-status-line {
@@ -715,33 +622,12 @@ body.capture-focus .capture-status-line {
   font-size: .84rem;
 }
 
-body.capture-focus .sun-overlay-badge {
-  font-size: .74rem;
-  padding: 6px 8px;
-}
-
-body.capture-focus .overlay-align-row {
-  gap: 6px;
-}
-
-body.capture-focus.capture-step4 .top-progress,
-body.capture-focus.capture-step4 .step-strip {
-  display: none !important;
-}
-
-
 body.capture-focus .camera-action-btn,
 body.capture-focus .capture-btn,
 body.capture-focus .small-btn,
 body.capture-focus .compact-meta-pill {
   min-height: 44px;
   font-size: .93rem;
-}
-
-body.capture-focus .overlay-align-btn,
-body.capture-focus .overlay-align-pill {
-  min-height: 40px;
-  font-size: .84rem;
 }
 
 body.capture-focus .small-btn {
@@ -804,11 +690,6 @@ body.capture-focus .floating-points {
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
-  .overlay-align-row {
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
-    gap: 6px;
-  }
-
   body.capture-focus .wizard-page {
     padding-left: 8px;
     padding-right: 8px;
@@ -835,10 +716,6 @@ body.capture-focus .floating-points {
     gap: 6px;
   }
 
-  body.capture-focus .overlay-align-row {
-    gap: 5px;
-  }
-
   body.capture-focus .capture-utility-row {
     gap: 6px;
   }
@@ -851,12 +728,6 @@ body.capture-focus .floating-points {
     font-size: .89rem;
   }
 
-  body.capture-focus .overlay-align-btn,
-  body.capture-focus .overlay-align-pill {
-    min-height: 38px;
-    font-size: .8rem;
-  }
-
   body.capture-focus .small-btn,
   body.capture-focus .compact-meta-pill {
     padding: 8px 9px;
@@ -865,47 +736,4 @@ body.capture-focus .floating-points {
   body.capture-focus .video-wrap.large {
     min-height: 0;
   }
-
-  body.capture-focus.capture-step4 .video-wrap.large {
-    min-height: 64svh;
-  }
-}
-
-
-.screen4-placeholder { display:none !important; }
-body.capture-focus.capture-step4 .camera-stage-card {
-  padding: 4px;
-  gap: 6px;
-}
-body.capture-focus.capture-step4 .camera-actions {
-  gap: 5px;
-  margin-top: 6px;
-}
-body.capture-focus.capture-step4 .video-wrap.large {
-  min-height: 78svh;
-  border-radius: 20px;
-}
-body.capture-focus.capture-step4 .capture-bar,
-body.capture-focus.capture-step4 .capture-utility-row,
-body.capture-focus.capture-step4 .overlay-align-row {
-  gap: 6px;
-}
-body.capture-focus.capture-step4 .capture-btn,
-body.capture-focus.capture-step4 .small-btn,
-body.capture-focus.capture-step4 .compact-meta-pill,
-body.capture-focus.capture-step4 .overlay-align-btn,
-body.capture-focus.capture-step4 .overlay-align-pill {
-  min-height: 40px;
-  font-size: .9rem;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-body.capture-focus.capture-step4 .capture-debug-line {
-  font-size: .8rem;
-}
-body.capture-focus.capture-step4 .sun-overlay-badge {
-  left: 8px;
-  right: 8px;
-  max-width: none;
-  bottom: 8px;
 }
