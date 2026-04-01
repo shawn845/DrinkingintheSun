@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sun Calibration Prototype</title>
+  <meta name="theme-color" content="#f4c542" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Calibration prototype</div>
+        <h1>Sun path + skyline</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="helpBtn" class="ghost-btn" type="button">Help</button>
+      </div>
+    </header>
+
+    <main class="main-stage">
+      <section id="setupCard" class="card setup-card">
+        <h2>Start calibration</h2>
+        <p class="muted">Use this in portrait. It opens the rear camera, shows the live sun path, lets you drag the sun marker onto the real sun, then trace the skyline.</p>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Pub</span>
+            <input id="pubName" type="text" placeholder="Example: The Martin" />
+          </label>
+          <label class="field">
+            <span>Spot</span>
+            <input id="spotName" type="text" placeholder="Example: Beer garden bench" />
+          </label>
+        </div>
+
+        <div class="field-grid two-col">
+          <label class="field">
+            <span>Vertical FOV</span>
+            <select id="vFovSelect">
+              <option value="65">65°</option>
+              <option value="70" selected>70°</option>
+              <option value="75">75°</option>
+              <option value="80">80°</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Sun path date</span>
+            <input id="pathDate" type="date" />
+          </label>
+        </div>
+
+        <div class="action-row">
+          <button id="startBtn" class="primary-btn" type="button">Enable camera & sensors</button>
+        </div>
+
+        <ul class="notes-list">
+          <li>HTTPS is required on a real phone.</li>
+          <li>If the sun is hidden, align to a visible landmark instead.</li>
+          <li>This saves a draft JSON file and an overlay PNG locally.</li>
+        </ul>
+      </section>
+
+      <section id="viewerSection" class="viewer-section hidden">
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div id="statusPill" class="status-pill">Waiting for permissions</div>
+        </div>
+
+        <section class="controls-sheet">
+          <div class="mode-row">
+            <button id="alignModeBtn" class="mode-btn active" type="button">Align sun</button>
+            <button id="traceModeBtn" class="mode-btn" type="button">Trace skyline</button>
+          </div>
+
+          <div class="mini-grid">
+            <div class="mini-card">
+              <div class="mini-label">Heading</div>
+              <div id="headingReadout" class="mini-value">—</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-label">Pitch</div>
+              <div id="pitchReadout" class="mini-value">—</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-label">Offset</div>
+              <div id="offsetReadout" class="mini-value">—</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-label">Points</div>
+              <div id="pointsReadout" class="mini-value">0</div>
+            </div>
+          </div>
+
+          <div id="alignControls" class="control-group">
+            <div class="control-group-title">Move the sun marker onto the real sun, then lock alignment.</div>
+            <div class="nudge-grid">
+              <button class="nudge-btn" data-nudge="up" type="button">▲ Up</button>
+              <button class="nudge-btn" data-nudge="left" type="button">◀ Left</button>
+              <button class="nudge-btn" data-nudge="right" type="button">Right ▶</button>
+              <button class="nudge-btn" data-nudge="down" type="button">Down ▼</button>
+            </div>
+            <div class="action-row split">
+              <button id="zeroOffsetBtn" class="ghost-btn" type="button">Reset offset</button>
+              <button id="lockAlignBtn" class="primary-btn" type="button">Lock alignment</button>
+            </div>
+          </div>
+
+          <div id="traceControls" class="control-group hidden">
+            <div class="control-group-title">Tap along the skyline or obstruction edge from left to right.</div>
+            <div class="action-row split">
+              <button id="undoBtn" class="ghost-btn" type="button">Undo</button>
+              <button id="clearBtn" class="ghost-btn" type="button">Clear</button>
+              <button id="saveBtn" class="primary-btn" type="button">Save draft</button>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="helpDialog">
+    <h2>How to use it</h2>
+    <ol>
+      <li>Stand at the seating position and hold the phone in portrait.</li>
+      <li>Tap <strong>Enable camera & sensors</strong>.</li>
+      <li>Drag the yellow sun marker onto the real sun, or use the nudge buttons.</li>
+      <li>Tap <strong>Lock alignment</strong>.</li>
+      <li>Switch to <strong>Trace skyline</strong> and tap along the obstruction edge.</li>
+      <li>Save the draft to download a JSON file and PNG overlay image.</li>
+    </ol>
+    <form method="dialog">
+      <button class="primary-btn" type="submit">Close</button>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
