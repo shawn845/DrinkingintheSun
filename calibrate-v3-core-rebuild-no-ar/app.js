@@ -199,8 +199,9 @@ function buildSensorLine() {
 }
 
 function buildDirectionLine() {
-  if (state.points.length < 2 || state.directionLock === 0) return "Direction not locked yet.";
+  if (state.points.length < 2) return "Direction not locked yet.";
   const sweep = getSweepWidthFromPoints(state.points);
+  if (state.directionLock === 0) return `Direction still settling • sweep ${sweep.toFixed(1)}° • keep moving one way.`;
   return `Direction locked • sweep ${sweep.toFixed(1)}° • keep scanning the same way.`;
 }
 
@@ -440,27 +441,34 @@ function validateDirectionForNewPoint(point) {
     return { ok: false, message: `Capture rejected. Total sweep would be ${totalSweep.toFixed(1)}°, which is too wide.` };
   }
 
-  if (state.points.length === 1) {
-    const delta = unwrapped[1] - unwrapped[0];
-    if (Math.abs(delta) < 1.5) {
-      return { ok: false, message: "Point rejected. Move further along the skyline before saving another point." };
-    }
-    return { ok: true, lockDirection: delta > 0 ? 1 : -1 };
-  }
-
   const prevUnwrapped = unwrapHeadingSequence(state.points.map((entry) => entry.rawHeadingDeg));
   const prevLast = prevUnwrapped[prevUnwrapped.length - 1];
   const nextLast = unwrapped[unwrapped.length - 1];
   const delta = nextLast - prevLast;
-  const direction = state.directionLock || (delta > 0 ? 1 : -1);
 
-  if (Math.abs(delta) < 0.6) {
-    return { ok: false, message: "Point rejected. That point is almost the same heading as the previous one." };
+  if (Math.abs(delta) < 0.8) {
+    return { ok: false, message: "Point rejected. Move a bit further along the skyline before saving another point." };
   }
-  if (direction === 1 && delta < -0.8) {
+
+  if (state.points.length === 1) {
+    return { ok: true, lockDirection: 0 };
+  }
+
+  if (state.points.length === 2) {
+    const candidateLock = inferDirectionLockFromPoints(candidate);
+    return { ok: true, lockDirection: candidateLock };
+  }
+
+  const direction = state.directionLock || inferDirectionLockFromPoints(state.points);
+  if (!direction) {
+    return { ok: true, lockDirection: inferDirectionLockFromPoints(candidate) };
+  }
+
+  const reverseThreshold = 2.0;
+  if (direction === 1 && delta < -reverseThreshold) {
     return { ok: false, message: "Direction reversed. Keep scanning the same way or start again." };
   }
-  if (direction === -1 && delta > 0.8) {
+  if (direction === -1 && delta > reverseThreshold) {
     return { ok: false, message: "Direction reversed. Keep scanning the same way or start again." };
   }
 
@@ -1030,11 +1038,22 @@ function buildRecord() {
 }
 
 function inferDirectionLockFromPoints(points) {
-  if (!points || points.length < 2) return 0;
+  if (!points || points.length < 3) return 0;
   const unwrapped = unwrapHeadingSequence(points.map((point) => point.rawHeadingDeg));
-  const delta = unwrapped[unwrapped.length - 1] - unwrapped[0];
-  if (Math.abs(delta) < 1) return 0;
-  return delta > 0 ? 1 : -1;
+  let positive = 0;
+  let negative = 0;
+  for (let i = 1; i < unwrapped.length; i += 1) {
+    const delta = unwrapped[i] - unwrapped[i - 1];
+    if (delta >= 1) positive += 1;
+    else if (delta <= -1) negative += 1;
+  }
+  const overall = unwrapped[unwrapped.length - 1] - unwrapped[0];
+  if (Math.abs(overall) < 3) return 0;
+  if (positive >= 2 && negative === 0) return 1;
+  if (negative >= 2 && positive === 0) return -1;
+  if (positive > negative + 1) return 1;
+  if (negative > positive + 1) return -1;
+  return 0;
 }
 
 function getSweepWidthFromPoints(points) {
