@@ -4,11 +4,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Calibration" />
-  <meta name="theme-color" content="#f5f2e9" />
   <title>Seat calibration v2 | Drinking in the Sun</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -29,11 +24,8 @@
     <section id="cameraStage" class="card camera-stage-card hidden">
       <div class="video-wrap large">
         <video id="video" autoplay playsinline muted></video>
-        <canvas id="cameraOverlay" class="camera-overlay" aria-hidden="true"></canvas>
         <div class="reticle" aria-hidden="true"></div>
         <div id="floatingPointsBadge" class="floating-points hidden">0 points</div>
-        <div id="sunOverlayBadge" class="sun-overlay-badge hidden">Live sun overlay</div>
-        <button id="cameraBackBtn" class="camera-back-btn hidden" type="button">Back</button>
       </div>
 
       <div id="cameraActions" class="camera-actions hidden">
@@ -49,20 +41,6 @@
           <div class="meta-pill compact-meta-pill"><strong id="captureSummary">0 points • Low</strong></div>
           <button id="undoPointBtn" class="small-btn" disabled>Undo</button>
           <button id="clearBtn" class="small-btn danger-lite" disabled>Start again</button>
-        </div>
-
-        <div id="arPreviewRow" class="overlay-align-row ar-preview-row hidden">
-          <div class="meta-pill compact-meta-pill overlay-align-pill"><strong id="arPreviewValue">AR preview now</strong></div>
-          <button id="arPreviewMinusBtn" class="small-btn overlay-align-btn" type="button">← 1h</button>
-          <button id="arPreviewNowBtn" class="small-btn overlay-align-btn" type="button">Now</button>
-          <button id="arPreviewPlusBtn" class="small-btn overlay-align-btn" type="button">1h →</button>
-        </div>
-
-        <div id="overlayAlignRow" class="overlay-align-row hidden">
-          <div class="meta-pill compact-meta-pill overlay-align-pill"><strong id="overlayAlignValue">Overlay align 0.0°</strong></div>
-          <button id="overlayMinusBtn" class="small-btn overlay-align-btn" type="button">← 1°</button>
-          <button id="overlayResetBtn" class="small-btn overlay-align-btn" type="button">Reset</button>
-          <button id="overlayPlusBtn" class="small-btn overlay-align-btn" type="button">1° →</button>
         </div>
 
         <div id="captureDebugLine" class="capture-debug-line hidden">Live relative —</div>
@@ -121,7 +99,15 @@
       </div>
     </section>
 
-    <section id="screen4" class="card screen hidden capture-header-card screen4-placeholder" aria-hidden="true"></section>
+    <section id="screen4" class="card screen hidden capture-header-card">
+      <div class="capture-head">
+        <div class="capture-head-copy">
+          <h2>Mark obstruction</h2>
+          <p class="subtle">Tap where the skyline changes shape. Add extra points around trees, poles, chimneys, and roof corners.</p>
+        </div>
+        <button id="backTo3Btn" class="top-back-btn">Back</button>
+      </div>
+    </section>
 
     <section id="screen5" class="card screen hidden">
       <h2>Review</h2>
