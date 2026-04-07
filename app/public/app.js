@@ -3,6 +3,7 @@ const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -
 const WEATHER_REFRESH_MS = 5 * 60 * 1000;
 const WEATHERAPI_KEY = (window.WEATHERAPI_KEY || '').trim() || '07879d3f63ed420c805115827261703';
 const WEATHERAPI_BASE = 'https://api.weatherapi.com/v1';
+const APP_TIME_ZONE = 'Europe/London';
 
 const CURATED_ROUTES = {
   the_martin: {
@@ -399,9 +400,11 @@ function hhmmToMinutes(hhmm) {
 }
 
 function minutesToLocalDate(dateObj, minutes) {
-  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 0, 0, 0, 0);
-  d.setMinutes(minutes);
-  return d;
+  const year = dateObj.getUTCFullYear();
+  const month = dateObj.getUTCMonth() + 1;
+  const day = dateObj.getUTCDate();
+  const offsetMinutes = getLondonOffsetMinutesForDateParts(year, month, day);
+  return new Date(Date.UTC(year, month - 1, day, 0, minutes, 0, 0) - (offsetMinutes * 60000));
 }
 
 function mapSolarRelative(obsMinutes, baseSolar, targetSolar) {
@@ -450,7 +453,11 @@ function getSolarTimesLocal(lat, lng, dateObj) {
   if (cosH < -1 || cosH > 1) return null;
 
   const hourAngleDeg = rad2deg(Math.acos(cosH));
-  const tzHours = -dateObj.getTimezoneOffset() / 60;
+  const tzHours = getLondonOffsetMinutesForDateParts(
+    dateObj.getUTCFullYear(),
+    dateObj.getUTCMonth() + 1,
+    dateObj.getUTCDate()
+  ) / 60;
 
   const solarNoon = 720 - (4 * lng) - eqTime + (tzHours * 60);
   const sunrise = solarNoon - (hourAngleDeg * 4);
@@ -460,8 +467,70 @@ function getSolarTimesLocal(lat, lng, dateObj) {
 }
 
 function dayOfYear(dateObj) {
-  const start = new Date(dateObj.getFullYear(), 0, 0);
-  return Math.floor((dateObj - start) / 86400000);
+  const year = dateObj.getUTCFullYear();
+  const current = Date.UTC(year, dateObj.getUTCMonth(), dateObj.getUTCDate(), 12, 0, 0, 0);
+  const start = Date.UTC(year, 0, 0, 12, 0, 0, 0);
+  return Math.floor((current - start) / 86400000);
+}
+
+function lastSundayOfMonthUtc(year, monthIndex) {
+  const d = new Date(Date.UTC(year, monthIndex + 1, 0, 0, 0, 0, 0));
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  return d;
+}
+
+function getLondonDstStartUtc(year) {
+  const lastSunday = lastSundayOfMonthUtc(year, 2);
+  return Date.UTC(year, 2, lastSunday.getUTCDate(), 1, 0, 0, 0);
+}
+
+function getLondonDstEndUtc(year) {
+  const lastSunday = lastSundayOfMonthUtc(year, 9);
+  return Date.UTC(year, 9, lastSunday.getUTCDate(), 1, 0, 0, 0);
+}
+
+function isLondonDstAtUtc(utcMs) {
+  const probe = new Date(utcMs);
+  const year = probe.getUTCFullYear();
+  const start = getLondonDstStartUtc(year);
+  const end = getLondonDstEndUtc(year);
+  return utcMs >= start && utcMs < end;
+}
+
+function getLondonOffsetMinutesForDateParts(year, month, day) {
+  const noonUtc = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
+  return isLondonDstAtUtc(noonUtc) ? 60 : 0;
+}
+
+function getLondonDateParts(dateObj) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(dateObj instanceof Date ? dateObj : new Date(dateObj));
+
+  const out = {};
+  for (const part of parts) {
+    if (part.type !== 'literal') out[part.type] = Number(part.value);
+  }
+
+  return {
+    year: out.year,
+    month: out.month,
+    day: out.day,
+    hour: out.hour,
+    minute: out.minute,
+    second: out.second
+  };
+}
+
+function createUtcAnchorDate(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
 }
 
 function getWindows(pub) {
@@ -2016,15 +2085,9 @@ function parseAstroTime(timeText, referenceDate) {
   if (meridiem === 'PM' && hours !== 12) hours += 12;
   if (meridiem === 'AM' && hours === 12) hours = 0;
 
-  return new Date(
-    referenceDate.getFullYear(),
-    referenceDate.getMonth(),
-    referenceDate.getDate(),
-    hours,
-    minutes,
-    0,
-    0
-  );
+  const londonDate = getLondonDateParts(referenceDate);
+  const dateAnchor = createUtcAnchorDate(londonDate.year, londonDate.month, londonDate.day);
+  return minutesToLocalDate(dateAnchor, (hours * 60) + minutes);
 }
 
 function renderWeatherBar(errorMessage = '') {
@@ -2145,15 +2208,21 @@ function mapsCycleHref(lat, lng) {
 
 function parseISODate(str) {
   const [y, m, d] = String(str || '').split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
+  return createUtcAnchorDate(y || 1970, (m || 1), d || 1);
 }
 
 function formatDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parts = getLondonDateParts(d);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
 
 function fmtTime(d) {
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: APP_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(d);
 }
 
 function haversineKm(lat1, lon1, lat2, lon2) {
