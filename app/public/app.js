@@ -324,9 +324,11 @@ function normalizeRow(row) {
     baseDate: pick('base_date'),
     spotAStart: pick('spot_a_sun_start'),
     spotAEnd: pick('spot_a_sun_end'),
+    spotAHorizon: pick('spot_a_horizon'),
     spotB: pick('spot_b'),
     spotBStart: pick('spot_b_sun_start'),
     spotBEnd: pick('spot_b_sun_end'),
+    spotBHorizon: pick('spot_b_horizon'),
     imageUrl: pick('image_url'),
     spotAPhotoUrl: pick('spot_a_photo_url', 'spot_a_photo', 'spot_a_image_url'),
     spotBPhotoUrl: pick('spot_b_photo_url', 'spot_b_photo', 'spot_b_image_url'),
@@ -337,16 +339,34 @@ function normalizeRow(row) {
   };
 }
 
+function hasLegacyWindow(baseDate, start, end) {
+  return !!(baseDate && start && end);
+}
+
+function hasHorizonProfile(horizonStr) {
+  return parseHorizonProfile(horizonStr).length >= 2;
+}
+
 function isValidPubRow(pub) {
+  const spotAOk =
+    pub.spotA &&
+    (
+      hasHorizonProfile(pub.spotAHorizon) ||
+      hasLegacyWindow(pub.baseDate, pub.spotAStart, pub.spotAEnd)
+    );
+
+  const spotBOk =
+    !pub.spotB ||
+    hasHorizonProfile(pub.spotBHorizon) ||
+    hasLegacyWindow(pub.baseDate, pub.spotBStart, pub.spotBEnd);
+
   return !!(
     pub.id &&
     pub.name &&
     Number.isFinite(pub.lat) &&
     Number.isFinite(pub.lng) &&
-    pub.spotA &&
-    pub.baseDate &&
-    pub.spotAStart &&
-    pub.spotAEnd
+    spotAOk &&
+    spotBOk
   );
 }
 
@@ -354,9 +374,26 @@ function enrichPub(pub) {
   const now = new Date();
   const today = formatDate(now);
 
-  const aToday = shiftWindow(pub.lat, pub.lng, pub.baseDate, pub.spotAStart, pub.spotAEnd, today);
-  const bToday = (pub.spotB && pub.spotBStart && pub.spotBEnd)
-    ? shiftWindow(pub.lat, pub.lng, pub.baseDate, pub.spotBStart, pub.spotBEnd, today)
+  const aToday = resolveSpotWindow({
+    lat: pub.lat,
+    lng: pub.lng,
+    baseDate: pub.baseDate,
+    startHHMM: pub.spotAStart,
+    endHHMM: pub.spotAEnd,
+    horizon: pub.spotAHorizon,
+    targetDateStr: today
+  });
+
+  const bToday = pub.spotB
+    ? resolveSpotWindow({
+        lat: pub.lat,
+        lng: pub.lng,
+        baseDate: pub.baseDate,
+        startHHMM: pub.spotBStart,
+        endHHMM: pub.spotBEnd,
+        horizon: pub.spotBHorizon,
+        targetDateStr: today
+      })
     : null;
 
   const best = chooseBestWindow(aToday, bToday, now);
@@ -369,6 +406,18 @@ function enrichPub(pub) {
 
 function reEnrichAll() {
   state.pubs = state.pubs.map(enrichPub);
+}
+
+function resolveSpotWindow({ lat, lng, baseDate, startHHMM, endHHMM, horizon, targetDateStr }) {
+  if (hasHorizonProfile(horizon)) {
+    return getWindowFromHorizon(lat, lng, horizon, targetDateStr);
+  }
+
+  if (hasLegacyWindow(baseDate, startHHMM, endHHMM)) {
+    return shiftWindow(lat, lng, baseDate, startHHMM, endHHMM, targetDateStr);
+  }
+
+  return null;
 }
 
 function shiftWindow(lat, lng, baseDateStr, startHHMM, endHHMM, targetDateStr) {
@@ -391,6 +440,126 @@ function shiftWindow(lat, lng, baseDateStr, startHHMM, endHHMM, targetDateStr) {
   return {
     start: minutesToLocalDate(targetDate, mapSolarRelative(baseStartMin, baseSolar, targetSolar)),
     end: minutesToLocalDate(targetDate, mapSolarRelative(baseEndMin, baseSolar, targetSolar))
+  };
+}
+
+
+function normalizeAzimuth(az) {
+  let value = Number(az);
+  if (!Number.isFinite(value)) return null;
+  value = value % 360;
+  if (value < 0) value += 360;
+  return value;
+}
+
+function parseHorizonProfile(horizonStr) {
+  return String(horizonStr || '')
+    .split('|')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => {
+      const [azStr, altStr] = part.split(':').map(s => s.trim());
+      const az = normalizeAzimuth(azStr);
+      const alt = Number(altStr);
+      if (!Number.isFinite(az) || !Number.isFinite(alt)) return null;
+      return { az, alt };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.az - b.az);
+}
+
+function horizonAltitudeAt(profile, azimuth) {
+  const az = normalizeAzimuth(azimuth);
+  if (!profile.length || az == null) return 90;
+
+  if (az <= profile[0].az) return profile[0].alt;
+
+  for (let i = 1; i < profile.length; i++) {
+    const prev = profile[i - 1];
+    const next = profile[i];
+
+    if (az <= next.az) {
+      const span = next.az - prev.az || 1;
+      const t = (az - prev.az) / span;
+      return prev.alt + ((next.alt - prev.alt) * t);
+    }
+  }
+
+  return profile[profile.length - 1].alt;
+}
+
+function getSunPositionLocal(lat, lng, dateObj) {
+  const parts = getLondonDateParts(dateObj);
+  const localMinutes = parts.hour + (parts.minute / 60) + (parts.second / 3600);
+
+  const dayDate = createUtcAnchorDate(parts.year, parts.month, parts.day);
+  const n = dayOfYear(dayDate);
+  const gamma = (2 * Math.PI / 365) * (n - 1 + ((localMinutes - 12) / 24));
+
+  const eqTime =
+    229.18 *
+    (0.000075 +
+      0.001868 * Math.cos(gamma) -
+      0.032077 * Math.sin(gamma) -
+      0.014615 * Math.cos(2 * gamma) -
+      0.040849 * Math.sin(2 * gamma));
+
+  const decl =
+    0.006918 -
+    0.399912 * Math.cos(gamma) +
+    0.070257 * Math.sin(gamma) -
+    0.006758 * Math.cos(2 * gamma) +
+    0.000907 * Math.sin(2 * gamma) -
+    0.002697 * Math.cos(3 * gamma) +
+    0.00148 * Math.sin(3 * gamma);
+
+  const tzOffsetMin = getLondonOffsetMinutesForDateParts(parts.year, parts.month, parts.day);
+  const minutesNow = (parts.hour * 60) + parts.minute + (parts.second / 60);
+  const trueSolarTime = (minutesNow + eqTime + (4 * lng) - tzOffsetMin + 1440) % 1440;
+  const hourAngleDeg = (trueSolarTime / 4) - 180;
+  const hourAngle = deg2rad(hourAngleDeg);
+  const latRad = deg2rad(lat);
+
+  const cosZenith =
+    (Math.sin(latRad) * Math.sin(decl)) +
+    (Math.cos(latRad) * Math.cos(decl) * Math.cos(hourAngle));
+
+  const zenith = Math.acos(clamp(cosZenith, -1, 1));
+  const elevation = 90 - rad2deg(zenith);
+
+  const azimuthRad = Math.atan2(
+    Math.sin(hourAngle),
+    (Math.cos(hourAngle) * Math.sin(latRad)) - (Math.tan(decl) * Math.cos(latRad))
+  );
+  const azimuth = (rad2deg(azimuthRad) + 180 + 360) % 360;
+
+  return { azimuth, elevation };
+}
+
+function getWindowFromHorizon(lat, lng, horizonStr, targetDateStr) {
+  const profile = parseHorizonProfile(horizonStr);
+  if (profile.length < 2) return null;
+
+  const targetDate = parseISODate(targetDateStr);
+  const stepMinutes = 2;
+  let firstSun = null;
+  let lastSun = null;
+
+  for (let minutes = 7 * 60; minutes <= 23 * 60; minutes += stepMinutes) {
+    const dt = minutesToLocalDate(targetDate, minutes);
+    const sun = getSunPositionLocal(lat, lng, dt);
+    const obstructionAlt = horizonAltitudeAt(profile, sun.azimuth);
+    const inSun = sun.elevation > obstructionAlt;
+
+    if (inSun && !firstSun) firstSun = new Date(dt);
+    if (inSun) lastSun = new Date(dt);
+  }
+
+  if (!firstSun || !lastSun) return null;
+
+  return {
+    start: firstSun,
+    end: lastSun
   };
 }
 
