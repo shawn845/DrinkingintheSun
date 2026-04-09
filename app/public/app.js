@@ -470,9 +470,9 @@ function parseHorizonProfile(horizonStr) {
 
 function horizonAltitudeAt(profile, azimuth) {
   const az = normalizeAzimuth(azimuth);
-  if (!profile.length || az == null) return 90;
+  if (!profile.length || az == null) return Infinity;
 
-  if (az <= profile[0].az) return profile[0].alt;
+  if (az < profile[0].az) return Infinity;
 
   for (let i = 1; i < profile.length; i++) {
     const prev = profile[i - 1];
@@ -485,7 +485,7 @@ function horizonAltitudeAt(profile, azimuth) {
     }
   }
 
-  return profile[profile.length - 1].alt;
+  return az > profile[profile.length - 1].az ? Infinity : profile[profile.length - 1].alt;
 }
 
 function getSunPositionLocal(lat, lng, dateObj) {
