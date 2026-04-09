@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Drinking in the Sun Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Drinking in the Sun Admin</h1>
+      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, then save straight to GitHub or export pubs.csv.</p>
+      <div id="draftStatus" class="draftStatus">Latest CSV will load by default. Local draft restore is available on this device.</div>
+    </div>
+    <div class="topActions">
+      <label class="btn secondary fileBtn">
+        <input id="fileInput" type="file" accept=".csv,text/csv" hidden>
+        Load CSV
+      </label>
+      <button id="btnReload" class="btn secondary" type="button">Reload bundled CSV</button>
+      <button id="btnSaveDraft" class="btn secondary" type="button">Save draft</button>
+      <button id="btnRestoreDraft" class="btn secondary" type="button">Restore draft</button>
+      <button id="btnClearDraft" class="btn secondary" type="button">Clear draft</button>
+      <button id="btnDownload" class="btn" type="button" disabled>Download pubs.csv</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar card">
+      <div class="sidebarTop">
+        <input id="searchInput" class="textInput" type="search" placeholder="Search or pick a pub…" autocomplete="off" />
+        <button id="btnNewPub" class="btn secondary small" type="button">New pub</button>
+      </div>
+      <div class="listHint">Type a few letters to show matching pubs. With no search, only the current pub is shown.</div>
+      <div id="pubCount" class="metaLine">No CSV loaded</div>
+      <div id="pubList" class="pubList"></div>
+    </aside>
+
+    <section class="editor">
+      <div class="card section gitSection">
+        <div class="sectionHead">
+          <h2>GitHub sync</h2>
+          <div class="rowActions">
+            <button id="btnGitHubLoad" class="btn secondary small" type="button">Load from GitHub</button>
+            <button id="btnGitHubSave" class="btn small" type="button" disabled>Save to GitHub</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <label>Owner / org<input id="github-owner" class="textInput" type="text" placeholder="your-github-name"></label>
+          <label>Repository<input id="github-repo" class="textInput" type="text" placeholder="drinking-in-the-sun"></label>
+          <label>Branch<input id="github-branch" class="textInput" type="text" value="main"></label>
+          <label>CSV path in repo<input id="github-path" class="textInput mono" type="text" value="public/data/pubs.csv"></label>
+          <label class="full">Fine-grained token<input id="github-token" class="textInput mono" type="password" placeholder="github_pat_..."></label>
+          <label class="full checkboxRow"><input id="github-remember-token" type="checkbox">Remember token on this device</label>
+          <label class="full">Commit message<input id="github-message" class="textInput" type="text" value="Update pubs.csv via admin tool"></label>
+        </div>
+        <div id="gitStatus" class="metaLine topGap">Load is optional for public repos. Save needs a token with repository Contents write permission.</div>
+      </div>
+
+      <div class="card section">
+        <div class="sectionHead">
+          <h2>Pub details</h2>
+          <div class="rowActions">
+            <button id="btnDuplicate" class="btn secondary small" type="button" disabled>Duplicate</button>
+            <button id="btnDelete" class="btn danger small" type="button" disabled>Delete</button>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <label>Id<input id="field-id" class="textInput" type="text"></label>
+          <label>Name<input id="field-name" class="textInput" type="text"></label>
+          <label class="full">Address<input id="field-address" class="textInput" type="text"></label>
+          <label>Latitude<input id="field-lat" class="textInput" type="number" step="any"></label>
+          <label>Longitude<input id="field-lng" class="textInput" type="number" step="any"></label>
+          <label>Base date<input id="field-base_date" class="textInput" type="date"></label>
+          <label class="full">Image URL<input id="field-image_url" class="textInput" type="url"></label>
+          <label class="full">Notes<textarea id="field-notes" class="textArea" rows="3"></textarea></label>
+          <label>Worth the trip
+            <select id="field-worth_the_trip" class="textInput"><option value="">—</option><option value="yes">yes</option><option value="no">no</option></select>
+          </label>
+          <label>Cycle-friendly
+            <select id="field-cycle_friendly" class="textInput"><option value="">—</option><option value="yes">yes</option><option value="no">no</option></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="gridPreview">
+        <section class="card section spotSection" data-spot="a">
+          <div class="sectionHead">
+            <h2>Spot A</h2>
+            <div id="spotAStatus" class="pill muted">Waiting for points</div>
+          </div>
+          <div class="grid2">
+            <label>Spot A name<input id="field-spot_a" class="textInput" type="text"></label>
+            <label>Spot A photo URL<input id="field-spot_a_photo_url" class="textInput" type="url"></label>
+            <label>Legacy start<input id="field-spot_a_sun_start" class="textInput" type="time"></label>
+            <label>Legacy end<input id="field-spot_a_sun_end" class="textInput" type="time"></label>
+            <label class="full">Horizon string<input id="field-spot_a_horizon" class="textInput mono" type="text"></label>
+          </div>
+          <div class="pointToolbar">
+            <button class="btn secondary small" type="button" data-add-point="a">Add point</button>
+            <button class="btn secondary small" type="button" data-sort-point="a">Sort points</button>
+            <button class="btn secondary small" type="button" data-rebuild-point="a">Rebuild string</button>
+          </div>
+          <div id="pointList-a" class="pointList"></div>
+          <div class="previewBlock">
+            <div class="previewHead">
+              <label>Preview date<input id="previewDateA" class="textInput" type="date"></label>
+              <div id="previewSummaryA" class="metaLine">No preview yet</div>
+            </div>
+            <svg id="graphA" class="graph" viewBox="0 0 360 220" preserveAspectRatio="none"></svg>
+          </div>
+        </section>
+
+        <section class="card section spotSection" data-spot="b">
+          <div class="sectionHead">
+            <h2>Spot B</h2>
+            <div id="spotBStatus" class="pill muted">Optional</div>
+          </div>
+          <div class="grid2">
+            <label>Spot B name<input id="field-spot_b" class="textInput" type="text"></label>
+            <label>Spot B photo URL<input id="field-spot_b_photo_url" class="textInput" type="url"></label>
+            <label>Legacy start<input id="field-spot_b_sun_start" class="textInput" type="time"></label>
+            <label>Legacy end<input id="field-spot_b_sun_end" class="textInput" type="time"></label>
+            <label class="full">Horizon string<input id="field-spot_b_horizon" class="textInput mono" type="text"></label>
+          </div>
+          <div class="pointToolbar">
+            <button class="btn secondary small" type="button" data-add-point="b">Add point</button>
+            <button class="btn secondary small" type="button" data-sort-point="b">Sort points</button>
+            <button class="btn secondary small" type="button" data-rebuild-point="b">Rebuild string</button>
+          </div>
+          <div id="pointList-b" class="pointList"></div>
+          <div class="previewBlock">
+            <div class="previewHead">
+              <label>Preview date<input id="previewDateB" class="textInput" type="date"></label>
+              <div id="previewSummaryB" class="metaLine">No preview yet</div>
+            </div>
+            <svg id="graphB" class="graph" viewBox="0 0 360 220" preserveAspectRatio="none"></svg>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <template id="pointRowTemplate">
+    <div class="pointRow">
+      <label>Az<input class="textInput pointAz" type="number" step="any" placeholder="112"></label>
+      <label>Alt<input class="textInput pointAlt" type="number" step="any" placeholder="25"></label>
+      <button class="btn danger small pointDelete" type="button">×</button>
+    </div>
+  </template>
+
+  <script src="admin.js"></script>
+</body>
+</html>
