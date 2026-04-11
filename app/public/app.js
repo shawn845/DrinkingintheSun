@@ -1,44 +1,11 @@
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
 const WEATHER_REFRESH_MS = 5 * 60 * 1000;
-const METOFFICE_API_KEY = (window.METOFFICE_API_KEY || '').trim() || 'eyJ4NXQjUzI1NiI6Ik5XVTVZakUxTkRjeVl6a3hZbUl4TkdSaFpqSmpOV1l6T1dGaE9XWXpNMk0yTWpRek5USm1OVEE0TXpOaU9EaG1NVFJqWVdNellXUm1ZalUyTTJJeVpBPT0iLCJraWQiOiJnYXRld2F5X2NlcnRpZmljYXRlX2FsaWFzIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ==.eyJzdWIiOiJzaGF3bkBzaGF3bnJ5YW4uY28udWtAY2FyYm9uLnN1cGVyIiwiYXBwbGljYXRpb24iOnsib3duZXIiOiJzaGF3bkBzaGF3bnJ5YW4uY28udWsiLCJ0aWVyUXVvdGFUeXBlIjpudWxsLCJ0aWVyIjoiVW5saW1pdGVkIiwibmFtZSI6ImxhbmRfb2JzLWFiMmE1MGNiLWM1OWEtNGNhMC1hZDI3LWQ0YmVhNTIwODg1MyIsImlkIjo0NDkxOCwidXVpZCI6ImFmZjUwZWE2LTQ0Y2EtNDhjOS1hNmYzLTQ1MjExNzdkMjY2NCJ9LCJpc3MiOiJodHRwczpcL1wvYXBpLW1hbmFnZXIuYXBpLW1hbmFnZW1lbnQubWV0b2ZmaWNlLmNsb3VkOjQ0M1wvb2F1dGgyXC90b2tlbiIsInRpZXJJbmZvIjp7IndkaF9jZHBfbGFuZG9ic19mcmVlIjp7InRpZXJRdW90YVR5cGUiOiJyZXF1ZXN0Q291bnQiLCJncmFwaFFMTWF4Q29tcGxleGl0eSI6MCwiZ3JhcGhRTE1heERlcHRoIjowLCJzdG9wT25RdW90YVJlYWNoIjp0cnVlLCJzcGlrZUFycmVzdExpbWl0IjowLCJzcGlrZUFycmVzdFVuaXQiOiJzZWMifX0sImtleXR5cGUiOiJQUk9EVUNUSU9OIiwic3Vic2NyaWJlZEFQSXMiOlt7InN1YnNjcmliZXJUZW5hbnREb21haW4iOiJjYXJib24uc3VwZXIiLCJuYW1lIjoiQ0RQX09ic2VydmF0aW9uX0xhbmQiLCJjb250ZXh0IjoiXC9vYnNlcnZhdGlvbi1sYW5kXC8xIiwicHVibGlzaGVyIjoiQ29uc3VtZXJEaWdpdGFsX0NJIiwidmVyc2lvbiI6IjEiLCJzdWJzY3JpcHRpb25UaWVyIjoid2RoX2NkcF9sYW5kb2JzX2ZyZWUifV0sInRva2VuX3R5cGUiOiJhcGlLZXkiLCJpYXQiOjE3NzU5MjY0OTAsImp0aSI6IjUzY2UyZTAxLTMwNjMtNDk3Ni04NDczLTI5M2I1YzAzOTEzMyJ9.S7kcJJlwyqkC3lkacr_rKYh770w4dgiA4IsZE2Ft2kFFYv8h0OPgsZxv6vXzMF7vZBUd69aHbUDMjPD3lULF5kSYEdIaoDCJ_x-xl6fHSAQF4-13DcnXzIvMofp8DxQt9pyMXgVcXGN6ziKjSZKsBlLDIsPo2-c9BpjZxKk16p8hbycAb9nrQh5AUSkbsKB8Bi_TeotvLhU7rTlENPbt1WJrr2b24dQo9ycaoDjAbXmzOZG7cwL2pqCspK_fKdRHlQ1NX2MBMrv8GmHWoP_jCzNY4Ij9AJr_hdg9REuGPkGBKb6BJ1anwdaWEWdtF8Ky4I9Zhyocm3wQIY4VJPUzfw==';
-const METOFFICE_BASE = 'https://datahub.metoffice.gov.uk';
+const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
+const OPEN_METEO_CURRENT_FIELDS = 'temperature_2m,weather_code,is_day,cloud_cover,precipitation,wind_speed_10m';
+const OPEN_METEO_HOURLY_FIELDS = 'temperature_2m,weather_code,is_day,cloud_cover,precipitation_probability';
+const OPEN_METEO_DAILY_FIELDS = 'sunrise,sunset';
 const APP_TIME_ZONE = 'Europe/London';
-
-
-const METOFFICE_WEATHER_CODES = {
-  0: 'Clear',
-  1: 'Sunny',
-  2: 'Partly cloudy',
-  3: 'Partly cloudy',
-  5: 'Mist',
-  6: 'Fog',
-  7: 'Cloudy',
-  8: 'Overcast',
-  9: 'Light rain shower',
-  10: 'Light rain shower',
-  11: 'Drizzle',
-  12: 'Light rain',
-  13: 'Heavy rain shower',
-  14: 'Heavy rain shower',
-  15: 'Heavy rain',
-  16: 'Sleet shower',
-  17: 'Sleet shower',
-  18: 'Sleet',
-  19: 'Hail shower',
-  20: 'Hail shower',
-  21: 'Hail',
-  22: 'Light snow shower',
-  23: 'Light snow shower',
-  24: 'Light snow',
-  25: 'Heavy snow shower',
-  26: 'Heavy snow shower',
-  27: 'Heavy snow',
-  28: 'Thunder shower',
-  29: 'Thunder shower',
-  30: 'Thunder'
-};
-
 
 const ROUTES_URL = './public/data/routes.json';
 let CURATED_ROUTES = {};
@@ -741,8 +708,7 @@ function hasFogWords(text = '') {
   return /(fog|mist|overcast|freezing fog)/i.test(String(text || ''));
 }
 
-
-function weatherMood(currentObj = null, nextObj = null, sunTimes = null, atTime = null) {
+function weatherMood(currentObj = null, sunTimes = null, atTime = null) {
   const referenceTime = atTime || currentObj?.time || new Date();
   const phase = sunPhaseForWeather(currentObj, sunTimes, referenceTime);
   const isDay = phase === 'day';
@@ -750,31 +716,30 @@ function weatherMood(currentObj = null, nextObj = null, sunTimes = null, atTime 
   const currentText = String(currentObj?.conditionText || '').trim();
   const precipNow = Number(currentObj?.precip ?? 0);
   const cloudNow = Number(currentObj?.cloudCover ?? 0);
-  const weatherCode = Number(currentObj?.weatherCode);
+  const combinedText = currentText;
 
   if (!isDay) {
-    if (precipNow > 0 || hasRainWords(currentText) || isMetOfficeRainCode(weatherCode)) {
+    if (precipNow >= 0.1 || hasRainWords(combinedText)) {
       return { icon: '🌧️', className: 'night-rainy', tone: 'rainy' };
     }
 
-    if ((weatherCode === 0 || /clear/i.test(currentText)) && !hasFogWords(currentText)) {
+    if (cloudNow <= 35 && !hasFogWords(combinedText)) {
       return { icon: '🌙', className: 'night-clear', tone: 'cloudy' };
     }
 
     return { icon: '☁️', className: 'night-cloudy', tone: 'cloudy' };
   }
 
-  if (precipNow > 0 || hasRainWords(currentText) || isMetOfficeRainCode(weatherCode)) {
+  if (precipNow >= 0.1 || hasRainWords(combinedText)) {
     return { icon: '🌧️', className: 'rainy', tone: 'rainy' };
   }
 
-  if (weatherCode === 1 || weatherCode === 3 || (!hasFogWords(currentText) && (/(sunny|clear)/i.test(currentText) || cloudNow <= 35))) {
+  if (!hasFogWords(combinedText) && (/(sunny|clear)/i.test(combinedText) || cloudNow <= 35)) {
     return { icon: '☀️', className: 'sunny', tone: 'sunny' };
   }
 
   return { icon: '⛅', className: 'cloudy', tone: 'cloudy' };
 }
-
 
 function sunPhaseForWeather(currentObj, sunTimes = null, atTime = new Date()) {
   if (sunTimes?.sunrise instanceof Date && sunTimes?.sunset instanceof Date && !Number.isNaN(sunTimes.sunrise.getTime()) && !Number.isNaN(sunTimes.sunset.getTime())) {
@@ -793,18 +758,17 @@ function weatherTitleText(currentObj, sunTimes = null) {
   return 'Current conditions';
 }
 
-
-function describeWeather(currentObj, nextObj = null, sunTimes = null) {
+function describeWeather(currentObj, sunTimes = null) {
   if (!currentObj) return 'Weather unavailable';
 
   const phase = sunPhaseForWeather(currentObj, sunTimes, currentObj.time || new Date());
-  const mood = weatherMood(currentObj, null, sunTimes, currentObj.time || new Date());
+  const mood = weatherMood(currentObj, sunTimes, currentObj.time || new Date());
   const text = String(currentObj.conditionText || '').trim();
 
   if (phase === 'after-sunset') {
     if (mood.tone === 'rainy') return 'Rain tonight';
     if (/(clear)/i.test(text)) return 'Clear';
-    if (/(partly cloudy|cloudy|overcast)/i.test(text)) return 'Cloudy';
+    if (/(partly cloudy|cloudy)/i.test(text)) return 'Cloudy';
     return text || 'Cloudy';
   }
 
@@ -822,9 +786,8 @@ function describeWeather(currentObj, nextObj = null, sunTimes = null) {
   return text || 'Cloudy';
 }
 
-
-function currentWeatherLabel(currentObj, sunTimes = null, nextObj = null) {
-  return describeWeather(currentObj, nextObj, sunTimes);
+function currentWeatherLabel(currentObj, sunTimes = null) {
+  return describeWeather(currentObj, sunTimes);
 }
 
 function nextHourLabel(nextObj) {
@@ -848,7 +811,6 @@ function getWeatherTone() {
 
   const mood = weatherMood(
     state.weather.current,
-    state.weather.nextHour,
     state.weather.sunTimes,
     state.weather.current.time || new Date()
   );
@@ -2176,23 +2138,22 @@ function closeModal(push = false) {
   if (push) history.pushState({}, '', state.currentView === 'map' ? '#map' : '#list');
 }
 
-
 async function refreshWeather(lat, lng) {
   try {
-    if (!METOFFICE_API_KEY || METOFFICE_API_KEY === 'PUT_YOUR_METOFFICE_API_KEY_HERE') {
-      throw new Error('Add your Met Office API key in app.js.');
+    const url = `${OPEN_METEO_BASE}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}&current=${encodeURIComponent(OPEN_METEO_CURRENT_FIELDS)}&hourly=${encodeURIComponent(OPEN_METEO_HOURLY_FIELDS)}&daily=${encodeURIComponent(OPEN_METEO_DAILY_FIELDS)}&forecast_days=2&timezone=${encodeURIComponent(APP_TIME_ZONE)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    const data = await res.json();
+
+    if (!res.ok || data?.error) {
+      throw new Error(data?.reason || data?.error || 'Weather request failed.');
     }
 
-    const nearest = await fetchMetOfficeNearestLocation(lat, lng);
-    const obsData = await fetchMetOfficeObservations(nearest, lat, lng);
-    const current = pickMetOfficeCurrent(obsData);
-
     state.weather = {
-      current,
-      nextHour: null,
-      sunTimes: null,
-      locationName: formatMetOfficeLocationName(nearest),
-      lastUpdated: current?.time ? current.time.toISOString() : ''
+      current: pickCurrent(data),
+      nextHour: pickNextHour(data),
+      sunTimes: pickSunTimes(data),
+      locationName: data?.timezone || APP_TIME_ZONE,
+      lastUpdated: data?.current?.time || ''
     };
 
     renderWeatherBar();
@@ -2203,234 +2164,76 @@ async function refreshWeather(lat, lng) {
   }
 }
 
-async function fetchMetOfficeJson(url) {
-  const res = await fetch(url, {
-    cache: 'no-store',
-    headers: {
-      apikey: METOFFICE_API_KEY,
-      Accept: 'application/json'
-    }
-  });
-
-  const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {}
-
-  if (!res.ok) {
-    const message = data?.detail || data?.message || data?.title || `Met Office request failed (HTTP ${res.status}).`;
-    throw new Error(message);
-  }
-
-  return data;
+function openMeteoCodeToText(code, isDay = true) {
+  const c = Number(code);
+  if (c === 0) return isDay ? 'Sunny' : 'Clear';
+  if (c === 1) return isDay ? 'Sunny' : 'Clear';
+  if (c === 2) return 'Partly cloudy';
+  if (c === 3) return 'Cloudy';
+  if (c === 45 || c === 48) return 'Fog';
+  if ([51, 53, 55].includes(c)) return 'Drizzle';
+  if ([56, 57].includes(c)) return 'Freezing drizzle';
+  if ([61, 63, 65].includes(c)) return 'Rain';
+  if ([66, 67].includes(c)) return 'Freezing rain';
+  if ([71, 73, 75].includes(c)) return 'Snow';
+  if (c === 77) return 'Snow grains';
+  if ([80, 81, 82].includes(c)) return 'Rain shower';
+  if ([85, 86].includes(c)) return 'Snow shower';
+  if (c === 95) return 'Thunderstorm';
+  if (c === 96 || c === 99) return 'Thunderstorm';
+  return 'Cloudy';
 }
 
-async function fetchMetOfficeNearestLocation(lat, lng) {
-  const candidates = [
-    `${METOFFICE_BASE}/observation-land/1/nearest?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}`,
-    `${METOFFICE_BASE}/observation-land/1/nearest?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`,
-    `${METOFFICE_BASE}/observation-land/1/nearest?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`
-  ];
-
-  let lastErr = null;
-  for (const url of candidates) {
-    try {
-      const data = await fetchMetOfficeJson(url);
-      const location = extractNearestLocation(data);
-      if (location) return location;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error('Unable to find nearest Met Office observation site.');
-}
-
-async function fetchMetOfficeObservations(location, lat, lng) {
-  const geohash = String(location?.geohash || location?.id || '').trim();
-  const candidates = [
-    geohash ? `${METOFFICE_BASE}/observation-land/1/location/${encodeURIComponent(geohash)}` : '',
-    geohash ? `${METOFFICE_BASE}/observation-land/1/location/${encodeURIComponent(geohash)}?includeLocationName=true` : '',
-    geohash ? `${METOFFICE_BASE}/observation-land/1?geohash=${encodeURIComponent(geohash)}` : '',
-    geohash ? `${METOFFICE_BASE}/observation-land/1/observations?geohash=${encodeURIComponent(geohash)}` : '',
-    `${METOFFICE_BASE}/observation-land/1/location?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}`,
-    `${METOFFICE_BASE}/observation-land/1?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}`
-  ].filter(Boolean);
-
-  let lastErr = null;
-  for (const url of candidates) {
-    try {
-      const data = await fetchMetOfficeJson(url);
-      if (extractLatestObservation(data)) return data;
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-
-  throw lastErr || new Error('Unable to load Met Office observations for the nearest site.');
-}
-
-function extractNearestLocation(data) {
-  if (!data) return null;
-
-  if (Array.isArray(data) && data.length) return normalizeNearestLocation(data[0]);
-  if (Array.isArray(data?.features) && data.features.length) return normalizeNearestLocation(data.features[0]?.properties || data.features[0]);
-  if (data?.features?.properties) return normalizeNearestLocation(data.features.properties);
-  if (typeof data === 'object') return normalizeNearestLocation(data);
-  return null;
-}
-
-function normalizeNearestLocation(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  const geohash = String(raw.geohash || raw.id || raw.locationId || '').trim();
-  if (!geohash) return null;
-  return {
-    geohash,
-    area: String(raw.area || raw.name || raw.location || '').trim(),
-    region: String(raw.region || '').trim(),
-    country: String(raw.country || '').trim(),
-    raw
-  };
-}
-
-function formatMetOfficeLocationName(location) {
-  const parts = [location?.area, location?.region, location?.country].filter(Boolean);
-  return parts.join(', ');
-}
-
-function extractLatestObservation(data) {
-  const records = [];
-  collectObservationRecords(data, records, 0);
-  return records
-    .filter(record => record && (hasObservationPayload(record) || parseObservationTime(record)))
-    .sort((a, b) => (parseObservationTime(b)?.getTime() || 0) - (parseObservationTime(a)?.getTime() || 0))[0] || null;
-}
-
-function collectObservationRecords(node, out, depth) {
-  if (!node || depth > 8) return;
-
-  if (Array.isArray(node)) {
-    node.forEach(item => collectObservationRecords(item, out, depth + 1));
-    return;
-  }
-
-  if (typeof node !== 'object') return;
-
-  if (looksLikeObservationRecord(node)) out.push(node);
-
-  const keysToFollow = ['features', 'properties', 'observations', 'timeSeries', 'data', 'values', 'records', 'items'];
-  keysToFollow.forEach(key => {
-    if (node[key] != null) collectObservationRecords(node[key], out, depth + 1);
-  });
-
-  Object.entries(node).forEach(([key, value]) => {
-    if (keysToFollow.includes(key)) return;
-    if (value && typeof value === 'object') collectObservationRecords(value, out, depth + 1);
-  });
-}
-
-function looksLikeObservationRecord(obj) {
-  if (!obj || typeof obj !== 'object') return false;
-  return !!parseObservationTime(obj) || hasObservationPayload(obj);
-}
-
-function hasObservationPayload(obj) {
-  const keys = [
-    'weatherCode', 'screenTemperature', 'temperature', 'airTemperature', 'windSpeed', 'windSpeed10m',
-    'cloudCover', 'totalCloudAmount', 'screenRelativeHumidity', 'precipitationRate', 'pressure'
-  ];
-  return keys.some(key => obj[key] != null);
-}
-
-function parseObservationTime(obj) {
-  const candidates = [
-    obj?.timestamp,
-    obj?.time,
-    obj?.observationTime,
-    obj?.datetime,
-    obj?.referenceTime,
-    obj?.validTime,
-    obj?.valueDate,
-    obj?.dtg
-  ];
-
-  for (const value of candidates) {
-    if (!value) continue;
-    const d = new Date(value);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
-
-  return null;
-}
-
-function firstFiniteNumber(obj, keys) {
-  for (const key of keys) {
-    const value = Number(obj?.[key]);
-    if (Number.isFinite(value)) return value;
-  }
-  return null;
-}
-
-function pickMetOfficeCurrent(data) {
-  const obs = extractLatestObservation(data);
-  if (!obs) throw new Error('No Met Office observation data returned.');
-
-  const time = parseObservationTime(obs) || new Date();
-  const weatherCode = firstFiniteNumber(obs, ['weatherCode', 'screenWeatherCode', 'significantWeatherCode', 'W']);
-  const temp = firstFiniteNumber(obs, ['screenTemperature', 'temperature', 'airTemperature', 'T']);
-  const precipRate = firstFiniteNumber(obs, ['precipitationRate', 'precipRate', 'rainfallRate']);
-  const precipAmount = firstFiniteNumber(obs, ['precipitationAmount', 'precipitation']);
-  const cloudCover = firstFiniteNumber(obs, ['cloudCover', 'totalCloudAmount']);
-  const windMs = firstFiniteNumber(obs, ['windSpeed', 'windSpeed10m', 'windGust']);
-  const windKph = Number.isFinite(windMs) ? windMs * 3.6 : 0;
-  const conditionText = metOfficeConditionText(weatherCode, cloudCover, precipRate, time);
+function pickCurrent(data) {
+  const current = data?.current;
+  if (!current) return null;
 
   return {
-    temp: Number.isFinite(temp) ? temp : 0,
-    precip: Number.isFinite(precipAmount) ? precipAmount : (Number.isFinite(precipRate) ? precipRate : 0),
-    cloudCover: Number.isFinite(cloudCover) ? cloudCover : estimateCloudFromCode(weatherCode),
-    isDay: inferIsDayFromCodeOrTime(weatherCode, time),
-    time,
-    windKph,
-    conditionText,
-    weatherCode,
+    temp: Number(current.temperature_2m),
+    precip: Number(current.precipitation ?? 0),
+    cloudCover: Number(current.cloud_cover ?? 0),
+    isDay: Number(current.is_day) === 1,
+    time: current.time ? new Date(current.time) : new Date(),
+    windKph: Number(current.wind_speed_10m ?? 0),
+    weatherCode: Number(current.weather_code),
+    conditionText: openMeteoCodeToText(current.weather_code, Number(current.is_day) === 1),
     iconUrl: ''
   };
 }
 
-function estimateCloudFromCode(weatherCode) {
-  if (!Number.isFinite(weatherCode)) return 50;
-  if (weatherCode === 1) return 10;
-  if (weatherCode === 3 || weatherCode === 2) return 35;
-  if (weatherCode === 7) return 75;
-  if (weatherCode === 8) return 95;
-  if (isMetOfficeRainCode(weatherCode)) return 85;
-  return 55;
+function pickSunTimes(data) {
+  const sunrise = data?.daily?.sunrise?.[0];
+  const sunset = data?.daily?.sunset?.[0];
+  if (!sunrise || !sunset) return null;
+
+  const sunriseDate = new Date(sunrise);
+  const sunsetDate = new Date(sunset);
+  if (Number.isNaN(sunriseDate.getTime()) || Number.isNaN(sunsetDate.getTime())) return null;
+
+  return { sunrise: sunriseDate, sunset: sunsetDate };
 }
 
-function inferIsDayFromCodeOrTime(weatherCode, time) {
-  if ([0, 2, 9, 13, 16, 19, 22, 25, 28].includes(weatherCode)) return false;
-  if ([1, 3, 10, 14, 17, 20, 23, 26, 29].includes(weatherCode)) return true;
+function pickNextHour(data) {
+  const hourly = data?.hourly;
+  const times = hourly?.time || [];
+  if (!times.length) return null;
 
-  const parts = getLondonDateParts(time || new Date());
-  return parts.hour >= 6 && parts.hour < 21;
+  const nowMs = data?.current?.time ? Date.parse(data.current.time) : Date.now();
+  let nextIndex = times.findIndex(time => Date.parse(time) > nowMs);
+  if (nextIndex < 0) nextIndex = 0;
+
+  return {
+    time: times[nextIndex] ? new Date(times[nextIndex]) : new Date(),
+    temp: Number(hourly?.temperature_2m?.[nextIndex]),
+    rain: Number(hourly?.precipitation_probability?.[nextIndex] ?? 0),
+    precip: null,
+    cloudCover: Number(hourly?.cloud_cover?.[nextIndex] ?? 0),
+    isDay: Number(hourly?.is_day?.[nextIndex]) === 1,
+    windKph: null,
+    weatherCode: Number(hourly?.weather_code?.[nextIndex]),
+    conditionText: openMeteoCodeToText(hourly?.weather_code?.[nextIndex], Number(hourly?.is_day?.[nextIndex]) === 1)
+  };
 }
-
-function isMetOfficeRainCode(code) {
-  return [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 28, 29, 30].includes(Number(code));
-}
-
-function metOfficeConditionText(weatherCode, cloudCover = null, precip = null, time = new Date()) {
-  const codeText = METOFFICE_WEATHER_CODES[Number(weatherCode)];
-  if (codeText) return codeText;
-  if (Number(precip) > 0) return 'Rain';
-  if (Number(cloudCover) <= 20) return inferIsDayFromCodeOrTime(weatherCode, time) ? 'Sunny' : 'Clear';
-  if (Number(cloudCover) <= 60) return 'Partly cloudy';
-  if (Number(cloudCover) > 60) return 'Cloudy';
-  return 'Cloudy';
-}
-
 
 function renderWeatherBar(errorMessage = '') {
   if (!state.weather || !state.weather.current) {
@@ -2442,17 +2245,20 @@ function renderWeatherBar(errorMessage = '') {
   }
 
   const current = state.weather.current;
+  const next = state.weather.nextHour;
   const sunTimes = state.weather.sunTimes || null;
-  const currentMood = weatherMood(current, null, sunTimes, current.time || new Date());
-  const currentLabel = currentWeatherLabel(current, sunTimes, null);
-  const obsTime = current.time ? fmtTime(current.time) : '';
+
+  const currentMood = weatherMood(current, sunTimes, current.time || new Date());
+  const currentLabel = currentWeatherLabel(current, sunTimes);
+  const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
+  const nextTemp = next && Number.isFinite(next.temp) ? `${Math.round(next.temp)}°C` : '—';
+  const nextRain = next && Number.isFinite(next.rain) ? `${Math.round(next.rain)}% rain` : '—';
 
   els.weatherIcon.textContent = currentMood.icon;
-  if (els.weatherTitle) els.weatherTitle.textContent = 'Current conditions · Met Office observation';
+  if (els.weatherTitle) els.weatherTitle.textContent = weatherTitleText(current, sunTimes);
   els.weatherBar.className = `weatherBar ${currentMood.className}`;
-  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · Observed ${obsTime} · Powered by Met Office data`;
+  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · Next hour: ${nextLabel} · ${nextTemp} · ${nextRain}`;
 }
-
 
 function initMap() {
   state.map = L.map('map', { zoomControl: true }).setView([FALLBACK_LOCATION.lat, FALLBACK_LOCATION.lng], 13);
