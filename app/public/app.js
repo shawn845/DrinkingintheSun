@@ -1,10 +1,7 @@
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
 const WEATHER_REFRESH_MS = 5 * 60 * 1000;
-const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
-const OPEN_METEO_CURRENT_FIELDS = 'temperature_2m,weather_code,is_day,cloud_cover,precipitation,wind_speed_10m';
-const OPEN_METEO_HOURLY_FIELDS = 'temperature_2m,weather_code,is_day,cloud_cover,precipitation_probability';
-const OPEN_METEO_DAILY_FIELDS = 'sunrise,sunset';
+const METOFFICE_WORKER_URL = 'https://dits-weather.shawn-4d5.workers.dev/weather';
 const APP_TIME_ZONE = 'Europe/London';
 
 const ROUTES_URL = './public/data/routes.json';
@@ -2138,22 +2135,27 @@ function closeModal(push = false) {
   if (push) history.pushState({}, '', state.currentView === 'map' ? '#map' : '#list');
 }
 
+
 async function refreshWeather(lat, lng) {
   try {
-    const url = `${OPEN_METEO_BASE}?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}&current=${encodeURIComponent(OPEN_METEO_CURRENT_FIELDS)}&hourly=${encodeURIComponent(OPEN_METEO_HOURLY_FIELDS)}&daily=${encodeURIComponent(OPEN_METEO_DAILY_FIELDS)}&forecast_days=2&timezone=${encodeURIComponent(APP_TIME_ZONE)}`;
+    const url = `${METOFFICE_WORKER_URL}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`;
     const res = await fetch(url, { cache: 'no-store' });
     const data = await res.json();
 
-    if (!res.ok || data?.error) {
-      throw new Error(data?.reason || data?.error || 'Weather request failed.');
+    if (!res.ok || data?.ok === false) {
+      throw new Error(data?.error || 'Weather request failed.');
     }
 
+    const current = pickCurrentFromMetOffice(data);
+    const sunTimes = pickSunTimesForLocation(lat, lng, current?.time || new Date());
+    const isDay = isWithinDaylight(current?.time || new Date(), sunTimes);
+
     state.weather = {
-      current: pickCurrent(data),
-      nextHour: pickNextHour(data),
-      sunTimes: pickSunTimes(data),
-      locationName: data?.timezone || APP_TIME_ZONE,
-      lastUpdated: data?.current?.time || ''
+      current: current ? { ...current, isDay } : null,
+      nextHour: null,
+      sunTimes,
+      locationName: data?.station?.name || data?.station?.geohash || 'Met Office',
+      lastUpdated: data?.current?.observedAt || ''
     };
 
     renderWeatherBar();
@@ -2164,75 +2166,66 @@ async function refreshWeather(lat, lng) {
   }
 }
 
-function openMeteoCodeToText(code, isDay = true) {
+function metOfficeCodeToText(code, isDay = true) {
   const c = Number(code);
   if (c === 0) return isDay ? 'Sunny' : 'Clear';
   if (c === 1) return isDay ? 'Sunny' : 'Clear';
-  if (c === 2) return 'Partly cloudy';
-  if (c === 3) return 'Cloudy';
-  if (c === 45 || c === 48) return 'Fog';
-  if ([51, 53, 55].includes(c)) return 'Drizzle';
-  if ([56, 57].includes(c)) return 'Freezing drizzle';
-  if ([61, 63, 65].includes(c)) return 'Rain';
-  if ([66, 67].includes(c)) return 'Freezing rain';
-  if ([71, 73, 75].includes(c)) return 'Snow';
-  if (c === 77) return 'Snow grains';
-  if ([80, 81, 82].includes(c)) return 'Rain shower';
-  if ([85, 86].includes(c)) return 'Snow shower';
-  if (c === 95) return 'Thunderstorm';
-  if (c === 96 || c === 99) return 'Thunderstorm';
+  if (c === 2 || c === 3) return 'Partly cloudy';
+  if (c === 5) return 'Mist';
+  if (c === 6) return 'Fog';
+  if (c === 7 || c === 8) return 'Cloudy';
+  if (c === 9 || c === 10) return 'Light rain shower';
+  if (c === 11) return 'Drizzle';
+  if (c === 12) return 'Light rain';
+  if (c === 13 || c === 14) return 'Heavy rain shower';
+  if (c === 15) return 'Heavy rain';
+  if (c === 16 || c === 17 || c === 18) return 'Sleet';
+  if (c === 19 || c === 20 || c === 21) return 'Hail';
+  if (c === 22 || c === 23 || c === 24) return 'Light snow';
+  if (c === 25 || c === 26 || c === 27) return 'Heavy snow';
+  if (c === 28 || c === 29 || c === 30) return 'Thunderstorm';
   return 'Cloudy';
 }
 
-function pickCurrent(data) {
+function pickCurrentFromMetOffice(data) {
   const current = data?.current;
   if (!current) return null;
 
+  const time = current.observedAt ? new Date(current.observedAt) : new Date();
+  const weatherCode = Number(current.weatherCode);
+  const hasCode = Number.isFinite(weatherCode);
+
   return {
-    temp: Number(current.temperature_2m),
-    precip: Number(current.precipitation ?? 0),
-    cloudCover: Number(current.cloud_cover ?? 0),
-    isDay: Number(current.is_day) === 1,
-    time: current.time ? new Date(current.time) : new Date(),
-    windKph: Number(current.wind_speed_10m ?? 0),
-    weatherCode: Number(current.weather_code),
-    conditionText: openMeteoCodeToText(current.weather_code, Number(current.is_day) === 1),
+    temp: Number(current.tempC),
+    precip: Number(current.precipMm ?? 0),
+    cloudCover: Number.isFinite(Number(current.cloudCover)) ? Number(current.cloudCover) : null,
+    isDay: null,
+    time,
+    windKph: Number.isFinite(Number(current.windMps)) ? Number(current.windMps) * 3.6 : null,
+    weatherCode: hasCode ? weatherCode : null,
+    conditionText: String(current.conditionText || '').trim() || metOfficeCodeToText(weatherCode, true),
     iconUrl: ''
   };
 }
 
-function pickSunTimes(data) {
-  const sunrise = data?.daily?.sunrise?.[0];
-  const sunset = data?.daily?.sunset?.[0];
-  if (!sunrise || !sunset) return null;
+function pickSunTimesForLocation(lat, lng, referenceDate) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
-  const sunriseDate = new Date(sunrise);
-  const sunsetDate = new Date(sunset);
-  if (Number.isNaN(sunriseDate.getTime()) || Number.isNaN(sunsetDate.getTime())) return null;
-
-  return { sunrise: sunriseDate, sunset: sunsetDate };
-}
-
-function pickNextHour(data) {
-  const hourly = data?.hourly;
-  const times = hourly?.time || [];
-  if (!times.length) return null;
-
-  const nowMs = data?.current?.time ? Date.parse(data.current.time) : Date.now();
-  let nextIndex = times.findIndex(time => Date.parse(time) > nowMs);
-  if (nextIndex < 0) nextIndex = 0;
+  const parts = getLondonDateParts(referenceDate instanceof Date ? referenceDate : new Date(referenceDate));
+  const dateAnchor = createUtcAnchorDate(parts.year, parts.month, parts.day);
+  const solar = getSolarTimesLocal(lat, lng, dateAnchor);
+  if (!solar) return null;
 
   return {
-    time: times[nextIndex] ? new Date(times[nextIndex]) : new Date(),
-    temp: Number(hourly?.temperature_2m?.[nextIndex]),
-    rain: Number(hourly?.precipitation_probability?.[nextIndex] ?? 0),
-    precip: null,
-    cloudCover: Number(hourly?.cloud_cover?.[nextIndex] ?? 0),
-    isDay: Number(hourly?.is_day?.[nextIndex]) === 1,
-    windKph: null,
-    weatherCode: Number(hourly?.weather_code?.[nextIndex]),
-    conditionText: openMeteoCodeToText(hourly?.weather_code?.[nextIndex], Number(hourly?.is_day?.[nextIndex]) === 1)
+    sunrise: minutesToLocalDate(dateAnchor, solar.sunrise),
+    sunset: minutesToLocalDate(dateAnchor, solar.sunset)
   };
+}
+
+function isWithinDaylight(dateObj, sunTimes) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return true;
+  if (!sunTimes?.sunrise || !sunTimes?.sunset) return true;
+  return dateObj >= sunTimes.sunrise && dateObj < sunTimes.sunset;
 }
 
 function renderWeatherBar(errorMessage = '') {
@@ -2250,14 +2243,23 @@ function renderWeatherBar(errorMessage = '') {
 
   const currentMood = weatherMood(current, sunTimes, current.time || new Date());
   const currentLabel = currentWeatherLabel(current, sunTimes);
-  const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
-  const nextTemp = next && Number.isFinite(next.temp) ? `${Math.round(next.temp)}°C` : '—';
-  const nextRain = next && Number.isFinite(next.rain) ? `${Math.round(next.rain)}% rain` : '—';
+  const observedText = current.time instanceof Date && !Number.isNaN(current.time.getTime())
+    ? `Observed ${fmtTime(current.time)}`
+    : 'Met Office';
 
   els.weatherIcon.textContent = currentMood.icon;
   if (els.weatherTitle) els.weatherTitle.textContent = weatherTitleText(current, sunTimes);
   els.weatherBar.className = `weatherBar ${currentMood.className}`;
-  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · Next hour: ${nextLabel} · ${nextTemp} · ${nextRain}`;
+
+  if (next) {
+    const nextLabel = nextHourLabel(next);
+    const nextTemp = Number.isFinite(next.temp) ? `${Math.round(next.temp)}°C` : '—';
+    const nextRain = Number.isFinite(next.rain) ? `${Math.round(next.rain)}% rain` : '—';
+    els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · Next hour: ${nextLabel} · ${nextTemp} · ${nextRain}`;
+    return;
+  }
+
+  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · ${observedText}`;
 }
 
 function initMap() {
