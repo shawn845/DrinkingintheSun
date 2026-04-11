@@ -706,42 +706,38 @@ function hasFogWords(text = '') {
   return /(fog|mist|overcast|freezing fog)/i.test(String(text || ''));
 }
 
-function weatherMood(currentObj = null, nextObj = null, sunTimes = null, atTime = null) {
+function weatherMood(currentObj = null, sunTimes = null, atTime = null) {
   const referenceTime = atTime || currentObj?.time || new Date();
   const phase = sunPhaseForWeather(currentObj, sunTimes, referenceTime);
   const isDay = phase === 'day';
 
   const currentText = String(currentObj?.conditionText || '').trim();
-  const nextText = String(nextObj?.conditionText || '').trim();
-  const combinedText = `${currentText} ${nextText}`.trim();
-
   const precipNow = Number(currentObj?.precip ?? 0);
-  const rainChance = Number(nextObj?.rain ?? 0);
   const cloudNow = Number(currentObj?.cloudCover ?? 0);
-  const cloudNext = Number(nextObj?.cloudCover ?? cloudNow);
 
   if (!isDay) {
-    if (precipNow >= 0.1 || hasRainWords(combinedText) || rainChance >= 65) {
+    if (precipNow >= 0.1 || hasRainWords(currentText)) {
       return { icon: '🌧️', className: 'night-rainy', tone: 'rainy' };
     }
 
-    if (cloudNow <= 35 && !hasFogWords(combinedText)) {
+    if (cloudNow <= 35 && !hasFogWords(currentText) && /(clear)/i.test(currentText)) {
       return { icon: '🌙', className: 'night-clear', tone: 'cloudy' };
     }
 
     return { icon: '☁️', className: 'night-cloudy', tone: 'cloudy' };
   }
 
-  if (precipNow >= 0.1 || hasRainWords(combinedText) || rainChance >= 65) {
+  if (precipNow >= 0.1 || hasRainWords(currentText)) {
     return { icon: '🌧️', className: 'rainy', tone: 'rainy' };
   }
 
-  if (!hasFogWords(combinedText) && (/(sunny|clear)/i.test(combinedText) || (cloudNow <= 35 && cloudNext <= 55))) {
+  if (!hasFogWords(currentText) && (/(sunny|clear)/i.test(currentText) || cloudNow <= 35)) {
     return { icon: '☀️', className: 'sunny', tone: 'sunny' };
   }
 
   return { icon: '⛅', className: 'cloudy', tone: 'cloudy' };
 }
+
 
 function sunPhaseForWeather(currentObj, sunTimes = null, atTime = new Date()) {
   if (sunTimes?.sunrise instanceof Date && sunTimes?.sunset instanceof Date && !Number.isNaN(sunTimes.sunrise.getTime()) && !Number.isNaN(sunTimes.sunset.getTime())) {
@@ -764,7 +760,7 @@ function describeWeather(currentObj, nextObj = null, sunTimes = null) {
   if (!currentObj) return 'Weather unavailable';
 
   const phase = sunPhaseForWeather(currentObj, sunTimes, currentObj.time || new Date());
-  const mood = weatherMood(currentObj, nextObj, sunTimes, currentObj.time || new Date());
+  const mood = weatherMood(currentObj, sunTimes, currentObj.time || new Date());
   const text = String(currentObj.conditionText || '').trim();
 
   if (phase === 'after-sunset') {
@@ -813,7 +809,6 @@ function getWeatherTone() {
 
   const mood = weatherMood(
     state.weather.current,
-    state.weather.nextHour,
     state.weather.sunTimes,
     state.weather.current.time || new Date()
   );
@@ -2249,8 +2244,8 @@ function renderWeatherBar(errorMessage = '') {
   const next = state.weather.nextHour;
   const sunTimes = state.weather.sunTimes || null;
 
-  const currentMood = weatherMood(current, next, sunTimes, current.time || new Date());
-  const currentLabel = currentWeatherLabel(current, sunTimes, next);
+  const currentMood = weatherMood(current, sunTimes, current.time || new Date());
+  const currentLabel = currentWeatherLabel(current, sunTimes);
   const nextLabel = next ? nextHourLabel(next) : 'Unavailable';
   const nextTemp = next && Number.isFinite(next.temp) ? `${Math.round(next.temp)}°C` : '—';
   const nextRain = next && Number.isFinite(next.rain) ? `${Math.round(next.rain)}% rain` : '—';
