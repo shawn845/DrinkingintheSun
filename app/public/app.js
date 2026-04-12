@@ -16,6 +16,7 @@ const state = {
   markerLayer: null,
   currentView: 'list',
   modalReturnView: 'list',
+  currentDetailPubId: null,
   userMarker: null,
   userAccuracyCircle: null,
   weatherRefreshTimer: null,
@@ -89,7 +90,7 @@ async function init() {
   initMap();
   setRowTitles();
   startWeatherRefresh();
-  if (location.hash === '#map') setView('map', false);
+  handleRouteFromHash();
 }
 
 async function loadRoutes() {
@@ -153,13 +154,46 @@ function wireUi() {
   });
 
   window.addEventListener('popstate', () => {
-    if (!els.modalOverlay.classList.contains('isHidden')) {
-      closeModal(false);
+    handleRouteFromHash();
+  });
+}
+
+
+function parseHashRoute() {
+  const hash = String(location.hash || '').trim();
+
+  if (hash === '#map') return { type: 'map' };
+  if (!hash || hash === '#list') return { type: 'list' };
+
+  const match = hash.match(/^#pub-(.+)$/);
+  if (match) {
+    try {
+      return { type: 'pub', pubId: decodeURIComponent(match[1]) };
+    } catch {
+      return { type: 'list' };
+    }
+  }
+
+  return { type: 'list' };
+}
+
+function handleRouteFromHash() {
+  const route = parseHashRoute();
+
+  if (route.type === 'pub' && route.pubId) {
+    const exists = state.pubs.find(p => p.id === route.pubId);
+    if (exists) {
+      openDetail(route.pubId, state.currentView || 'list', false);
       return;
     }
-    if (location.hash === '#map') setView('map', false);
-    else setView('list', false);
-  });
+  }
+
+  if (!els.modalOverlay.classList.contains('isHidden')) {
+    closeModal(false);
+  }
+
+  if (route.type === 'map') setView('map', false);
+  else setView('list', false);
 }
 
 function setView(view, push = true) {
@@ -1265,12 +1299,14 @@ function renderDetailGallery(pub) {
   `;
 }
 
-function openDetail(pubId, sourceView = 'list') {
+function openDetail(pubId, sourceView = 'list', push = true) {
   state.modalReturnView = sourceView || state.currentView;
   if (state.currentView === 'map') setView('list', false);
 
   const pub = state.pubs.find(p => p.id === pubId);
   if (!pub) return;
+
+  state.currentDetailPubId = pubId;
 
   const now = new Date();
   const curatedRoute = getCuratedRouteForPub(pub);
@@ -1291,6 +1327,7 @@ function openDetail(pubId, sourceView = 'list') {
       ${pub.notes ? `<div class="detailNotes">${escapeHtml(pub.notes)}</div>` : ''}
       <div class="detailActions">
         <a class="pillBtn" href="${mapsHref(pub.lat, pub.lng, pub.name)}" target="_blank" rel="noopener">Directions</a>
+        <button class="pillBtn" type="button" id="btnSharePub">Share</button>
         ${curatedRoute
           ? `<button class="pillBtn" type="button" id="btnRecommendedRide">Recommended ride</button>`
           : yesFlag(pub.cycleFriendly)
@@ -1309,7 +1346,124 @@ function openDetail(pubId, sourceView = 'list') {
   els.modalOverlay.classList.remove('isHidden');
   bindDetailGalleryDots();
   bindCuratedRide(pub, curatedRoute);
-  history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
+  bindShareButton(pub);
+
+  if (push) {
+    history.pushState({ modal: pubId }, '', `#pub-${encodeURIComponent(pubId)}`);
+  }
+}
+
+
+
+function shareUrlForPub(pub) {
+  const url = new URL(window.location.href);
+  url.hash = `#pub-${encodeURIComponent(pub.id)}`;
+  return url.toString();
+}
+
+function shareTextForPub(pub) {
+  const display = getDisplayStatus(pub);
+  const line = display?.line ? ` ${display.line}` : '';
+  return `${pub.name}${line} on Drinking in the Sun`;
+}
+
+function ensureShareToast() {
+  let toast = document.getElementById('shareToast');
+  if (toast) return toast;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .shareToast {
+      position: fixed;
+      left: 50%;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(10px);
+      background: rgba(47,47,47,.96);
+      color: #fff;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 14px;
+      line-height: 1;
+      box-shadow: 0 10px 24px rgba(0,0,0,.18);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 9999;
+    }
+
+    .shareToast.isVisible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  `;
+  document.head.appendChild(style);
+
+  toast = document.createElement('div');
+  toast.id = 'shareToast';
+  toast.className = 'shareToast';
+  toast.setAttribute('aria-live', 'polite');
+  document.body.appendChild(toast);
+  return toast;
+}
+
+function showShareToast(message) {
+  const toast = ensureShareToast();
+  toast.textContent = message;
+  toast.classList.add('isVisible');
+  clearTimeout(showShareToast._timer);
+  showShareToast._timer = setTimeout(() => {
+    toast.classList.remove('isVisible');
+  }, 1800);
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'absolute';
+  area.style.left = '-9999px';
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand('copy');
+  document.body.removeChild(area);
+}
+
+async function sharePub(pub) {
+  if (!pub) return;
+
+  const url = shareUrlForPub(pub);
+  const text = shareTextForPub(pub);
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: pub.name,
+        text,
+        url
+      });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    await copyText(url);
+    showShareToast('Link copied');
+  } catch (err) {
+    showShareToast('Could not copy link');
+  }
+}
+
+function bindShareButton(pub) {
+  const btn = document.getElementById('btnSharePub');
+  if (!btn) return;
+  btn.addEventListener('click', () => sharePub(pub));
 }
 
 function renderSpotCard(kicker, name, windowObj, stateObj) {
@@ -2126,6 +2280,7 @@ function closeModal(push = false) {
 
   els.modalOverlay.classList.add('isHidden');
   els.modalContent.innerHTML = '';
+  state.currentDetailPubId = null;
   unlockBodyScroll();
 
   const ret = state.modalReturnView || 'list';
