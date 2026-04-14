@@ -2310,7 +2310,7 @@ async function refreshWeather(lat, lng) {
       nextHour: null,
       sunTimes,
       locationName: data?.station?.name || data?.station?.geohash || 'Met Office',
-      lastUpdated: data?.current?.observedAt || ''
+      lastUpdated: data?.current?.UpdatedAt || ''
     };
 
     renderWeatherBar();
@@ -2346,7 +2346,7 @@ function pickCurrentFromMetOffice(data) {
   const current = data?.current;
   if (!current) return null;
 
-  const time = current.observedAt ? new Date(current.observedAt) : new Date();
+  const time = current.UpdatedAt ? new Date(current.UpdatedAt) : new Date();
   const weatherCode = Number(current.weatherCode);
   const hasCode = Number.isFinite(weatherCode);
 
@@ -2398,8 +2398,8 @@ function renderWeatherBar(errorMessage = '') {
 
   const currentMood = weatherMood(current, sunTimes, current.time || new Date());
   const currentLabel = currentWeatherLabel(current, sunTimes);
-  const observedText = current.time instanceof Date && !Number.isNaN(current.time.getTime())
-    ? `Observed ${fmtTime(current.time)}`
+  const UpdatedText = current.time instanceof Date && !Number.isNaN(current.time.getTime())
+    ? `Updated ${fmtTime(current.time)}`
     : 'Met Office';
 
   els.weatherIcon.textContent = currentMood.icon;
@@ -2414,7 +2414,7 @@ function renderWeatherBar(errorMessage = '') {
     return;
   }
 
-  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · ${observedText}`;
+  els.weatherLine.textContent = `${currentLabel} · ${Math.round(current.temp)}°C · ${UpdatedText}`;
 }
 
 function initMap() {
