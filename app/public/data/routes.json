@@ -1,11 +1,72 @@
 {
+  "the_martin": {
+    "id": "the_martin",
+    "pubName": "The Martin",
+    "start": {
+      "label": "Near Nottingham city centre",
+      "lat": 52.947074,
+      "lng": -1.147203
+    },
+    "end": {
+      "label": "The Martin",
+      "lat": 52.891962,
+      "lng": -0.956514
+    },
+    "stats": {
+      "routePoints": 442,
+      "distanceKm": 22.77,
+      "minutesAt15kph": 91,
+      "minutesAt18kph": 76
+    },
+    "map": {
+      "bbox": [
+        -1.147386,
+        52.891962,
+        -0.956514,
+        52.948391
+      ],
+      "encodedPolyline5": "efdbI~`_FiAd@OcBSqEKoCKoCIqCMeCIyCOaDIqCAY@QBQFMEO[?KWIO?c@K]MXp@B^Op@KpBI|@Af@ARJb@A|@Bf@?fA?fAErAIdA]x@OxABrAAhA?bACpACnAEjAKnAu@RGP_@\\_A^qATgALoA?w@[kBi@yCHa@\\FVTxBfBfA`AzA`Bi@pADJx@cCzAkGDK@_@m@HeBeAsBsAeAkAiC}AiBkB_CiCSu@_BgFcAaE[iDG_D?eBNuPv@eIZaBJw@RsC?wEQaFa@{E_@oC[{DoB_Jg@sCc@sB{@qHEcAAiCJ}C`A}IrAyDbAyDt@eC~@eDRy@lBwLFkA^}H?m@Kk@DW?oASmDO_@_AgEUs@wBkFm@e@w@u@U]yAaBuC{FHSp@{AVAUo@He@Sa@Bq@Bk@KwA^_@RE|ArA@mCD_@~HpQhCr@l@XFLvByDaF_MyCwGTe@Ne@`@Ij@DTJNR\\cAoAqCkAmCi@mAa@sAq@{Dm@mDs@kCw@kB}@aB}@yAy@uAk@sAQi@a@sAc@cBSuAOeBK{AEmAAqA?mA@wAF{@Fs@JaAPkARoARmAPyAHeANiADw@@s@@]CcAG{AIwAGcAOmBGwAMsBM}BEu@IsAsBgZYiESgCc@uEU{B_@{B]cBw@oBIw@Eu@IsBYoKM{DGmEEiGCsECeCPTd@dAb@dAHZlAtBbC`EfA~AdAxA|AdBpApAjB|AxA~@|AdAfBj@fCp@dBb@lBNzDTvBK~AOhAKfAQnBi@bBo@zAi@t@c@fBkAbB{AlCgC~AaBtBuB`BaB|A}A`BgB`DcDrBqBtAwA~AaBzBqCfBcCnBsCnAmB`CwDzAaCnBwDbBiE~@{CNcAUiABuBX_DL]X]b@Un@Kd@Cf@c@TYf@qAz@wBp@iBj@{AdAkCt@kBbAkCJId@u@j@uAz@gBX[z@mAd@u@lEqDNNN?~AeBrBm@vAc@j@]lAeBb@kBR_ALu@?yACo@Ko@BSMqBZmBb@i@dAV?cA@eBCqESkCMwCAaBQeAgAwDe@}A]qBSaBG{@BwDAeCAkDCgCIqBGiBEgCNqBJmABwBCoAGs@WeAc@u@}A_Bk@kAm@mAwCkGi@wAWg@mA{BoAeCsAgCeAkBkBmCiAcBmAaB}AgBcAoAeAcBgAqBw@qBmAcD]sBYy@?oAJuBX{EJwAf@eCz@sC~@_Dv@aB|@{@hAKhAFdADn@Cx@Sp@IxAkAzAiBj@iAx@gBfA{DXkA^cAf@u@hA_A|@k@dBeAzA}@nAw@tA}@lAc@dBE~@JvAj@`Ab@pAr@t@d@h@^f@NLBL?D?lAkJd@kD^uDBm@?eF@uCBo@EeA@qAAYCU_@oJl@qGIaYkCsHy@yUDgQl@mTzCaOpB_JzBuLtBiJvB?tD`C~CdB~CnBzCfB|@`@dBeAdElAxDbAnDlApBr@jC`GjBdFtCrGrA{@~BaCrAaDtBeEjCj@rA?`BQbA_C\\uDl@uE|@mI`CYjCh@r@nBb@qCx@qCzBoB`BgCjCaC"
+    }
+  },
+  "durham_ox_inn": {
+    "id": "durham_ox_inn",
+    "pubName": "The Durham Ox",
+    "start": {
+      "label": "Near Nottingham city centre",
+      "lat": 52.954342,
+      "lng": -1.138367
+    },
+    "end": {
+      "label": "The Durham Ox",
+      "lat": 52.961178,
+      "lng": -0.85412
+    },
+    "stats": {
+      "routePoints": 679,
+      "distanceKm": 31.73,
+      "minutesAt15kph": 127,
+      "minutesAt18kph": 106,
+      "recordedDurationMinutes": 112,
+      "approxElevationGainM": 120,
+      "approxElevationLossM": 128
+    },
+    "map": {
+      "bbox": [
+        -1.138737,
+        52.938024,
+        -0.85412,
+        53.004807
+      ],
+      "encodedPolyline5": "ssebIxi}EFLFLN[Vg@DIf@aAn@qAVv@p@fBPXp@j@p@f@z@@xAQDAvAWIJ[AI?GCoA?GLAPAtAOLAfDSTAF?BAAUAICcCP}CH_DZ{DBoAHa@r@a@H@NEHEJIFKAKGa@CQLGb@SJEtBcAt@w@i@b@q@L]x@}CNHNLDOJ[p@Ob@WLJLFFIZbA|@hAv@bAd@d@RZ\b@n@r@TXb@l@JTZ]lBsA`IsGr@s@l@a@vAw@lDuAz@k@v@}@n@cApAwCF_@JWCi@G]@[COGQAe@CIKa@M[Om@E[GUCOMu@?CCSAKC]AIGm@CYAOCSQiBAMCWCQAGKaACSGm@Gc@EUEQ?EG]ESESCQKi@CMCOAQG]E[?CE_@AUEc@C[CUEy@Ca@A[A[?IGkACq@?KC[A_@AOAOQiBAMC]?I?E?e@?YB}@L_ADe@AcA?ACe@?GEe@KyAUmBCMAI_@{CEaAD[LMlL{@t@MdA]HCAq@Ei@c@qBIYI_@IWAGSmA?GAGGkD?yB@kF?[?qG?mAGcBDg@?C@C@CBI@G_AsAc@_AM_@a@aBMo@Ia@UaBs@}H[iByAqFMi@Kc@QkAG}@As@HkBNeAxAuGFa@^mCVyDAoDKmCa@gDa@mB}@{CeA{BeBkDaD_Hi@kAa@wAaBgJi@sBIWq@_BcEiHc@eAEOYy@y@aDMu@UmCEi@AQAUCc@?{@B_GHuAzAoKL{AJcA@YD_AC_AQeE_@kFc@eIEw@AC?KkBoXAK?EGq@C_@OiCE[w@cJSoBAIc@iC[wAs@mBOaAy@qZMiS?e@IqPAwCA_BAQFcAR}@pAkCj@uAAc@D_ABW@KJmACiAEc@U}BAmANyCA_@Kq@Kc@AEWiAAm@d@}C@YIgBMmAEc@E[I@EM?QDGB?WaCIm@OcBAGEi@Gi@Cw@FqBNkD?}CGs@Os@[cBa@_CUeBYoDMiCCa@O{CGeAK}BGwAWoEAM[sDQyBAMWqCAWKEQcBCMEk@QkAWiCuAeREiBKS?WAUFYQsJOmT_@aJHCOaCAKIBWcDOUC[E]De@S{A_@aBkDyMo@eDWeBu@gIKcDGu@mDzDcBpAs@RUL}ArBc@ZyCFoD^mCt@_Fz@oOhBgBdBaAd@u@H{@IyCo@q@RcGrHEDkApBm@rAHZwBrD{KpPc@f@{ArAcFjDyAlA{AjCOPUJe@IgCwAsBi@q@Ky@G_@UGKc@_Ak@y@U[s@cAO[m@cC_@eAe@k@a@UoAa@yAIq@GMIw@o@c@_@WQk@CeFLiBFiC^yAJw@Cy@Q[Mk@c@m@kAqAoEuBuDi@wAmBcGgFgOc@gB[iBOi@uCcH[mAWyAy@sE_BgIe@mDoAoUs@qM@mAHu@^iJ?QZcFLmDBc@@M?EX}HNsBlAcLBa@?OMiD?K@]@Y@IZqE@cDDgBJeANg@JSRIpAQRYHMrBsHbC_IjAwDhBqFhAsDj@sAu@u@e@o@AEGGAAo@w@W]c@_@eAkA}BwBMO_@]QOm@q@QW_@i@{@mA[a@k@_As@sAaAyBCGa@_Ac@eBOi@}@wDsAcGa@iByBsIa@mAQm@{@_CgHoKw@iB_A_FiCgGUc@_GqJa@QeCq@qCoAc@c@mC_EuFkHyAyBwF_Is@s@}CoBYWMQuCaJ]o@WYeA{@sA_@yAO}A]iHsDiFoDe@[e@k@Oa@Iu@i@wBY{@EIl@_CpEsSjI}YjAcCdDkDh@w@bDiHfFqHx@oAx@sA`@o@tAqCjAmCp@cBVkAv@Td@|@Fh@AxB@n@Hl@bDjELFJGPy@dCiOFo@?aBDk@Ja@dAoA`BeAhE}DtGgL|EuKhF{In@w@lIsHz@i@Eu@o@kF@u@Jq@b@yAJ{@PcFVuECuCKmI@}BFmAz@{IDk@lAgSh@sKh@qFf@aELyAB{AV}KHcA~AwEjFeNJWFWVeAlHo^n@f@z@p@lEiNr@wDzBsQLeAdBqQ~Iip@|AqLjD`Cj@fARd@Zp@p@n@bClAfAr@~AtALLh@f@~@~AhApBrAlCxAvCvKlU~Px^h@|@NNbEtAdAVhA{M`@_DrA{GZsBR{CXiCPkAn@uDHgAhAq^B_APgGBaA?Q@q@^kRBsANgCBkAAuAQoB@eADa@n@eCzBmI@E"
+    }
+  },
   "bearded_theory": {
     "id": "bearded_theory",
     "pubName": "Cycle to Bearded Theory with Zig Zag Thursday 21 May 2026",
     "start": {
       "label": "Nottingham Library",
       "lat": 52.949643,
-      "lng": 1.147796
+      "lng": -1.147796
     },
     "end": {
       "label": "Cycle to Bearded Theory with Zig Zag Thursday 21 May 2026",
