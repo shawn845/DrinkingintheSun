@@ -404,7 +404,7 @@ function enrichPub(pub) {
         horizon: pub.spotBHorizon,
         targetDateStr: today
       })
-    : null;
+    : [];
 
   const best = chooseBestWindow(aToday, bToday, now);
   const distanceKm = state.userLocation
@@ -418,16 +418,51 @@ function reEnrichAll() {
   state.pubs = state.pubs.map(enrichPub);
 }
 
+function normalizeWindowList(value) {
+  const list = Array.isArray(value) ? value : (value ? [value] : []);
+  return list
+    .filter(w => w && w.start instanceof Date && w.end instanceof Date && w.end > w.start)
+    .sort((a, b) => a.start - b.start);
+}
+
+function mergeNearbySunWindows(windows, minGapMinutes = 4, minDurationMinutes = 4) {
+  const list = normalizeWindowList(windows);
+  if (!list.length) return [];
+
+  const merged = [{ start: new Date(list[0].start), end: new Date(list[0].end) }];
+
+  for (let i = 1; i < list.length; i++) {
+    const prev = merged[merged.length - 1];
+    const curr = list[i];
+    const gapMinutes = (curr.start - prev.end) / 60000;
+
+    if (gapMinutes <= minGapMinutes) {
+      prev.end = new Date(Math.max(prev.end.getTime(), curr.end.getTime()));
+    } else {
+      merged.push({ start: new Date(curr.start), end: new Date(curr.end) });
+    }
+  }
+
+  return merged.filter(w => ((w.end - w.start) / 60000) >= minDurationMinutes);
+}
+
+function formatWindowRanges(windows) {
+  const list = normalizeWindowList(windows);
+  if (!list.length) return 'No sun today';
+  return list.map(w => `${fmtTime(w.start)}–${fmtTime(w.end)}`).join(', ');
+}
+
 function resolveSpotWindow({ lat, lng, baseDate, startHHMM, endHHMM, horizon, targetDateStr }) {
   if (hasHorizonProfile(horizon)) {
     return getWindowFromHorizon(lat, lng, horizon, targetDateStr);
   }
 
   if (hasLegacyWindow(baseDate, startHHMM, endHHMM)) {
-    return shiftWindow(lat, lng, baseDate, startHHMM, endHHMM, targetDateStr);
+    const shifted = shiftWindow(lat, lng, baseDate, startHHMM, endHHMM, targetDateStr);
+    return shifted ? [shifted] : [];
   }
 
-  return null;
+  return [];
 }
 
 function shiftWindow(lat, lng, baseDateStr, startHHMM, endHHMM, targetDateStr) {
@@ -548,29 +583,43 @@ function getSunPositionLocal(lat, lng, dateObj) {
 
 function getWindowFromHorizon(lat, lng, horizonStr, targetDateStr) {
   const profile = parseHorizonProfile(horizonStr);
-  if (profile.length < 2) return null;
+  if (profile.length < 2) return [];
 
   const targetDate = parseISODate(targetDateStr);
   const stepMinutes = 2;
-  let firstSun = null;
-  let lastSun = null;
+  const dayStartMinutes = 7 * 60;
+  const dayEndMinutes = 23 * 60;
 
-  for (let minutes = 7 * 60; minutes <= 23 * 60; minutes += stepMinutes) {
+  const windows = [];
+  let currentStart = null;
+
+  for (let minutes = dayStartMinutes; minutes <= dayEndMinutes; minutes += stepMinutes) {
     const dt = minutesToLocalDate(targetDate, minutes);
     const sun = getSunPositionLocal(lat, lng, dt);
     const obstructionAlt = horizonAltitudeAt(profile, sun.azimuth);
     const inSun = sun.elevation > obstructionAlt;
 
-    if (inSun && !firstSun) firstSun = new Date(dt);
-    if (inSun) lastSun = new Date(dt);
+    if (inSun && !currentStart) {
+      currentStart = new Date(dt);
+    }
+
+    if (!inSun && currentStart) {
+      windows.push({
+        start: new Date(currentStart),
+        end: new Date(dt)
+      });
+      currentStart = null;
+    }
   }
 
-  if (!firstSun || !lastSun) return null;
+  if (currentStart) {
+    windows.push({
+      start: new Date(currentStart),
+      end: minutesToLocalDate(targetDate, dayEndMinutes)
+    });
+  }
 
-  return {
-    start: firstSun,
-    end: lastSun
-  };
+  return mergeNearbySunWindows(windows, 4, 4);
 }
 
 function hhmmToMinutes(hhmm) {
@@ -713,22 +762,27 @@ function createUtcAnchorDate(year, month, day) {
 }
 
 function getWindows(pub) {
-  const out = [];
-  if (pub.spotAToday) out.push(pub.spotAToday);
-  if (pub.spotBToday) out.push(pub.spotBToday);
-  return out;
+  return [
+    ...normalizeWindowList(pub.spotAToday),
+    ...normalizeWindowList(pub.spotBToday)
+  ].sort((a, b) => a.start - b.start);
 }
 
 function getWindowStats(pub, now) {
-  const windows = getWindows(pub).filter(w => w && w.end > w.start);
+  const windows = getWindows(pub).filter(w => w.end > w.start);
   const remaining = windows.filter(w => w.end > now);
 
   const active = remaining.find(w => now >= w.start && now <= w.end) || null;
   const next = remaining.filter(w => now < w.start).sort((a, b) => a.start - b.start)[0] || null;
-  const latestRemainingWindow = remaining.sort((a, b) => b.end - a.end)[0] || null;
+  const latestRemainingWindow = remaining.slice().sort((a, b) => b.end - a.end)[0] || null;
   const latestRemainingEnd = latestRemainingWindow ? latestRemainingWindow.end : null;
 
-  return { activeWindow: active, nextWindow: next, latestRemainingEnd, latestRemainingWindow };
+  return {
+    activeWindow: active,
+    nextWindow: next,
+    latestRemainingEnd,
+    latestRemainingWindow
+  };
 }
 
 function hasRainWords(text = '') {
@@ -890,36 +944,64 @@ function getDisplayStatus(pub) {
 
 function buildSpotStateWeatherAware(windowObj, now) {
   const tone = getWeatherTone();
+  const windows = normalizeWindowList(windowObj);
 
-  if (!windowObj) return { status: 'Sun time unavailable', line: '', badge: 'Unavailable' };
-
-  const inWindow = now >= windowObj.start && now <= windowObj.end;
-  const upcoming = now < windowObj.start;
-
-  if (inWindow) {
-    if (tone === 'sunny') return { status: 'Sunny now', line: `Sun until ${fmtTime(windowObj.end)}`, badge: 'Best now' };
-    if (tone === 'cloudy') return { status: 'Cloudy now', line: `Sun until ${fmtTime(windowObj.end)}`, badge: 'Best now' };
-    return { status: 'Not sunny now', line: `Sun until ${fmtTime(windowObj.end)}`, badge: 'Best now' };
+  if (!windows.length) {
+    return {
+      status: 'Finished today',
+      line: 'No sun today',
+      badge: 'No sun today'
+    };
   }
 
-  if (upcoming) {
-    if (tone === 'rainy') return { status: 'Rainy now', line: `Sun from ${fmtTime(windowObj.start)}`, badge: 'Later today' };
-    if (tone === 'cloudy') return { status: 'Cloudy now', line: `Sun from ${fmtTime(windowObj.start)}`, badge: 'Later today' };
-    return { status: 'Not sunny now', line: `Sun from ${fmtTime(windowObj.start)}`, badge: 'Later today' };
+  const active = windows.find(w => now >= w.start && now <= w.end) || null;
+  const next = windows.find(w => now < w.start) || null;
+  const hadEarlier = windows.some(w => w.end <= now);
+
+  if (active) {
+    if (tone === 'sunny') return { status: 'Sunny now', line: `Sun until ${fmtTime(active.end)}`, badge: 'Best now' };
+    if (tone === 'cloudy') return { status: 'Cloudy now', line: `Sun until ${fmtTime(active.end)}`, badge: 'Best now' };
+    return { status: 'Not sunny now', line: `Sun until ${fmtTime(active.end)}`, badge: 'Best now' };
   }
 
-  return { status: 'Finished today', line: 'No more sun today', badge: 'Finished today' };
+  if (next) {
+    const prefix = hadEarlier ? 'Sun again from' : 'Sun from';
+    if (tone === 'rainy') return { status: 'Rainy now', line: `${prefix} ${fmtTime(next.start)}`, badge: 'Later today' };
+    if (tone === 'cloudy') return { status: 'Cloudy now', line: `${prefix} ${fmtTime(next.start)}`, badge: 'Later today' };
+    return { status: 'Not sunny now', line: `${prefix} ${fmtTime(next.start)}`, badge: 'Later today' };
+  }
+
+  return {
+    status: 'Finished today',
+    line: 'No more sun today',
+    badge: 'Finished today'
+  };
 }
 
 function chooseBestWindow(a, b, now) {
-  const candidates = [a, b].filter(Boolean);
-  if (!candidates.length) return { state: 'none', line: 'Sun time unavailable', window: null };
+  const candidates = [
+    ...normalizeWindowList(a),
+    ...normalizeWindowList(b)
+  ].sort((x, y) => x.start - y.start);
+
+  if (!candidates.length) {
+    return { state: 'none', line: 'No sun today', window: null };
+  }
 
   const active = candidates.find(w => now >= w.start && now <= w.end);
-  if (active) return { state: 'sunny', line: `Sun until ${fmtTime(active.end)}`, window: active };
+  if (active) {
+    return { state: 'sunny', line: `Sun until ${fmtTime(active.end)}`, window: active };
+  }
 
-  const upcoming = candidates.filter(w => now < w.start).sort((x, y) => x.start - y.start)[0];
-  if (upcoming) return { state: 'shade', line: `Sun from ${fmtTime(upcoming.start)}`, window: upcoming };
+  const upcoming = candidates.find(w => now < w.start) || null;
+  if (upcoming) {
+    const hadEarlier = candidates.some(w => w.end <= now);
+    return {
+      state: 'shade',
+      line: `${hadEarlier ? 'Sun again from' : 'Sun from'} ${fmtTime(upcoming.start)}`,
+      window: upcoming
+    };
+  }
 
   return { state: 'none', line: 'No more sun today', window: null };
 }
@@ -1338,7 +1420,7 @@ function openDetail(pubId, sourceView = 'list', push = true) {
     ${curatedRoute ? renderCuratedRideCard(pub, curatedRoute) : ''}
     <div class="spotList">
       ${renderSpotCard('Location', pub.spotA, pub.spotAToday, aState)}
-      ${pub.spotB && pub.spotBToday ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState) : ''}
+      ${pub.spotB && normalizeWindowList(pub.spotBToday).length ? renderSpotCard('Location', pub.spotB, pub.spotBToday, bState) : ''}
     </div>
   `;
 
@@ -1467,16 +1549,23 @@ function bindShareButton(pub) {
 }
 
 function renderSpotCard(kicker, name, windowObj, stateObj) {
-  const todayStart = new Date(windowObj.start);
+  const windows = normalizeWindowList(windowObj);
+  const baseDate = windows[0]?.start ? new Date(windows[0].start) : new Date();
+
+  const todayStart = new Date(baseDate);
   todayStart.setHours(7, 0, 0, 0);
 
-  const todayEnd = new Date(windowObj.start);
+  const todayEnd = new Date(baseDate);
   todayEnd.setHours(23, 0, 0, 0);
 
-  const spanTotal = todayEnd - todayStart;
-  const sunLeftPct = clamp(((windowObj.start - todayStart) / spanTotal) * 100, 0, 100);
-  const sunWidthPct = clamp(((windowObj.end - windowObj.start) / spanTotal) * 100, 0, 100);
+  const spanTotal = todayEnd - todayStart || 1;
   const nowPct = clamp(((new Date() - todayStart) / spanTotal) * 100, 0, 100);
+
+  const sunBlocksHtml = windows.map(window => {
+    const leftPct = clamp(((window.start - todayStart) / spanTotal) * 100, 0, 100);
+    const widthPct = clamp(((window.end - window.start) / spanTotal) * 100, 0, 100);
+    return `<div class="timelineSun" style="left:${leftPct}%; width:${widthPct}%;"></div>`;
+  }).join('');
 
   return `
     <section class="spotCard">
@@ -1494,13 +1583,13 @@ function renderSpotCard(kicker, name, windowObj, stateObj) {
       <div class="timelineWrap">
         <div class="timelineLabels"><span>07:00</span><span>23:00</span></div>
         <div class="timeline">
-          <div class="timelineSun" style="left:${sunLeftPct}%; width:${sunWidthPct}%;"></div>
+          ${sunBlocksHtml}
           <div class="timelineNow" style="left:${nowPct}%;"></div>
         </div>
         <div class="timelineNowLabel">now</div>
       </div>
 
-      <div class="spotWindow">Sun today: ${fmtTime(windowObj.start)}–${fmtTime(windowObj.end)}</div>
+      <div class="spotWindow">Sun today: ${escapeHtml(formatWindowRanges(windows))}</div>
     </section>
   `;
 }
