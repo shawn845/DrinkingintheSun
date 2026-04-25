@@ -32,7 +32,11 @@ const state = {
   fullscreenRouteUserAccuracyCircle: null,
   fullscreenRouteNav: null,
   fullscreenRoutePubName: '',
-  fullscreenRouteLastInstructionKey: ''
+  fullscreenRouteLastInstructionKey: '',
+  sunRouteMap: null,
+  sunRouteLayer: null,
+  sunRouteMarkerLayer: null,
+  sunRouteCurrentPlan: null
 };
 
 const els = {
@@ -44,6 +48,9 @@ const els = {
   rowNearMeWrap: document.getElementById('rowNearMeWrap'),
   rowNearMe: document.getElementById('rowNearMe'),
   rowNearMeMeta: document.getElementById('rowNearMeMeta'),
+  rowSunRoutesWrap: null,
+  btnLouReed: null,
+  btnUsainBolt: null,
   rowSunniest: document.getElementById('rowSunniest'),
   rowSunniestMeta: document.getElementById('rowSunniestMeta'),
   rowWorthTripWrap: null,
@@ -82,6 +89,7 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   wireUi();
+  ensureSunRoutesRow();
   ensureWorthTripRow();
   await loadRoutes();
   state.pubs = (await loadPubs()).map(enrichPub);
@@ -165,6 +173,25 @@ function parseHashRoute() {
   if (hash === '#map') return { type: 'map' };
   if (!hash || hash === '#list') return { type: 'list' };
 
+  const routeMatch = hash.match(/^#route-(lou-reed|usain-bolt)(?:\?(.*))?$/);
+  if (routeMatch) {
+    const params = new URLSearchParams(routeMatch[2] || '');
+    const pubIds = String(params.get('pubs') || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean)
+      .map(v => {
+        try { return decodeURIComponent(v); } catch { return v; }
+      });
+
+    return {
+      type: 'sunRoute',
+      mode: routeMatch[1],
+      pubIds,
+      startIso: params.get('start') || ''
+    };
+  }
+
   const match = hash.match(/^#pub-(.+)$/);
   if (match) {
     try {
@@ -179,6 +206,11 @@ function parseHashRoute() {
 
 function handleRouteFromHash() {
   const route = parseHashRoute();
+
+  if (route.type === 'sunRoute' && route.mode) {
+    openSharedSunRoute(route, false);
+    return;
+  }
 
   if (route.type === 'pub' && route.pubId) {
     const exists = state.pubs.find(p => p.id === route.pubId);
@@ -1114,6 +1146,702 @@ function renderCycleBadge(pub) {
   return '<span class="miniBadge">🚲 Cycle</span>';
 }
 
+
+
+const SUN_ROUTE_MODES = {
+  'lou-reed': {
+    id: 'lou-reed',
+    title: 'Lou Reed',
+    subtitle: 'A perfect sunny pub day by bike.',
+    kicker: 'Perfect day',
+    buttonText: 'Build Lou Reed',
+    travelMode: 'cycle',
+    travelLabel: 'Bike',
+    travelVerb: 'Cycle',
+    maxStops: 4,
+    minStops: 3,
+    stopMinutes: 55,
+    candidateOriginKm: 34,
+    maxSegmentKm: 22,
+    upcomingMinutes: 360
+  },
+  'usain-bolt': {
+    id: 'usain-bolt',
+    title: 'Usain Bolt',
+    subtitle: 'A fast city-centre sun chase from where you are now.',
+    kicker: 'Sun sprint',
+    buttonText: 'Start Usain Bolt',
+    travelMode: 'walk',
+    travelLabel: 'Walk',
+    travelVerb: 'Walk',
+    maxStops: 8,
+    minStops: 4,
+    stopMinutes: 25,
+    candidateOriginKm: 5.2,
+    maxSegmentKm: 2.2,
+    upcomingMinutes: 120
+  }
+};
+
+function ensureSunRoutesRow() {
+  if (els.rowSunRoutesWrap || !els.listView) return;
+
+  const wrap = document.createElement('section');
+  wrap.className = 'sunRoutesWrap';
+  wrap.id = 'rowSunRoutesWrap';
+  wrap.innerHTML = `
+    <div class="rowHeader">
+      <h2 class="rowTitle">Sunny routes</h2>
+      <div class="rowMeta">Built from live sun windows</div>
+    </div>
+    <div class="sunRouteModeGrid" role="list">
+      <button class="sunRouteModeCard louReed" id="btnLouReed" type="button" role="listitem">
+        <span class="sunRouteModeKicker">Perfect day</span>
+        <span class="sunRouteModeTitle">Lou Reed</span>
+        <span class="sunRouteModeText">A slower sunny pub day by bike, with time to enjoy each stop.</span>
+      </button>
+      <button class="sunRouteModeCard usainBolt" id="btnUsainBolt" type="button" role="listitem">
+        <span class="sunRouteModeKicker">Sun sprint</span>
+        <span class="sunRouteModeTitle">Usain Bolt</span>
+        <span class="sunRouteModeText">A fast city-centre sun chase from where you are now.</span>
+      </button>
+    </div>
+  `;
+
+  els.listView.insertBefore(wrap, els.listView.firstElementChild);
+  els.rowSunRoutesWrap = wrap;
+  els.btnLouReed = wrap.querySelector('#btnLouReed');
+  els.btnUsainBolt = wrap.querySelector('#btnUsainBolt');
+
+  els.btnLouReed.addEventListener('click', () => openSunRouteMode('lou-reed'));
+  els.btnUsainBolt.addEventListener('click', () => openSunRouteMode('usain-bolt'));
+}
+
+async function openSunRouteMode(modeId, push = true) {
+  const config = SUN_ROUTE_MODES[modeId];
+  if (!config) return;
+
+  const btn = modeId === 'lou-reed' ? els.btnLouReed : els.btnUsainBolt;
+  const originalText = btn ? btn.querySelector('.sunRouteModeKicker')?.textContent : '';
+
+  if (btn) {
+    btn.disabled = true;
+    const kicker = btn.querySelector('.sunRouteModeKicker');
+    if (kicker) kicker.textContent = 'Building route…';
+  }
+
+  try {
+    const origin = await getAdaptiveRouteOrigin();
+    reEnrichAll();
+    const plan = generateSunRoutePlan(modeId, new Date(), origin);
+    openSunRoutePlan(plan, push);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      const kicker = btn.querySelector('.sunRouteModeKicker');
+      if (kicker && originalText) kicker.textContent = originalText;
+    }
+  }
+}
+
+function getRouteOriginNow() {
+  if (state.userLocation && !state.userLocation.fallback) {
+    return {
+      lat: state.userLocation.lat,
+      lng: state.userLocation.lng,
+      name: 'your location',
+      fallback: false
+    };
+  }
+
+  return {
+    ...FALLBACK_LOCATION,
+    name: FALLBACK_LOCATION.name,
+    fallback: true
+  };
+}
+
+function getAdaptiveRouteOrigin() {
+  if (state.userLocation && !state.userLocation.fallback) {
+    return Promise.resolve(getRouteOriginNow());
+  }
+
+  if (!navigator.geolocation) {
+    state.userLocation = { ...FALLBACK_LOCATION, fallback: true };
+    return Promise.resolve(getRouteOriginNow());
+  }
+
+  return new Promise(resolve => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        state.userLocation = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          name: 'Your location',
+          fallback: false
+        };
+
+        try {
+          await refreshWeather(state.userLocation.lat, state.userLocation.lng);
+        } catch {}
+
+        renderEverything();
+        updateUserLocationMarker();
+
+        if (state.map) {
+          state.map.setView([state.userLocation.lat, state.userLocation.lng], 13);
+        }
+
+        resolve(getRouteOriginNow());
+      },
+      () => {
+        state.userLocation = { ...FALLBACK_LOCATION, fallback: true };
+        renderEverything();
+        resolve(getRouteOriginNow());
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
+    );
+  });
+}
+
+function openSharedSunRoute(route, push = false) {
+  const config = SUN_ROUTE_MODES[route.mode];
+  if (!config) return;
+
+  const pubs = route.pubIds
+    .map(id => state.pubs.find(pub => pub.id === id))
+    .filter(Boolean);
+
+  if (!pubs.length) {
+    setView('list', false);
+    return;
+  }
+
+  const startTime = route.startIso ? new Date(route.startIso) : new Date();
+  const safeStartTime = Number.isNaN(startTime.getTime()) ? new Date() : startTime;
+  const origin = getRouteOriginNow();
+  const plan = buildSunRoutePlanFromPubs(route.mode, pubs, safeStartTime, origin, true);
+  openSunRoutePlan(plan, push);
+}
+
+function openSunRoutePlan(plan, push = true) {
+  if (!plan) return;
+
+  state.modalReturnView = state.currentView || 'list';
+  state.sunRouteCurrentPlan = plan;
+
+  renderSunRouteModal(plan);
+  lockBodyScroll();
+  els.modalOverlay.classList.remove('isHidden');
+
+  if (push) {
+    history.pushState({ sunRoute: plan.mode.id }, '', sunRouteShareHash(plan));
+  }
+}
+
+function generateSunRoutePlan(modeId, startTime = new Date(), origin = getRouteOriginNow()) {
+  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+  const selected = [];
+  let currentPoint = origin;
+  let currentTime = new Date(startTime);
+  let totalKm = 0;
+
+  const initialCandidates = getSunRouteCandidates(config, origin, startTime);
+  const candidatePool = initialCandidates.length
+    ? initialCandidates
+    : state.pubs.filter(pub => Number.isFinite(pub.lat) && Number.isFinite(pub.lng));
+
+  for (let i = 0; i < config.maxStops; i++) {
+    const next = chooseNextSunRouteStop({
+      config,
+      selected,
+      pool: candidatePool,
+      currentPoint,
+      currentTime,
+      origin,
+      stopIndex: i
+    });
+
+    if (!next) break;
+
+    selected.push(next);
+    totalKm += next.travelKm || 0;
+    currentPoint = next.pub;
+    currentTime = new Date(next.departAt);
+  }
+
+  if (selected.length < config.minStops) {
+    const fallbackPlan = buildFallbackSunRoute(config, startTime, origin, selected, candidatePool);
+    if (fallbackPlan.length > selected.length) {
+      return buildSunRoutePlanFromStops(config.id, fallbackPlan, startTime, origin, false);
+    }
+  }
+
+  return buildSunRoutePlanFromStops(config.id, selected, startTime, origin, false);
+}
+
+function getSunRouteCandidates(config, origin, startTime) {
+  const now = new Date(startTime);
+
+  return state.pubs
+    .filter(pub => Number.isFinite(pub.lat) && Number.isFinite(pub.lng))
+    .filter(pub => {
+      const originKm = routeDistanceKm(origin, pub, config.travelMode);
+      if (config.id === 'usain-bolt' && originKm > config.candidateOriginKm) return false;
+
+      if (config.id === 'lou-reed') {
+        const cycleOrWorth = yesFlag(pub.cycleFriendly) || yesFlag(pub.worthTheTrip);
+        if (!cycleOrWorth && originKm > 12) return false;
+        if (originKm > config.candidateOriginKm) return false;
+      }
+
+      const opportunity = getSunOpportunityForArrival(pub, now, config.stopMinutes, config.upcomingMinutes);
+      return opportunity.score > 0;
+    });
+}
+
+function chooseNextSunRouteStop({ config, selected, pool, currentPoint, currentTime, origin, stopIndex }) {
+  const selectedIds = new Set(selected.map(item => item.pub.id));
+  let best = null;
+
+  for (const pub of pool) {
+    if (selectedIds.has(pub.id)) continue;
+
+    const travelKm = routeDistanceKm(currentPoint, pub, config.travelMode);
+    const travelMinutes = travelMinutesForKm(travelKm, config.travelMode);
+
+    if (stopIndex > 0 && travelKm > config.maxSegmentKm) continue;
+    if (stopIndex === 0 && config.id === 'usain-bolt' && travelKm > config.candidateOriginKm) continue;
+
+    const arriveAt = new Date(currentTime.getTime() + travelMinutes * 60000);
+    const opportunity = getSunOpportunityForArrival(pub, arriveAt, config.stopMinutes, config.upcomingMinutes);
+    if (opportunity.score <= 0) continue;
+
+    const departAt = new Date(arriveAt.getTime() + config.stopMinutes * 60000);
+    const originKm = routeDistanceKm(origin, pub, config.travelMode);
+
+    let score = opportunity.score;
+
+    if (config.id === 'lou-reed') {
+      score += yesFlag(pub.worthTheTrip) ? 32 : 0;
+      score += yesFlag(pub.cycleFriendly) ? 24 : 0;
+      score -= travelMinutes * 0.45;
+      score -= originKm * 0.45;
+    } else {
+      score += pub.bestNow?.state === 'sunny' ? 28 : 0;
+      score -= travelMinutes * 2.4;
+      score -= travelKm * 8;
+      if (stopIndex > 0 && travelKm > 1.4) score -= 24;
+    }
+
+    if (!best || score > best.score) {
+      best = {
+        pub,
+        score,
+        travelKm,
+        travelMinutes,
+        arriveAt,
+        departAt,
+        opportunity
+      };
+    }
+  }
+
+  return best;
+}
+
+function buildFallbackSunRoute(config, startTime, origin, alreadySelected, pool) {
+  const selectedIds = new Set(alreadySelected.map(item => item.pub.id));
+  const items = [...alreadySelected];
+  let currentPoint = items.length ? items[items.length - 1].pub : origin;
+  let currentTime = items.length ? new Date(items[items.length - 1].departAt) : new Date(startTime);
+
+  const ranked = pool
+    .filter(pub => !selectedIds.has(pub.id))
+    .map(pub => {
+      const originKm = routeDistanceKm(origin, pub, config.travelMode);
+      const opportunity = getSunOpportunityForArrival(pub, startTime, config.stopMinutes, config.upcomingMinutes * 1.5);
+      let score = opportunity.score - originKm;
+      if (config.id === 'lou-reed') {
+        score += yesFlag(pub.worthTheTrip) ? 25 : 0;
+        score += yesFlag(pub.cycleFriendly) ? 20 : 0;
+      } else {
+        score += pub.bestNow?.state === 'sunny' ? 20 : 0;
+      }
+      return { pub, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  for (const item of ranked) {
+    if (items.length >= config.maxStops) break;
+    const travelKm = routeDistanceKm(currentPoint, item.pub, config.travelMode);
+    const travelMinutes = travelMinutesForKm(travelKm, config.travelMode);
+    const arriveAt = new Date(currentTime.getTime() + travelMinutes * 60000);
+    const opportunity = getSunOpportunityForArrival(item.pub, arriveAt, config.stopMinutes, config.upcomingMinutes * 1.5);
+    const departAt = new Date(arriveAt.getTime() + config.stopMinutes * 60000);
+
+    items.push({
+      pub: item.pub,
+      score: item.score,
+      travelKm,
+      travelMinutes,
+      arriveAt,
+      departAt,
+      opportunity
+    });
+
+    selectedIds.add(item.pub.id);
+    currentPoint = item.pub;
+    currentTime = departAt;
+  }
+
+  return items;
+}
+
+function buildSunRoutePlanFromPubs(modeId, pubs, startTime, origin, isShared = false) {
+  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+  const stops = [];
+  let currentPoint = origin;
+  let currentTime = new Date(startTime);
+
+  pubs.forEach(pub => {
+    const travelKm = routeDistanceKm(currentPoint, pub, config.travelMode);
+    const travelMinutes = travelMinutesForKm(travelKm, config.travelMode);
+    const arriveAt = new Date(currentTime.getTime() + travelMinutes * 60000);
+    const opportunity = getSunOpportunityForArrival(pub, arriveAt, config.stopMinutes, config.upcomingMinutes * 1.5);
+    const departAt = new Date(arriveAt.getTime() + config.stopMinutes * 60000);
+
+    stops.push({
+      pub,
+      score: opportunity.score,
+      travelKm,
+      travelMinutes,
+      arriveAt,
+      departAt,
+      opportunity
+    });
+
+    currentPoint = pub;
+    currentTime = departAt;
+  });
+
+  return buildSunRoutePlanFromStops(config.id, stops, startTime, origin, isShared);
+}
+
+function buildSunRoutePlanFromStops(modeId, stops, startTime, origin, isShared = false) {
+  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+  const totalKm = stops.reduce((sum, stop) => sum + (stop.travelKm || 0), 0);
+  const lastDepart = stops.length ? stops[stops.length - 1].departAt : startTime;
+  const totalMinutes = stops.length
+    ? Math.max(0, (lastDepart - startTime) / 60000)
+    : 0;
+
+  return {
+    mode: config,
+    stops,
+    startTime: new Date(startTime),
+    generatedAt: new Date(),
+    origin,
+    totalKm,
+    totalMinutes,
+    isShared
+  };
+}
+
+function routeDistanceKm(a, b, mode = 'walk') {
+  if (!a || !b) return 0;
+  const crowKm = haversineKm(a.lat, a.lng, b.lat, b.lng);
+  const factor = mode === 'cycle' ? 1.22 : 1.28;
+  return crowKm * factor;
+}
+
+function travelMinutesForKm(km, mode = 'walk') {
+  const speedKph = mode === 'cycle' ? 17 : 4.8;
+  return (km / speedKph) * 60;
+}
+
+function getSunOpportunityForArrival(pub, arrivalAt, stayMinutes = 30, upcomingMinutes = 120) {
+  const windows = getWindows(pub).filter(window => window.end > arrivalAt);
+  const stayEnd = new Date(arrivalAt.getTime() + stayMinutes * 60000);
+  let best = {
+    score: 0,
+    label: 'No useful sun then',
+    line: 'No useful sun then',
+    badge: 'Maybe shade',
+    window: null,
+    waitMinutes: null,
+    usableMinutes: 0,
+    state: 'none'
+  };
+
+  for (const window of windows) {
+    const waitMinutes = Math.max(0, (window.start - arrivalAt) / 60000);
+    if (waitMinutes > upcomingMinutes) continue;
+
+    const usableStart = arrivalAt > window.start ? arrivalAt : window.start;
+    const usableEnd = stayEnd < window.end ? stayEnd : window.end;
+    const usableMinutes = Math.max(0, (usableEnd - usableStart) / 60000);
+    const remainingMinutes = Math.max(0, (window.end - arrivalAt) / 60000);
+
+    let score = 0;
+    let label = '';
+    let line = '';
+    let badge = '';
+    let state = '';
+
+    if (arrivalAt >= window.start && arrivalAt < window.end) {
+      score = 110 + Math.min(remainingMinutes, 120) + Math.min(usableMinutes, stayMinutes);
+      label = `Sunny on arrival`;
+      line = `Sun until ${fmtTime(window.end)}`;
+      badge = 'Best fit';
+      state = 'active';
+    } else {
+      score = 72 - (waitMinutes * 0.85) + Math.min((window.end - window.start) / 60000, 100) * 0.18;
+      label = waitMinutes <= 12 ? 'Sun starts just after arrival' : `Sun from ${fmtTime(window.start)}`;
+      line = `Sun ${fmtTime(window.start)}–${fmtTime(window.end)}`;
+      badge = waitMinutes <= 30 ? 'Good timing' : 'Later';
+      state = 'upcoming';
+    }
+
+    if (score > best.score) {
+      best = {
+        score,
+        label,
+        line,
+        badge,
+        window,
+        waitMinutes,
+        usableMinutes,
+        state
+      };
+    }
+  }
+
+  return best;
+}
+
+function renderSunRouteModal(plan) {
+  destroySunRoutePlanMap();
+
+  const config = plan.mode;
+  const hasStops = plan.stops.length > 0;
+  const locationText = plan.origin?.fallback
+    ? `Using ${plan.origin.name || FALLBACK_LOCATION.name}`
+    : 'Using your location';
+  const generatedText = `Built for ${fmtTime(plan.startTime)} today`;
+  const routeLabel = `${plan.stops.length} stops · ${plan.totalKm.toFixed(1)} km · about ${formatRideMinutes(plan.totalMinutes)}`;
+  const routeEmptyText = config.id === 'lou-reed'
+    ? 'Not enough useful sunny cycling stops are available right now.'
+    : 'Not enough useful sunny city-centre stops are available right now.';
+
+  els.modalContent.innerHTML = `
+    <section class="sunRoutePlan">
+      <div class="sunRoutePlanHero ${config.id === 'lou-reed' ? 'louReed' : 'usainBolt'}">
+        <div class="sunRoutePlanKicker">${escapeHtml(config.kicker)}</div>
+        <h2 class="sunRoutePlanTitle">${escapeHtml(config.title)}</h2>
+        <p class="sunRoutePlanSubtitle">${escapeHtml(config.subtitle)}</p>
+      </div>
+
+      <div class="sunRoutePlanBody">
+        <div class="sunRouteSummary">
+          <span>${escapeHtml(routeLabel)}</span>
+          <span>${escapeHtml(config.travelLabel)}</span>
+          <span>${escapeHtml(locationText)}</span>
+        </div>
+
+        <div class="sunRouteGenerated">${escapeHtml(generatedText)}. ${plan.isShared ? 'Shared route.' : 'Generated from current sun windows.'}</div>
+
+        <div class="detailActions sunRouteActions">
+          <button class="pillBtn" type="button" id="btnShareSunRoute" ${hasStops ? '' : 'disabled'}>Share route</button>
+          ${hasStops ? `<a class="pillBtn" href="${escapeAttr(mapsSunRouteHref(plan))}" target="_blank" rel="noopener">Open in Maps</a>` : ''}
+        </div>
+
+        ${hasStops ? `<div class="sunRouteMap" id="sunRoutePlanMap" aria-label="${escapeAttr(config.title)} map"></div>` : ''}
+
+        ${hasStops ? renderSunRouteStops(plan) : `<div class="emptyState">${escapeHtml(routeEmptyText)} Try Near me, or try again later when more sun windows are open.</div>`}
+
+        <div class="sunRouteFootnote">Routes are suggestions, not opening-hours guarantees. Check the pub before making a long trip.</div>
+      </div>
+    </section>
+  `;
+
+  const shareBtn = document.getElementById('btnShareSunRoute');
+  if (shareBtn) shareBtn.addEventListener('click', () => shareSunRoute(plan));
+
+  if (hasStops) {
+    requestAnimationFrame(() => initSunRoutePlanMap(plan));
+  }
+}
+
+function renderSunRouteStops(plan) {
+  return `
+    <ol class="sunRouteStopList">
+      ${plan.stops.map((stop, index) => renderSunRouteStop(plan, stop, index)).join('')}
+    </ol>
+  `;
+}
+
+function renderSunRouteStop(plan, stop, index) {
+  const travelText = index === 0
+    ? `${plan.mode.travelVerb} from ${plan.origin?.fallback ? 'city centre' : 'your location'}`
+    : `${plan.mode.travelVerb} from previous stop`;
+
+  const distanceText = `${formatRideMinutes(stop.travelMinutes)} · ${stop.travelKm.toFixed(1)} km`;
+  const badges = [];
+  if (yesFlag(stop.pub.cycleFriendly)) badges.push('🚲 Cycle');
+  if (yesFlag(stop.pub.worthTheTrip)) badges.push('Worth the trip');
+
+  return `
+    <li class="sunRouteStop">
+      <button class="sunRouteStopButton" type="button" onclick="openDetail('${escapeAttr(stop.pub.id)}', 'list')">
+        <span class="sunRouteStopNumber">${index + 1}</span>
+        <span class="sunRouteStopMain">
+          <span class="sunRouteStopName">${escapeHtml(stop.pub.name)}</span>
+          <span class="sunRouteStopMeta">${escapeHtml(travelText)} · ${escapeHtml(distanceText)}</span>
+          <span class="sunRouteStopSun">${escapeHtml(fmtTime(stop.arriveAt))} arrival · ${escapeHtml(stop.opportunity.line)}</span>
+          ${badges.length ? `<span class="sunRouteStopBadges">${badges.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</span>` : ''}
+        </span>
+        <span class="sunRouteStopBadge">${escapeHtml(stop.opportunity.badge)}</span>
+      </button>
+    </li>
+  `;
+}
+
+function initSunRoutePlanMap(plan) {
+  const mapEl = document.getElementById('sunRoutePlanMap');
+  if (!mapEl || !plan?.stops?.length || !window.L) return;
+
+  destroySunRoutePlanMap();
+
+  state.sunRouteMap = L.map(mapEl, {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: true,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    touchZoom: true
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(state.sunRouteMap);
+
+  const points = [
+    [plan.origin.lat, plan.origin.lng],
+    ...plan.stops.map(stop => [stop.pub.lat, stop.pub.lng])
+  ];
+
+  state.sunRouteLayer = L.polyline(points, {
+    color: '#d6b24a',
+    weight: 5,
+    opacity: 0.95,
+    dashArray: '7 8'
+  }).addTo(state.sunRouteMap);
+
+  state.sunRouteMarkerLayer = L.layerGroup().addTo(state.sunRouteMap);
+
+  L.circleMarker(points[0], {
+    radius: 7,
+    color: '#2f2f2f',
+    weight: 2,
+    fillColor: '#ffffff',
+    fillOpacity: 1
+  }).addTo(state.sunRouteMarkerLayer).bindTooltip(plan.origin?.fallback ? FALLBACK_LOCATION.name : 'Start', { direction: 'top' });
+
+  plan.stops.forEach((stop, index) => {
+    L.circleMarker([stop.pub.lat, stop.pub.lng], {
+      radius: 9,
+      color: '#2f2f2f',
+      weight: 2,
+      fillColor: '#f5c542',
+      fillOpacity: 1
+    }).addTo(state.sunRouteMarkerLayer).bindTooltip(`${index + 1}. ${stop.pub.name}`, { direction: 'top' });
+  });
+
+  state.sunRouteMap.fitBounds(state.sunRouteLayer.getBounds(), { padding: [18, 18] });
+  setTimeout(() => state.sunRouteMap && state.sunRouteMap.invalidateSize(), 120);
+}
+
+function destroySunRoutePlanMap() {
+  if (state.sunRouteMap) {
+    state.sunRouteMap.remove();
+    state.sunRouteMap = null;
+    state.sunRouteLayer = null;
+    state.sunRouteMarkerLayer = null;
+  }
+}
+
+function sunRouteShareHash(plan) {
+  const params = new URLSearchParams();
+  params.set('pubs', plan.stops.map(stop => encodeURIComponent(stop.pub.id)).join(','));
+  params.set('start', plan.startTime.toISOString());
+  return `#route-${plan.mode.id}?${params.toString()}`;
+}
+
+function sunRouteShareUrl(plan) {
+  const url = new URL(window.location.href);
+  url.hash = sunRouteShareHash(plan);
+  return url.toString();
+}
+
+function shareTextForSunRoute(plan) {
+  const title = plan.mode.id === 'lou-reed'
+    ? 'Lou Reed sunny pub route'
+    : 'Usain Bolt sunny pub route';
+  const stops = plan.stops.map(stop => stop.pub.name).join(' → ');
+  return `${title}: ${stops}`;
+}
+
+async function shareSunRoute(plan) {
+  if (!plan || !plan.stops.length) return;
+
+  const url = sunRouteShareUrl(plan);
+  const text = shareTextForSunRoute(plan);
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: plan.mode.title,
+        text,
+        url
+      });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+
+  try {
+    await copyText(url);
+    showShareToast('Route link copied');
+  } catch (err) {
+    showShareToast('Could not copy route link');
+  }
+}
+
+function mapsSunRouteHref(plan) {
+  if (!plan?.stops?.length) return '#';
+
+  const origin = `${plan.origin.lat},${plan.origin.lng}`;
+  const destinationStop = plan.stops[plan.stops.length - 1];
+  const destination = `${destinationStop.pub.lat},${destinationStop.pub.lng}`;
+  const waypoints = plan.stops
+    .slice(0, -1)
+    .map(stop => `${stop.pub.lat},${stop.pub.lng}`)
+    .join('|');
+
+  const params = new URLSearchParams();
+  params.set('api', '1');
+  params.set('origin', origin);
+  params.set('destination', destination);
+  if (waypoints) params.set('waypoints', waypoints);
+  params.set('travelmode', plan.mode.travelMode === 'cycle' ? 'bicycling' : 'walking');
+
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+
 function ensureWorthTripRow() {
   if (els.rowWorthTripWrap) return;
   const anchorWrap = els.rowSunniest ? els.rowSunniest.closest('.rowWrap') : null;
@@ -1382,6 +2110,8 @@ function renderDetailGallery(pub) {
 }
 
 function openDetail(pubId, sourceView = 'list', push = true) {
+  destroySunRoutePlanMap();
+  state.sunRouteCurrentPlan = null;
   state.modalReturnView = sourceView || state.currentView;
   if (state.currentView === 'map') setView('list', false);
 
@@ -2358,6 +3088,8 @@ function bindDetailGalleryDots() {
 function closeModal(push = false) {
   closeExpandedRouteMap();
   stopDetailRouteLocationWatch();
+  destroySunRoutePlanMap();
+  state.sunRouteCurrentPlan = null;
 
   if (state.detailRouteMap) {
     state.detailRouteMap.remove();
