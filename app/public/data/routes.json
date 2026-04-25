@@ -71,19 +71,19 @@
       "lng": -0.963414
     },
     "stats": {
-      "routePoints": 593,
-      "distanceKm": 20.98,
-      "minutesAt15kph": 84,
-      "minutesAt18kph": 70
+      "routePoints": 679,
+      "distanceKm": 31.73,
+      "minutesAt15kph": 127,
+      "minutesAt18kph": 106
     },
     "map": {
       "bbox": [
         -1.138737,
         52.938024,
-        -0.910148,
-        52.986609
+        -0.85412,
+        53.004807
       ],
-      "encodedPolyline5": "usebIvi}EHNFLN[Vg@DIf@aAn@qAVv@p@fBPXp@j@p@f@z@@xAQDAvAW\\IJ[AI?GCoA?GLAPCtAMLAfDSTAF?BAAUAICcCP}CH_DZ{DBoAHa@r@a@H@NEHEJIFKAKGa@CQLGb@SJEtBcAt@w@\\i@b@q@L]x@}CNHNLDOJ[p@Ob@WLJLFFIZbA|@hAv@bAd@d@RZ\\b@n@r@TXb@l@JTZ]lBsA`IsGr@s@l@a@vAw@lDuAz@m@v@{@n@cApAwCF_@JWCi@G]@[COGQAe@CIKa@M[Oo@EYGUCOMu@?CCSAKC]AIGm@CYAOCSQiBAMCWCQAGKaACSGm@Gc@ESES?EG]ESESCQKi@CMCQAOG]E[?CE_@CUCc@C[CUEy@Ca@A[A[?IGkACq@?KC[A_@AOAOQiBAMC]?I?E?g@?WB}@J_AFe@AcA?ACe@?GEe@KyAUmBCMAI_@{CEaAD[LMlL{@t@MdA]HCAq@Ei@c@qBIYI_@IWAGSmA?GAGGkD?yB@kF?[?qG?mAGcBDg@?C@C@CBI@G_AsAc@_AM_@a@aBMo@Ia@UaBs@}H[iByAqFMi@Kc@QkAG}@As@HkBNeAxAuGFa@^mCVyDAqDKkCa@gDa@mB}@{CeA{BeBkDaD_Hi@kAa@wAaBgJi@sBIWq@_BcEiHc@eAEOYy@y@aDMu@UmCEi@AQCUAc@A{@B_GJwAzAoKLyAJeA@WD_AC_AQeE_@kFc@eIEw@AC?KkBoXAK?EGq@C_@OiCE[w@cJSoBCIa@iC[wAs@mBOaAy@qZMiSAe@GqPAwCA_BAQFcAR}@pAkCj@uAAc@D_ABW@KHmAAiAEc@U}BAmANyCA_@Kq@Kc@AEWiAAm@d@}C@YIgBMmAEc@E[I?GK@QDGB?WaCIm@OcBAGEi@Gi@Cw@FqBNkD?}CGs@Os@[cBa@_CUeBYoDMiCCa@O{CGeAK}BGwAWoEAM[sDQyBAMWqCAWMEOcBCMEk@QkAWiCuAeREiBKS?WAUFYQsJOmT_@cJHAOaCAKIBWcDOUC[E]De@S{A_@aBkDyMo@eDWeBu@gIKcDGu@FmFTuDJBJyAIGh@oJXcHb@gMJiF@eFn@u]BwA?[LwG@_BGiBIaD?y@AmADkATaD?I@GBcAAGuC_H_FmNO?KMi@eAYK_BWUWOa@AGM[`@yB?UK[aDsEY}@]u@Oe@]k@uAcBWKS[{DqGcBgC_CaDwBmC?EKGyEiFSAGNqAsACCYWaCkBcFuC}CoA_Cs@_Dq@_C[aCOiB@{AP{A`@_Bp@GB@LK@GJ?\\IFKDoChAu@Fm@I_@Ou@{@g@oAA_@DSDWCMOmAWi@SO[Iu@@y@^CQEWM{@p@y@LYFY?UIUY_@gAqBuAkD[o@mAaBeAeC{EuJ}@aCOkAgIaQ{AeC]cAiBcDw@iBUgA_AoBSS}AbGe@nF@^DPLLBMJ?DMNcBZuBfAwEv@{CrDgMBi@K[USw@iAgBwBoBqBDSDWgDqDq@aAOu@@o@ECCEEIT_@Lg@Hm@BY@wC]qI?_D`@iF\\iCnAkGf@}E^qC~@sEb@kC?kAEkBWgHMs@Ws@a@s@e@iACIWSMO_@UqC}AUGg@]s@u@yBwCCE_@_@wBuAo@s@KScCoGUcACc@@W|@aCLs@K_EAYAi@k@kEQmAOqAE_@DmDAs@Eq@gD{I_@k@cAaAi@iAi@}@{BoDe@eAMk@k@kE[kC[uBo@eDSsA?COkAQc@_@g@mBkBo@mAc@xA"
+      "encodedPolyline5": "ssebIxi}EFLFLN[Vg@DIf@aAn@qAVv@p@fBPXp@j@p@f@z@@xAQDAvAW\\IJ[AI?GCoA?GLAPCtAMLAfDSTAF?BAAUAICcCP}CH_DZ{DBoAHa@r@a@H@NEHEJIFKAKGa@CQLGb@SJEtBcAt@w@\\i@b@q@L]x@}CNHNLDOJ[p@Ob@WLJLFFIZbA|@hAv@bAd@d@RZ\\b@n@r@TXb@l@JTZ]lBsA`IsGr@s@l@a@vAw@lDuAz@m@v@{@n@cApAwCF_@JWCi@G]@[COGQAe@CIKa@M[Oo@EYGUCOMu@?CCSAKC]AIGm@CYAOCSQiBAMCWCQAGKaACSGm@Gc@EUEQ?EG]ESESCQKi@CMCQAOG]E[?CE_@CUCc@C[CUEy@Ca@A[A[?IGkACq@?KC[A_@AOAOQiBAMC]?I?E?g@?WB}@J_AFe@AcA?ACe@?GEe@KyAUmBCMAI_@{CEaAD[LMlL{@t@MdA]HCAq@Ei@c@qBIYI_@IWAGSmA?GAGGkD?yB@kF?[?qG?mAGcBDg@?C@C@CBI@G_AsAc@_AM_@a@aBMo@Ia@UaBs@}H[iByAqFMi@Kc@QkAG}@As@HkBNeAxAuGFa@^mCVyDAqDKkCa@gDa@mB}@{CeA{BeBkDaD_Hi@kAa@wAaBgJi@sBIWq@_BcEiHc@eAEOYy@y@aDMu@UmCEi@AQCUAc@A{@B_GJwAzAoKLyAJeA@WD_AC_AQeE_@kFc@eIEw@AC?KkBoXAK?EGq@C_@OiCE[w@cJSoBCIa@iC[wAs@mBOaAy@qZMiSAe@GqPAwCA_BAQFcAR}@pAkCj@uAAc@D_ABW@KHmAAiAEc@U}BAmANyCA_@Kq@Kc@AEWiAAm@d@}C@YIgBMmAEc@E[I?GK@QDGB?WaCIm@OcBAGEi@Gi@Cw@FqBNkD?}CGs@Os@[cBa@_CUeBYoDMiCCa@O{CGeAK}BGwAWoEAM[sDQyBAMWqCAWMEOcBCMEk@QkAWiCuAeREiBKS?WAUFYQsJOmT_@cJHAOaCAKIBWcDOUC[E]De@S{A_@aBkDyMo@eDWeBu@gIKcDGu@mDzDeBpAq@PUN}ArBc@ZyCFoD^mCr@_F|@oOhBgBbBaAf@u@H{@IyCo@q@RcGrHEDkApBm@rAHZwBrD{KpPc@f@{ArAcFjDyAlA}AjCMPUJe@IgCwAsBi@q@Ky@G_@UGKc@_Ak@{@UYs@cAO[m@cC_@eAe@k@a@WqA_@wAIq@GMIw@o@c@_@WQk@CgFLgBFiC^yAJw@Cy@Q[Mk@c@m@kAqAoEuBuDi@wAmBcGgFgOc@gB[iBOi@uCeH]kAU{Ay@qE_BgIe@mDoAoUu@qMBmAHu@^iJ?QZcFLmDBc@@M?EX}HNsBlAcLBa@?OMiD?K@]@Y@IZqE@cDDiBJcANg@JSRIpAQRYFMtBsHbC_IhAwDjBqFhAsDj@sAu@u@e@o@AEGGAAo@w@W]e@a@cAiA}BwBMO_@]QOm@q@QW_@i@}@mAYa@k@_As@sAaA{BCEa@_Ae@eBMi@}@yDsAaGa@iByBsIa@mAQm@{@_CgHoKw@iB_A_FkCiGSa@_GqJa@SeCo@qCoAc@c@mC_EuFkHyAyBwF_Is@s@}CoBYWMQuCaJ]o@WYeA{@sA_@yAO}A]iHsDiFoDe@[e@k@Oa@Iu@i@wBY{@EIl@_CpEsSjI}YjAcCbDkDj@w@bDiHfFqHv@oAz@sA`@o@tAqCjAoCp@aBTmAx@Vd@|@Fh@CxBBn@Hl@bDjELFJGPy@dCiOFo@?aBDk@Ja@dAoA`BeAhE}DtGgL|EuKhF{In@w@lIsHz@i@Ew@o@iF@u@Jq@b@yAJ{@PcFVuECuCKmI@}BFmAz@{IDk@lAgSf@sKj@qFf@aELyAB{AT}KJcA~AwEjFeNJWFWVeAlHo^n@d@x@r@nEiNr@wDzBsQLeAdBqQ~Iip@|AqLjD`Cj@fARd@Zp@p@n@bClAfAr@~AtALLh@f@~@~AhApBrAlCxAvCvKlU~Px^f@|@PNbEtAdAVhA{M`@_DrA{GZsBR{CXiCPkAn@uDFgAjAq^B_APgGBaA?Q@q@^kRBsANgCBkAAuAQoB@eADa@n@eCzBmI@E"
     }
   },
   "durham_ox_inn": {
