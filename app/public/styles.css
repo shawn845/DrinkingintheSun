@@ -1114,3 +1114,301 @@ button,
   }
 }
 
+
+
+
+/* Lou Reed / Usain Bolt generated sunny routes */
+.sunRoutesWrap{
+  margin-top:2px;
+  margin-bottom:16px;
+}
+
+.sunRouteModeGrid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+}
+
+.sunRouteModeCard{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:var(--panel);
+  box-shadow:var(--shadow);
+  padding:15px;
+  text-align:left;
+  display:grid;
+  gap:5px;
+  color:var(--text);
+  position:relative;
+  overflow:hidden;
+}
+
+.sunRouteModeCard::after{
+  content:"";
+  position:absolute;
+  right:-22px;
+  top:-28px;
+  width:100px;
+  height:100px;
+  border-radius:999px;
+  background:rgba(245,197,66,.18);
+  pointer-events:none;
+}
+
+.sunRouteModeCard.usainBolt::after{
+  width:92px;
+  height:92px;
+  right:-18px;
+  top:auto;
+  bottom:-30px;
+}
+
+.sunRouteModeCard:disabled{
+  opacity:.72;
+}
+
+.sunRouteModeKicker{
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.28px;
+  color:#8b741f;
+}
+
+.sunRouteModeTitle{
+  font-size:22px;
+  line-height:1.05;
+  font-weight:900;
+  color:#2f2f2f;
+}
+
+.sunRouteModeText{
+  max-width:78%;
+  font-size:13px;
+  line-height:1.35;
+  color:var(--muted);
+  font-weight:700;
+}
+
+.sunRoutePlan{
+  padding-bottom:20px;
+}
+
+.sunRoutePlanHero{
+  padding:50px 16px 18px;
+  background:linear-gradient(180deg,#fff3c2,#fbfaf7);
+  border-bottom:1px solid var(--line);
+}
+
+.sunRoutePlanHero.usainBolt{
+  background:linear-gradient(180deg,#fff7db,#fbfaf7);
+}
+
+.sunRoutePlanKicker{
+  font-size:12px;
+  color:#80680f;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.28px;
+}
+
+.sunRoutePlanTitle{
+  margin:5px 0 0;
+  font-size:32px;
+  line-height:1;
+  color:#2f2f2f;
+}
+
+.sunRoutePlanSubtitle{
+  margin:8px 0 0;
+  max-width:500px;
+  color:#575757;
+  font-size:15px;
+  line-height:1.35;
+  font-weight:700;
+}
+
+.sunRoutePlanBody{
+  padding:14px;
+}
+
+.sunRouteSummary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-bottom:8px;
+}
+
+.sunRouteSummary span{
+  display:inline-flex;
+  align-items:center;
+  padding:7px 10px;
+  border-radius:999px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  box-shadow:0 2px 8px rgba(0,0,0,.04);
+  color:#4a4a4a;
+  font-size:12px;
+  font-weight:850;
+}
+
+.sunRouteGenerated{
+  margin:8px 0 12px;
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+  line-height:1.35;
+}
+
+.sunRouteActions{
+  margin-bottom:12px;
+}
+
+.sunRouteActions .pillBtn:disabled{
+  opacity:.48;
+}
+
+.sunRouteMap{
+  height:250px;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:#ececec;
+  overflow:hidden;
+  box-shadow:0 6px 16px rgba(0,0,0,.06);
+  margin:12px 0;
+}
+
+.sunRouteStopList{
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:grid;
+  gap:10px;
+}
+
+.sunRouteStop{
+  margin:0;
+  padding:0;
+}
+
+.sunRouteStopButton{
+  width:100%;
+  border:1px solid var(--line);
+  background:var(--panel);
+  border-radius:18px;
+  box-shadow:0 5px 14px rgba(0,0,0,.055);
+  padding:12px;
+  display:grid;
+  grid-template-columns:34px 1fr auto;
+  gap:10px;
+  align-items:start;
+  text-align:left;
+  color:var(--text);
+}
+
+.sunRouteStopNumber{
+  width:30px;
+  height:30px;
+  border-radius:999px;
+  background:rgba(245,197,66,.95);
+  color:#1c1c1c;
+  font-weight:900;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+}
+
+.sunRouteStopMain{
+  min-width:0;
+  display:grid;
+  gap:4px;
+}
+
+.sunRouteStopName{
+  font-size:16px;
+  line-height:1.15;
+  font-weight:900;
+  color:#2f2f2f;
+}
+
+.sunRouteStopMeta,
+.sunRouteStopSun{
+  font-size:12px;
+  line-height:1.25;
+  color:var(--muted);
+  font-weight:750;
+}
+
+.sunRouteStopSun{
+  color:#4d4d4d;
+}
+
+.sunRouteStopBadge{
+  white-space:nowrap;
+  padding:6px 9px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff7db;
+  color:#5a4a14;
+  font-size:11px;
+  font-weight:900;
+}
+
+.sunRouteStopBadges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:2px;
+}
+
+.sunRouteStopBadges span{
+  display:inline-flex;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#faf9f4;
+  color:#4a4a4a;
+  font-size:11px;
+  font-weight:850;
+}
+
+.sunRouteFootnote{
+  margin-top:12px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.35;
+  font-weight:700;
+}
+
+@media (min-width:720px){
+  .sunRouteModeGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  .sunRoutePlanHero{
+    padding-left:22px;
+    padding-right:22px;
+  }
+
+  .sunRoutePlanBody{
+    padding:16px 22px;
+  }
+}
+
+@media (max-width:420px){
+  .sunRouteModeText{
+    max-width:88%;
+  }
+
+  .sunRouteStopButton{
+    grid-template-columns:30px 1fr;
+  }
+
+  .sunRouteStopBadge{
+    grid-column:2;
+    justify-self:start;
+  }
+}
+
