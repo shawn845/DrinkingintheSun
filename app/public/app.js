@@ -1173,7 +1173,7 @@ const SUN_ROUTE_MODES = {
   'usain-bolt': {
     id: 'usain-bolt',
     title: 'Usain Bolt',
-    subtitle: 'A fast city-centre sun chase from where you are now.',
+    subtitle: 'Fast city sun chase.',
     kicker: 'Sun sprint',
     buttonText: 'Start Usain Bolt',
     travelMode: 'walk',
@@ -1232,12 +1232,12 @@ function ensureSunRoutesRow() {
       <button class="sunRouteModeCard louReed" id="btnLouReed" type="button" role="listitem">
         <span class="sunRouteModeKicker">Perfect day</span>
         <span class="sunRouteModeTitle">Lou Reed</span>
-        <span class="sunRouteModeText">A slower sunny pub day by bike, with time to enjoy each stop.</span>
+        <span class="sunRouteModeText">Sunny pub day by bike.</span>
       </button>
       <button class="sunRouteModeCard usainBolt" id="btnUsainBolt" type="button" role="listitem">
         <span class="sunRouteModeKicker">Sun sprint</span>
         <span class="sunRouteModeTitle">Usain Bolt</span>
-        <span class="sunRouteModeText">A fast city-centre sun chase from where you are now.</span>
+        <span class="sunRouteModeText">Fast city sun chase.</span>
       </button>
     </div>
   `;
