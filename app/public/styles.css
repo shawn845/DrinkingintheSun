@@ -1575,3 +1575,98 @@ button,
     font-size:11px;
   }
 }
+
+/* Compact sunny route buttons - iPhone fix */
+.sunRoutesWrap{
+  margin-top:8px !important;
+  margin-bottom:14px !important;
+}
+
+.sunRoutesWrap .rowHeader{
+  padding-bottom:8px;
+}
+
+.sunRoutesWrap .rowTitle{
+  font-size:18px;
+}
+
+.sunRoutesWrap .rowMeta{
+  font-size:12px;
+  text-align:right;
+}
+
+.sunRouteModeGrid{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:8px !important;
+  align-items:stretch !important;
+}
+
+.sunRouteModeCard{
+  min-width:0 !important;
+  min-height:88px !important;
+  width:100% !important;
+  padding:11px 10px !important;
+  border-radius:18px !important;
+  gap:3px !important;
+  align-content:start !important;
+}
+
+.sunRouteModeCard::after{
+  width:54px !important;
+  height:54px !important;
+  right:-22px !important;
+  top:-18px !important;
+  opacity:.78 !important;
+}
+
+.sunRouteModeCard.usainBolt::after{
+  width:54px !important;
+  height:54px !important;
+  right:-20px !important;
+  bottom:-18px !important;
+  top:auto !important;
+}
+
+.sunRouteModeKicker{
+  font-size:9px !important;
+  letter-spacing:.22px !important;
+  line-height:1.1 !important;
+}
+
+.sunRouteModeTitle{
+  font-size:18px !important;
+  line-height:1.02 !important;
+  white-space:nowrap !important;
+}
+
+.sunRouteModeText{
+  max-width:100% !important;
+  font-size:11px !important;
+  line-height:1.18 !important;
+  display:-webkit-box !important;
+  -webkit-line-clamp:2 !important;
+  -webkit-box-orient:vertical !important;
+  overflow:hidden !important;
+}
+
+@media (max-width:380px){
+  .sunRouteModeGrid{
+    gap:7px !important;
+  }
+
+  .sunRouteModeCard{
+    min-height:82px !important;
+    padding:10px 9px !important;
+    border-radius:17px !important;
+  }
+
+  .sunRouteModeTitle{
+    font-size:16px !important;
+  }
+
+  .sunRouteModeKicker,
+  .sunRouteModeText{
+    font-size:10px !important;
+  }
+}
