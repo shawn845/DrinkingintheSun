@@ -188,7 +188,8 @@ function parseHashRoute() {
       type: 'sunRoute',
       mode: routeMatch[1],
       pubIds,
-      startIso: params.get('start') || ''
+      startIso: params.get('start') || '',
+      lengthKey: params.get('length') || ''
     };
   }
 
@@ -1163,7 +1164,11 @@ const SUN_ROUTE_MODES = {
     stopMinutes: 55,
     candidateOriginKm: 34,
     maxSegmentKm: 22,
-    upcomingMinutes: 360
+    upcomingMinutes: 360,
+    minSpacingKm: 2.2,
+    finishBackToCity: true,
+    defaultLength: 'normal',
+    defaultStartOffsetMinutes: 120
   },
   'usain-bolt': {
     id: 'usain-bolt',
@@ -1179,9 +1184,38 @@ const SUN_ROUTE_MODES = {
     stopMinutes: 25,
     candidateOriginKm: 5.2,
     maxSegmentKm: 2.2,
-    upcomingMinutes: 120
+    upcomingMinutes: 120,
+    minSpacingKm: 0,
+    finishBackToCity: false,
+    defaultLength: 'normal',
+    defaultStartOffsetMinutes: 0
   }
 };
+
+const SUN_ROUTE_LENGTHS = {
+  'lou-reed': {
+    short: { label: 'Short', maxStops: 3, minStops: 2, stopMinutes: 45 },
+    normal: { label: 'Normal', maxStops: 4, minStops: 3, stopMinutes: 55 },
+    long: { label: 'Long', maxStops: 5, minStops: 3, stopMinutes: 65 }
+  },
+  'usain-bolt': {
+    short: { label: 'Short', maxStops: 5, minStops: 3, stopMinutes: 20 },
+    normal: { label: 'Normal', maxStops: 8, minStops: 4, stopMinutes: 25 },
+    long: { label: 'Long', maxStops: 10, minStops: 5, stopMinutes: 25 }
+  }
+};
+
+function getSunRouteConfig(modeId, lengthKey = '') {
+  const base = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+  const lengths = SUN_ROUTE_LENGTHS[base.id] || {};
+  const safeLengthKey = lengths[lengthKey] ? lengthKey : (base.defaultLength || 'normal');
+  return {
+    ...base,
+    ...(lengths[safeLengthKey] || {}),
+    lengthKey: safeLengthKey,
+    lengthLabel: (lengths[safeLengthKey] || {}).label || 'Normal'
+  };
+}
 
 function ensureSunRoutesRow() {
   if (els.rowSunRoutesWrap || !els.listView) return;
@@ -1218,7 +1252,7 @@ function ensureSunRoutesRow() {
 }
 
 async function openSunRouteMode(modeId, push = true) {
-  const config = SUN_ROUTE_MODES[modeId];
+  const config = getSunRouteConfig(modeId);
   if (!config) return;
 
   const btn = modeId === 'lou-reed' ? els.btnLouReed : els.btnUsainBolt;
@@ -1233,7 +1267,9 @@ async function openSunRouteMode(modeId, push = true) {
   try {
     const origin = await getAdaptiveRouteOrigin();
     reEnrichAll();
-    const plan = generateSunRoutePlan(modeId, new Date(), origin);
+    const config = getSunRouteConfig(modeId);
+    const startTime = getDefaultSunRouteStartTime(config);
+    const plan = generateSunRoutePlan(modeId, startTime, origin, config.lengthKey);
     openSunRoutePlan(plan, push);
   } finally {
     if (btn) {
@@ -1305,8 +1341,46 @@ function getAdaptiveRouteOrigin() {
   });
 }
 
+
+function getDefaultSunRouteStartTime(config) {
+  const now = new Date();
+  const offset = Number(config?.defaultStartOffsetMinutes || 0);
+  const start = new Date(now.getTime() + offset * 60000);
+  return roundDateToNextQuarter(start);
+}
+
+function roundDateToNextQuarter(dateObj) {
+  const d = new Date(dateObj instanceof Date ? dateObj : new Date());
+  const mins = d.getMinutes();
+  const add = (15 - (mins % 15)) % 15;
+  d.setMinutes(mins + add, 0, 0);
+  return d;
+}
+
+function formatTimeInputValue(dateObj) {
+  return fmtTime(dateObj instanceof Date ? dateObj : new Date());
+}
+
+function dateWithTimeInputValue(value, fallbackDate = new Date()) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+  const baseParts = getLondonDateParts(fallbackDate instanceof Date ? fallbackDate : new Date());
+  const hours = match ? clamp(Number(match[1]), 0, 23) : baseParts.hour;
+  const minutes = match ? clamp(Number(match[2]), 0, 59) : baseParts.minute;
+  const dateAnchor = createUtcAnchorDate(baseParts.year, baseParts.month, baseParts.day);
+  return minutesToLocalDate(dateAnchor, (hours * 60) + minutes);
+}
+
+function getSunRouteFinishPoint(config, origin = null) {
+  if (!config?.finishBackToCity) return null;
+  return {
+    ...FALLBACK_LOCATION,
+    name: FALLBACK_LOCATION.name,
+    isRouteFinish: true
+  };
+}
+
 function openSharedSunRoute(route, push = false) {
-  const config = SUN_ROUTE_MODES[route.mode];
+  const config = getSunRouteConfig(route.mode, route.lengthKey);
   if (!config) return;
 
   const pubs = route.pubIds
@@ -1321,7 +1395,7 @@ function openSharedSunRoute(route, push = false) {
   const startTime = route.startIso ? new Date(route.startIso) : new Date();
   const safeStartTime = Number.isNaN(startTime.getTime()) ? new Date() : startTime;
   const origin = getRouteOriginNow();
-  const plan = buildSunRoutePlanFromPubs(route.mode, pubs, safeStartTime, origin, true);
+  const plan = buildSunRoutePlanFromPubs(route.mode, pubs, safeStartTime, origin, true, config.lengthKey);
   openSunRoutePlan(plan, push);
 }
 
@@ -1340,8 +1414,8 @@ function openSunRoutePlan(plan, push = true) {
   }
 }
 
-function generateSunRoutePlan(modeId, startTime = new Date(), origin = getRouteOriginNow()) {
-  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+function generateSunRoutePlan(modeId, startTime = new Date(), origin = getRouteOriginNow(), lengthKey = '') {
+  const config = getSunRouteConfig(modeId, lengthKey);
   const selected = [];
   let currentPoint = origin;
   let currentTime = new Date(startTime);
@@ -1374,11 +1448,11 @@ function generateSunRoutePlan(modeId, startTime = new Date(), origin = getRouteO
   if (selected.length < config.minStops) {
     const fallbackPlan = buildFallbackSunRoute(config, startTime, origin, selected, candidatePool);
     if (fallbackPlan.length > selected.length) {
-      return buildSunRoutePlanFromStops(config.id, fallbackPlan, startTime, origin, false);
+      return buildSunRoutePlanFromStops(config.id, fallbackPlan, startTime, origin, false, config.lengthKey);
     }
   }
 
-  return buildSunRoutePlanFromStops(config.id, selected, startTime, origin, false);
+  return buildSunRoutePlanFromStops(config.id, selected, startTime, origin, false, config.lengthKey);
 }
 
 function getSunRouteCandidates(config, origin, startTime) {
@@ -1420,14 +1494,29 @@ function chooseNextSunRouteStop({ config, selected, pool, currentPoint, currentT
 
     const departAt = new Date(arriveAt.getTime() + config.stopMinutes * 60000);
     const originKm = routeDistanceKm(origin, pub, config.travelMode);
+    const cityKm = routeDistanceKm(FALLBACK_LOCATION, pub, config.travelMode);
+    const returnKm = routeDistanceKm(pub, FALLBACK_LOCATION, config.travelMode);
+    const nearestSelectedKm = selected.length
+      ? Math.min(...selected.map(item => routeDistanceKm(item.pub, pub, config.travelMode)))
+      : Infinity;
 
     let score = opportunity.score;
 
     if (config.id === 'lou-reed') {
-      score += yesFlag(pub.worthTheTrip) ? 32 : 0;
-      score += yesFlag(pub.cycleFriendly) ? 24 : 0;
-      score -= travelMinutes * 0.45;
-      score -= originKm * 0.45;
+      score += yesFlag(pub.worthTheTrip) ? 34 : 0;
+      score += yesFlag(pub.cycleFriendly) ? 26 : 0;
+      score -= travelMinutes * 0.32;
+      score -= originKm * 0.18;
+
+      if (Number.isFinite(nearestSelectedKm) && nearestSelectedKm < config.minSpacingKm) {
+        score -= (config.minSpacingKm - nearestSelectedKm) * 34;
+      }
+
+      if (stopIndex === 0) {
+        score += Math.min(cityKm, 14) * 0.85;
+      } else if (stopIndex >= Math.max(1, config.maxStops - 2)) {
+        score -= returnKm * 1.05;
+      }
     } else {
       score += pub.bestNow?.state === 'sunny' ? 28 : 0;
       score -= travelMinutes * 2.4;
@@ -1464,8 +1553,15 @@ function buildFallbackSunRoute(config, startTime, origin, alreadySelected, pool)
       const opportunity = getSunOpportunityForArrival(pub, startTime, config.stopMinutes, config.upcomingMinutes * 1.5);
       let score = opportunity.score - originKm;
       if (config.id === 'lou-reed') {
+        const nearestSelectedKm = alreadySelected.length
+          ? Math.min(...alreadySelected.map(item => routeDistanceKm(item.pub, pub, config.travelMode)))
+          : Infinity;
         score += yesFlag(pub.worthTheTrip) ? 25 : 0;
         score += yesFlag(pub.cycleFriendly) ? 20 : 0;
+        score += Math.min(routeDistanceKm(FALLBACK_LOCATION, pub, config.travelMode), 12) * 0.45;
+        if (Number.isFinite(nearestSelectedKm) && nearestSelectedKm < config.minSpacingKm) {
+          score -= (config.minSpacingKm - nearestSelectedKm) * 26;
+        }
       } else {
         score += pub.bestNow?.state === 'sunny' ? 20 : 0;
       }
@@ -1499,8 +1595,8 @@ function buildFallbackSunRoute(config, startTime, origin, alreadySelected, pool)
   return items;
 }
 
-function buildSunRoutePlanFromPubs(modeId, pubs, startTime, origin, isShared = false) {
-  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
+function buildSunRoutePlanFromPubs(modeId, pubs, startTime, origin, isShared = false, lengthKey = '') {
+  const config = getSunRouteConfig(modeId, lengthKey);
   const stops = [];
   let currentPoint = origin;
   let currentTime = new Date(startTime);
@@ -1526,15 +1622,21 @@ function buildSunRoutePlanFromPubs(modeId, pubs, startTime, origin, isShared = f
     currentTime = departAt;
   });
 
-  return buildSunRoutePlanFromStops(config.id, stops, startTime, origin, isShared);
+  return buildSunRoutePlanFromStops(config.id, stops, startTime, origin, isShared, config.lengthKey);
 }
 
-function buildSunRoutePlanFromStops(modeId, stops, startTime, origin, isShared = false) {
-  const config = SUN_ROUTE_MODES[modeId] || SUN_ROUTE_MODES['usain-bolt'];
-  const totalKm = stops.reduce((sum, stop) => sum + (stop.travelKm || 0), 0);
+function buildSunRoutePlanFromStops(modeId, stops, startTime, origin, isShared = false, lengthKey = '') {
+  const config = getSunRouteConfig(modeId, lengthKey);
+  const finishPoint = getSunRouteFinishPoint(config, origin);
+  const lastStop = stops.length ? stops[stops.length - 1] : null;
+  const returnKm = finishPoint && lastStop ? routeDistanceKm(lastStop.pub, finishPoint, config.travelMode) : 0;
+  const returnMinutes = finishPoint && lastStop ? travelMinutesForKm(returnKm, config.travelMode) : 0;
+  const stopsKm = stops.reduce((sum, stop) => sum + (stop.travelKm || 0), 0);
+  const totalKm = stopsKm + returnKm;
   const lastDepart = stops.length ? stops[stops.length - 1].departAt : startTime;
+  const finishAt = returnMinutes ? new Date(lastDepart.getTime() + returnMinutes * 60000) : lastDepart;
   const totalMinutes = stops.length
-    ? Math.max(0, (lastDepart - startTime) / 60000)
+    ? Math.max(0, (finishAt - startTime) / 60000)
     : 0;
 
   return {
@@ -1543,6 +1645,10 @@ function buildSunRoutePlanFromStops(modeId, stops, startTime, origin, isShared =
     startTime: new Date(startTime),
     generatedAt: new Date(),
     origin,
+    finishPoint,
+    returnKm,
+    returnMinutes,
+    finishAt,
     totalKm,
     totalMinutes,
     isShared
@@ -1630,10 +1736,13 @@ function renderSunRouteModal(plan) {
     ? `Using ${plan.origin.name || FALLBACK_LOCATION.name}`
     : 'Using your location';
   const generatedText = `Built for ${fmtTime(plan.startTime)} today`;
+  const finishText = plan.finishPoint
+    ? `Finish: ${plan.finishPoint.name || FALLBACK_LOCATION.name}`
+    : 'Finish: final pub';
   const routeLabel = `${plan.stops.length} stops · ${plan.totalKm.toFixed(1)} km · about ${formatRideMinutes(plan.totalMinutes)}`;
   const routeEmptyText = config.id === 'lou-reed'
-    ? 'Not enough useful sunny cycling stops are available right now.'
-    : 'Not enough useful sunny city-centre stops are available right now.';
+    ? 'Not enough useful sunny cycling stops are available for that start time.'
+    : 'Not enough useful sunny city-centre stops are available for that start time.';
 
   els.modalContent.innerHTML = `
     <section class="sunRoutePlan">
@@ -1647,10 +1756,23 @@ function renderSunRouteModal(plan) {
         <div class="sunRouteSummary">
           <span>${escapeHtml(routeLabel)}</span>
           <span>${escapeHtml(config.travelLabel)}</span>
+          <span>${escapeHtml(config.lengthLabel)}</span>
           <span>${escapeHtml(locationText)}</span>
+          <span>${escapeHtml(finishText)}</span>
         </div>
 
-        <div class="sunRouteGenerated">${escapeHtml(generatedText)}. ${plan.isShared ? 'Shared route.' : 'Generated from current sun windows.'}</div>
+        <div class="sunRouteControls" aria-label="Route controls">
+          <label class="sunRouteControlField">
+            <span>Start time</span>
+            <input id="sunRouteStartTime" type="time" value="${escapeAttr(formatTimeInputValue(plan.startTime))}" />
+          </label>
+          <div class="sunRouteLengthControl" aria-label="Route length">
+            ${renderSunRouteLengthButtons(config)}
+          </div>
+          <button class="pillBtn sunRouteRebuildBtn" type="button" id="btnRebuildSunRoute">Rebuild route</button>
+        </div>
+
+        <div class="sunRouteGenerated">${escapeHtml(generatedText)}. ${plan.isShared ? 'Shared route.' : 'Generated from the selected start time and sun windows.'}</div>
 
         <div class="detailActions sunRouteActions">
           <button class="pillBtn" type="button" id="btnShareSunRoute" ${hasStops ? '' : 'disabled'}>Share route</button>
@@ -1659,12 +1781,16 @@ function renderSunRouteModal(plan) {
 
         ${hasStops ? `<div class="sunRouteMap" id="sunRoutePlanMap" aria-label="${escapeAttr(config.title)} map"></div>` : ''}
 
-        ${hasStops ? renderSunRouteStops(plan) : `<div class="emptyState">${escapeHtml(routeEmptyText)} Try Near me, or try again later when more sun windows are open.</div>`}
+        ${hasStops ? renderSunRouteStops(plan) : `<div class="emptyState">${escapeHtml(routeEmptyText)} Try changing the start time or route length.</div>`}
+
+        ${hasStops && plan.finishPoint ? renderSunRouteFinish(plan) : ''}
 
         <div class="sunRouteFootnote">Routes are suggestions, not opening-hours guarantees. Check the pub before making a long trip.</div>
       </div>
     </section>
   `;
+
+  bindSunRouteControls(plan);
 
   const shareBtn = document.getElementById('btnShareSunRoute');
   if (shareBtn) shareBtn.addEventListener('click', () => shareSunRoute(plan));
@@ -1672,6 +1798,54 @@ function renderSunRouteModal(plan) {
   if (hasStops) {
     requestAnimationFrame(() => initSunRoutePlanMap(plan));
   }
+}
+
+function renderSunRouteLengthButtons(config) {
+  const lengths = SUN_ROUTE_LENGTHS[config.id] || {};
+  return Object.entries(lengths).map(([key, item]) => `
+    <button class="sunRouteLengthBtn ${key === config.lengthKey ? 'isActive' : ''}" type="button" data-length="${escapeAttr(key)}" aria-pressed="${key === config.lengthKey ? 'true' : 'false'}">${escapeHtml(item.label)}</button>
+  `).join('');
+}
+
+function bindSunRouteControls(plan) {
+  const timeInput = document.getElementById('sunRouteStartTime');
+  const rebuildBtn = document.getElementById('btnRebuildSunRoute');
+  const lengthButtons = Array.from(document.querySelectorAll('.sunRouteLengthBtn'));
+  let selectedLength = plan.mode.lengthKey || plan.mode.defaultLength || 'normal';
+
+  lengthButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedLength = btn.dataset.length || selectedLength;
+      lengthButtons.forEach(item => {
+        const active = item === btn;
+        item.classList.toggle('isActive', active);
+        item.setAttribute('aria-pressed', String(active));
+      });
+    });
+  });
+
+  if (!rebuildBtn) return;
+  rebuildBtn.addEventListener('click', () => {
+    const nextStart = dateWithTimeInputValue(timeInput?.value, plan.startTime || new Date());
+    reEnrichAll();
+    const nextPlan = generateSunRoutePlan(plan.mode.id, nextStart, plan.origin || getRouteOriginNow(), selectedLength);
+    openSunRoutePlan(nextPlan, true);
+  });
+}
+
+function renderSunRouteFinish(plan) {
+  const lastStop = plan.stops[plan.stops.length - 1];
+  if (!lastStop || !plan.finishPoint) return '';
+
+  return `
+    <div class="sunRouteFinishCard">
+      <span class="sunRouteFinishDot">↩</span>
+      <span>
+        <strong>Finish back in ${escapeHtml(plan.finishPoint.name || FALLBACK_LOCATION.name)}</strong>
+        <em>${escapeHtml(plan.mode.travelVerb)} back after the last stop · ${escapeHtml(formatRideMinutes(plan.returnMinutes))} · ${escapeHtml(plan.returnKm.toFixed(1))} km · about ${escapeHtml(fmtTime(plan.finishAt))}</em>
+      </span>
+    </div>
+  `;
 }
 
 function renderSunRouteStops(plan) {
@@ -1729,7 +1903,8 @@ function initSunRoutePlanMap(plan) {
 
   const points = [
     [plan.origin.lat, plan.origin.lng],
-    ...plan.stops.map(stop => [stop.pub.lat, stop.pub.lng])
+    ...plan.stops.map(stop => [stop.pub.lat, stop.pub.lng]),
+    ...(plan.finishPoint ? [[plan.finishPoint.lat, plan.finishPoint.lng]] : [])
   ];
 
   state.sunRouteLayer = L.polyline(points, {
@@ -1759,6 +1934,16 @@ function initSunRoutePlanMap(plan) {
     }).addTo(state.sunRouteMarkerLayer).bindTooltip(`${index + 1}. ${stop.pub.name}`, { direction: 'top' });
   });
 
+  if (plan.finishPoint) {
+    L.circleMarker([plan.finishPoint.lat, plan.finishPoint.lng], {
+      radius: 7,
+      color: '#2f2f2f',
+      weight: 2,
+      fillColor: '#ffffff',
+      fillOpacity: 1
+    }).addTo(state.sunRouteMarkerLayer).bindTooltip('Finish: Nottingham city centre', { direction: 'top' });
+  }
+
   state.sunRouteMap.fitBounds(state.sunRouteLayer.getBounds(), { padding: [18, 18] });
   setTimeout(() => state.sunRouteMap && state.sunRouteMap.invalidateSize(), 120);
 }
@@ -1776,6 +1961,7 @@ function sunRouteShareHash(plan) {
   const params = new URLSearchParams();
   params.set('pubs', plan.stops.map(stop => encodeURIComponent(stop.pub.id)).join(','));
   params.set('start', plan.startTime.toISOString());
+  params.set('length', plan.mode.lengthKey || 'normal');
   return `#route-${plan.mode.id}?${params.toString()}`;
 }
 
@@ -1825,9 +2011,11 @@ function mapsSunRouteHref(plan) {
 
   const origin = `${plan.origin.lat},${plan.origin.lng}`;
   const destinationStop = plan.stops[plan.stops.length - 1];
-  const destination = `${destinationStop.pub.lat},${destinationStop.pub.lng}`;
-  const waypoints = plan.stops
-    .slice(0, -1)
+  const destination = plan.finishPoint
+    ? `${plan.finishPoint.lat},${plan.finishPoint.lng}`
+    : `${destinationStop.pub.lat},${destinationStop.pub.lng}`;
+  const waypointStops = plan.finishPoint ? plan.stops : plan.stops.slice(0, -1);
+  const waypoints = waypointStops
     .map(stop => `${stop.pub.lat},${stop.pub.lng}`)
     .join('|');
 
