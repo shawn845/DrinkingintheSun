@@ -80,3 +80,8 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
 .routeSection code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 #route-summary, #route-snippet { background:#fff; }
 .fileBtn input { display:none; }
+
+.uploadSection .checkboxRow { margin-top: 28px; }
+.uploadPreview { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.uploadPreview.isHidden { display: none; }
+.uploadPreviewImg { display: block; width: 100%; max-width: 360px; border-radius: 14px; border: 1px solid var(--line); background: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.05); }
