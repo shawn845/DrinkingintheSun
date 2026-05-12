@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -10,7 +11,7 @@
   <header class="topbar">
     <div>
       <h1>Drinking in the Sun Admin</h1>
-      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, upload GPX routes, then save pubs.csv and routes.json straight to GitHub or export locally.</p>
+      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, upload Cloudflare-hosted images, upload GPX routes, then save pubs.csv and routes.json straight to GitHub or export locally.</p>
       <div id="draftStatus" class="draftStatus">Latest CSV will load by default. Local draft restore is available on this device.</div>
     </div>
     <div class="topActions">
@@ -85,6 +86,39 @@
             <select id="field-cycle_friendly" class="textInput"><option value="">—</option><option value="yes">yes</option><option value="no">no</option></select>
           </label>
         </div>
+      </div>
+
+      <div class="card section uploadSection">
+        <div class="sectionHead">
+          <h2>Cloudflare image upload</h2>
+          <div class="rowActions">
+            <label class="btn secondary small fileBtn">
+              <input id="upload-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              Choose image
+            </label>
+            <button id="btnUploadImage" class="btn small" type="button" disabled>Upload image</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <label>Upload token<input id="upload-token" class="textInput mono" type="password" placeholder="Paste your Cloudflare upload token"></label>
+          <label class="checkboxRow"><input id="upload-remember-token" type="checkbox">Remember upload token on this device</label>
+          <label>Image type
+            <select id="upload-image-type" class="textInput">
+              <option value="main">Main image</option>
+              <option value="spot-a">Spot A image</option>
+              <option value="spot-b">Spot B image</option>
+            </select>
+          </label>
+          <label>Upload slug<input id="upload-slug" class="textInput mono" type="text" readonly></label>
+          <label class="full">Selected file<input id="upload-file-name" class="textInput" type="text" readonly placeholder="No image selected"></label>
+          <label class="full">Returned Cloudflare URL<input id="upload-returned-url" class="textInput" type="url" readonly placeholder="Uploaded image URL will appear here"></label>
+        </div>
+        <div id="uploadStatus" class="metaLine topGap">Choose a pub, choose an image, then upload. The matching URL field will fill automatically.</div>
+        <div id="uploadPreviewWrap" class="uploadPreview isHidden">
+          <img id="uploadPreviewImg" class="uploadPreviewImg" alt="Uploaded image preview" />
+        </div>
+      </div>
+
       <div class="card section routeSection">
         <div class="sectionHead">
           <h2>Curated route / GPX</h2>
