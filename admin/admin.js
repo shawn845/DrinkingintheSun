@@ -2,6 +2,8 @@ const DEFAULT_FETCH_PATHS = ['./public/data/pubs.csv', './pubs.csv'];
 const DEFAULT_ROUTES_FETCH_PATHS = ['./public/data/routes.json', './routes.json'];
 const STORAGE_KEY = 'drinking_admin_local_draft_v5';
 const SETTINGS_KEY = 'drinking_admin_github_settings_v5';
+const UPLOAD_SETTINGS_KEY = 'drinking_admin_upload_settings_v1';
+const UPLOAD_ENDPOINT = 'https://api.drinkinginthesun.com/upload-image';
 const MAX_SEARCH_RESULTS = 14;
 const APP_TIME_ZONE = 'Europe/London';
 const KNOWN_HEADERS = [
@@ -68,7 +70,18 @@ const els = {
   routeSnippet: document.getElementById('route-snippet'),
   btnRouteClear: document.getElementById('btnRouteClear'),
   btnRouteCopy: document.getElementById('btnRouteCopy'),
-  btnRouteDownload: document.getElementById('btnRouteDownload')
+  btnRouteDownload: document.getElementById('btnRouteDownload'),
+  uploadFile: document.getElementById('upload-file'),
+  uploadToken: document.getElementById('upload-token'),
+  uploadRememberToken: document.getElementById('upload-remember-token'),
+  uploadImageType: document.getElementById('upload-image-type'),
+  uploadSlug: document.getElementById('upload-slug'),
+  uploadFileName: document.getElementById('upload-file-name'),
+  uploadReturnedUrl: document.getElementById('upload-returned-url'),
+  uploadStatus: document.getElementById('uploadStatus'),
+  btnUploadImage: document.getElementById('btnUploadImage'),
+  uploadPreviewWrap: document.getElementById('uploadPreviewWrap'),
+  uploadPreviewImg: document.getElementById('uploadPreviewImg')
 };
 
 const fieldIds = KNOWN_HEADERS.reduce((acc, header) => {
@@ -89,6 +102,7 @@ document.addEventListener('DOMContentLoaded', init);
 async function init() {
   wireUi();
   restoreSettings();
+  restoreUploadSettings();
   const today = formatDate(new Date());
   els.previewDateA.value = today;
   els.previewDateB.value = today;
@@ -97,7 +111,9 @@ async function init() {
   }
   updateDraftStatus();
   updateGitStatus();
+  updateUploadUi();
 }
+
 
 function wireUi() {
   els.fileInput.addEventListener('change', onFileChosen);
@@ -125,6 +141,7 @@ function wireUi() {
       if (!hasSelection()) return;
       state.rows[state.selectedIndex][key] = normalizeFieldValue(key, el.value);
       if (key === 'id' || key === 'name' || key === 'spot_a' || key === 'spot_b') renderPubList();
+      if (key === 'id' || key === 'name') updateUploadUi();
       if (key === 'spot_a_horizon') rebuildPointRowsFromString('a', true);
       if (key === 'spot_b_horizon') rebuildPointRowsFromString('b', true);
       updatePreview();
@@ -171,7 +188,21 @@ function wireUi() {
   els.btnRouteClear.addEventListener('click', clearCurrentRouteDraft);
   els.btnRouteCopy.addEventListener('click', copyRouteSnippet);
   els.btnRouteDownload.addEventListener('click', downloadRouteSnippet);
+
+  [els.uploadToken, els.uploadImageType].forEach(el => {
+    el.addEventListener('input', () => {
+      persistUploadSettings();
+      updateUploadUi();
+    });
+  });
+  els.uploadRememberToken.addEventListener('change', () => {
+    persistUploadSettings();
+    updateUploadUi();
+  });
+  els.uploadFile.addEventListener('change', onUploadFileChosen);
+  els.btnUploadImage.addEventListener('click', uploadCurrentImage);
 }
+
 
 async function loadDefaultCsv() {
   state.githubSha = '';
@@ -602,8 +633,10 @@ function populateEditor() {
   rebuildPointRowsFromString('b', false);
   loadRouteDraftIntoEditor();
   updatePreview();
+  updateUploadUi();
   updateDirtyUi();
 }
+
 
 function clearEditor(message) {
   Object.values(fieldIds).forEach(el => { el.value = ''; });
@@ -618,8 +651,10 @@ function clearEditor(message) {
   els.spotBStatus.className = 'pill muted';
   els.spotBStatus.textContent = 'Optional';
   clearRouteEditor();
+  updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
+
 
 function normalizeFieldValue(key, value) {
   if (key === 'worth_the_trip' || key === 'cycle_friendly') return String(value || '').trim().toLowerCase();
@@ -890,8 +925,167 @@ function updateDirtyUi() {
   els.btnRouteCopy.disabled = !hasSnippet;
   els.btnRouteDownload.disabled = !hasSnippet;
   els.btnRouteClear.disabled = !hasSelection() && !hasSnippet;
+  const hasUploadReady = hasSelection() && !!String(els.uploadToken.value || '').trim() && !!els.uploadFile.files?.[0];
+  els.btnUploadImage.disabled = !hasUploadReady;
 }
 
+
+
+
+function persistUploadSettings() {
+  const payload = {
+    rememberToken: !!els.uploadRememberToken.checked,
+    token: els.uploadRememberToken.checked ? String(els.uploadToken.value || '').trim() : ''
+  };
+  try {
+    localStorage.setItem(UPLOAD_SETTINGS_KEY, JSON.stringify(payload));
+  } catch {}
+}
+
+function restoreUploadSettings() {
+  try {
+    const raw = localStorage.getItem(UPLOAD_SETTINGS_KEY) || '';
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    els.uploadRememberToken.checked = !!payload.rememberToken;
+    els.uploadToken.value = payload.rememberToken ? (payload.token || '') : '';
+  } catch {}
+}
+
+function getUploadSlug(row = getSelectedRow()) {
+  if (!row) return '';
+  const raw = String(row.id || row.name || '').trim();
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
+function getUploadTargetFieldKey(imageType) {
+  if (imageType === 'spot-a') return 'spot_a_photo_url';
+  if (imageType === 'spot-b') return 'spot_b_photo_url';
+  return 'image_url';
+}
+
+function updateUploadUi(message = '', isError = false) {
+  const row = getSelectedRow();
+  const slug = getUploadSlug(row);
+  if (els.uploadSlug) els.uploadSlug.value = slug;
+  if (!els.uploadFile.files?.length && els.uploadFileName) {
+    els.uploadFileName.value = '';
+    els.uploadFileName.placeholder = 'No image selected';
+  }
+  const selectedType = String(els.uploadImageType.value || 'main');
+  const targetKey = getUploadTargetFieldKey(selectedType);
+  const targetValue = row ? String(row[targetKey] || '').trim() : '';
+  const defaultText = row
+    ? `Upload ${selectedType} image for this pub. On success the ${targetKey} field will fill automatically.`
+    : 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.';
+  els.uploadStatus.textContent = message || (targetValue ? `Current ${targetKey}: ${targetValue}` : defaultText);
+  els.uploadStatus.classList.toggle('errorText', !!isError);
+  if (targetValue && !els.uploadReturnedUrl.value) {
+    els.uploadReturnedUrl.value = targetValue;
+    setUploadPreview(targetValue);
+  }
+  if (!row && els.uploadReturnedUrl) {
+    els.uploadReturnedUrl.value = '';
+    setUploadPreview('');
+  }
+  updateDirtyUi();
+}
+
+function setUploadPreview(url) {
+  const clean = String(url || '').trim();
+  if (!clean) {
+    els.uploadPreviewWrap.classList.add('isHidden');
+    els.uploadPreviewImg.removeAttribute('src');
+    return;
+  }
+  els.uploadPreviewWrap.classList.remove('isHidden');
+  els.uploadPreviewImg.src = clean;
+}
+
+function onUploadFileChosen() {
+  const file = els.uploadFile.files?.[0] || null;
+  if (els.uploadFileName) {
+    els.uploadFileName.value = file ? file.name : '';
+    els.uploadFileName.placeholder = file ? '' : 'No image selected';
+  }
+  updateUploadUi(file ? `Ready to upload ${file.name}.` : '');
+}
+
+async function uploadCurrentImage() {
+  const row = getSelectedRow();
+  if (!row) {
+    updateUploadUi('Choose a pub first.', true);
+    return;
+  }
+
+  const token = String(els.uploadToken.value || '').trim();
+  const file = els.uploadFile.files?.[0] || null;
+  const imageType = String(els.uploadImageType.value || 'main');
+  const pubSlug = getUploadSlug(row);
+
+  if (!token) {
+    updateUploadUi('Paste your Cloudflare upload token first.', true);
+    return;
+  }
+  if (!pubSlug) {
+    updateUploadUi('This pub needs an id or name before you can upload.', true);
+    return;
+  }
+  if (!file) {
+    updateUploadUi('Choose an image file first.', true);
+    return;
+  }
+
+  persistUploadSettings();
+  els.btnUploadImage.disabled = true;
+  updateUploadUi('Uploading image to Cloudflare…');
+
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('pubSlug', pubSlug);
+    form.append('imageType', imageType);
+    form.append('replace', 'true');
+
+    const res = await fetch(UPLOAD_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: form
+    });
+
+    const data = await safeJson(res);
+
+    if (!res.ok || !data?.ok || !data?.url) {
+      throw new Error(data?.error || `Upload failed (${res.status}).`);
+    }
+
+    const targetKey = getUploadTargetFieldKey(imageType);
+    row[targetKey] = data.url;
+    if (fieldIds[targetKey]) fieldIds[targetKey].value = data.url;
+    els.uploadReturnedUrl.value = data.url;
+    setUploadPreview(data.url);
+    els.uploadFile.value = '';
+    if (els.uploadFileName) {
+      els.uploadFileName.value = '';
+      els.uploadFileName.placeholder = 'No image selected';
+    }
+    updateUploadUi(`Upload complete. ${targetKey} filled automatically.`);
+    updatePreview();
+    saveDraftToLocal();
+  } catch (err) {
+    updateUploadUi(err?.message || 'Upload failed.', true);
+  } finally {
+    updateDirtyUi();
+  }
+}
 
 function saveDraftToLocal(manual = false) {
   if (!state.headers.length) return;
