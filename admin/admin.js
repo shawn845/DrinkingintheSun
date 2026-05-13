@@ -201,13 +201,13 @@ function wireUi() {
     persistUploadSettings();
     updateUploadUi();
   });
-  els.uploadFile.addEventListener('click', () => {
-    try { els.uploadFile.value = ''; } catch {}
-  });
-  els.uploadFile.addEventListener('change', onUploadFileChosen);
-  els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
-  els.btnUploadSpotA.addEventListener('click', () => uploadCurrentImage('spot-a'));
-  els.btnUploadSpotB.addEventListener('click', () => uploadCurrentImage('spot-b'));
+  if (els.uploadFile) {
+    els.uploadFile.addEventListener('click', () => { try { els.uploadFile.value = ''; } catch {} });
+    els.uploadFile.addEventListener('change', onUploadFileChosen);
+  }
+  if (els.btnUploadMain) els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
+  if (els.btnUploadSpotA) els.btnUploadSpotA.addEventListener('click', () => uploadCurrentImage('spot-a'));
+  if (els.btnUploadSpotB) els.btnUploadSpotB.addEventListener('click', () => uploadCurrentImage('spot-b'));
 }
 
 
@@ -658,10 +658,6 @@ function clearEditor(message) {
   els.spotBStatus.className = 'pill muted';
   els.spotBStatus.textContent = 'Optional';
   clearRouteEditor();
-  clearUploadLocalPreview();
-  if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
-  if (els.uploadFileName) { els.uploadFileName.value = ''; els.uploadFileName.placeholder = 'No image selected'; }
-  setUploadPreview('');
   updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
@@ -936,10 +932,10 @@ function updateDirtyUi() {
   els.btnRouteCopy.disabled = !hasSnippet;
   els.btnRouteDownload.disabled = !hasSnippet;
   els.btnRouteClear.disabled = !hasSelection() && !hasSnippet;
-  const hasUploadReady = hasSelection() && !!String(els.uploadToken.value || '').trim() && !!els.uploadFile.files?.[0];
-  els.btnUploadMain.disabled = !hasUploadReady;
-  els.btnUploadSpotA.disabled = !hasUploadReady;
-  els.btnUploadSpotB.disabled = !hasUploadReady;
+  const hasUploadReady = !!(els.uploadToken && els.uploadFile && hasSelection() && String(els.uploadToken.value || '').trim() && els.uploadFile.files?.[0]);
+  if (els.btnUploadMain) els.btnUploadMain.disabled = !hasUploadReady;
+  if (els.btnUploadSpotA) els.btnUploadSpotA.disabled = !hasUploadReady;
+  if (els.btnUploadSpotB) els.btnUploadSpotB.disabled = !hasUploadReady;
 }
 
 
@@ -947,8 +943,8 @@ function updateDirtyUi() {
 
 function persistUploadSettings() {
   const payload = {
-    rememberToken: !!els.uploadRememberToken.checked,
-    token: els.uploadRememberToken.checked ? String(els.uploadToken.value || '').trim() : ''
+    rememberToken: !!els.uploadRememberToken?.checked,
+    token: els.uploadRememberToken?.checked ? String(els.uploadToken?.value || '').trim() : ''
   };
   try {
     localStorage.setItem(UPLOAD_SETTINGS_KEY, JSON.stringify(payload));
@@ -960,8 +956,8 @@ function restoreUploadSettings() {
     const raw = localStorage.getItem(UPLOAD_SETTINGS_KEY) || '';
     if (!raw) return;
     const payload = JSON.parse(raw);
-    els.uploadRememberToken.checked = !!payload.rememberToken;
-    els.uploadToken.value = payload.rememberToken ? (payload.token || '') : '';
+    if (els.uploadRememberToken) els.uploadRememberToken.checked = !!payload.rememberToken;
+    if (els.uploadToken) els.uploadToken.value = payload.rememberToken ? (payload.token || '') : '';
   } catch {}
 }
 
@@ -983,6 +979,41 @@ function getUploadTargetFieldKey(imageType) {
   return 'image_url';
 }
 
+function updateUploadUi(message = '', isError = false) {
+  if (!els.uploadStatus) return;
+  const row = getSelectedRow();
+  const slug = row ? getUploadSlug(row) : '';
+  if (els.uploadSlug) els.uploadSlug.value = slug;
+
+  if (els.uploadFileName && (!els.uploadFile || !els.uploadFile.files?.length)) {
+    els.uploadFileName.value = '';
+    els.uploadFileName.placeholder = 'No image selected';
+  }
+
+  const mainValue = row ? String(row.image_url || '').trim() : '';
+  const spotAValue = row ? String(row.spot_a_photo_url || '').trim() : '';
+  const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
+  const defaultText = row
+    ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
+    : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
+
+  els.uploadStatus.textContent = message || defaultText;
+  els.uploadStatus.classList.toggle('errorText', !!isError);
+
+  const previewUrl =
+    String(state.uploadLocalPreviewUrl || '').trim() ||
+    String(els.uploadReturnedUrl?.value || '').trim() ||
+    mainValue || spotAValue || spotBValue || '';
+
+  setUploadPreview(previewUrl);
+
+  if (!row) {
+    if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
+  }
+
+  updateDirtyUi();
+}
+
 function clearUploadLocalPreview() {
   if (state.uploadLocalPreviewUrl) {
     try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
@@ -990,36 +1021,8 @@ function clearUploadLocalPreview() {
   }
 }
 
-function updateUploadUi(message = '', isError = false) {
-  const row = getSelectedRow();
-  const slug = getUploadSlug(row);
-  if (els.uploadSlug) els.uploadSlug.value = slug;
-  if (!els.uploadFile.files?.length && els.uploadFileName) {
-    els.uploadFileName.value = '';
-    els.uploadFileName.placeholder = 'No image selected';
-  }
-  const mainValue = row ? String(row.image_url || '').trim() : '';
-  const spotAValue = row ? String(row.spot_a_photo_url || '').trim() : '';
-  const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
-  const defaultText = row
-    ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
-    : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
-  els.uploadStatus.textContent = message || defaultText;
-  els.uploadStatus.classList.toggle('errorText', !!isError);
-  const previewUrl = String(state.uploadLocalPreviewUrl || '').trim() || String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
-  if (previewUrl) {
-    setUploadPreview(previewUrl);
-  } else {
-    setUploadPreview('');
-  }
-  if (!row && els.uploadReturnedUrl) {
-    els.uploadReturnedUrl.value = '';
-    setUploadPreview('');
-  }
-  updateDirtyUi();
-}
-
 function setUploadPreview(url) {
+  if (!els.uploadPreviewWrap || !els.uploadPreviewImg) return;
   const clean = String(url || '').trim();
   if (!clean) {
     els.uploadPreviewWrap.classList.add('isHidden');
@@ -1031,18 +1034,24 @@ function setUploadPreview(url) {
 }
 
 function onUploadFileChosen() {
+  if (!els.uploadFile) return;
   const file = els.uploadFile.files?.[0] || null;
+
   if (els.uploadFileName) {
     els.uploadFileName.value = file ? file.name : '';
     els.uploadFileName.placeholder = file ? '' : 'No image selected';
   }
+
   clearUploadLocalPreview();
+
   if (file) {
-    state.uploadLocalPreviewUrl = URL.createObjectURL(file);
-    setUploadPreview(state.uploadLocalPreviewUrl);
-  } else {
-    setUploadPreview('');
+    try {
+      state.uploadLocalPreviewUrl = URL.createObjectURL(file);
+    } catch {
+      state.uploadLocalPreviewUrl = '';
+    }
   }
+
   updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
 
@@ -1053,8 +1062,8 @@ async function uploadCurrentImage(targetType = 'main') {
     return;
   }
 
-  const token = String(els.uploadToken.value || '').trim();
-  const file = els.uploadFile.files?.[0] || null;
+  const token = String(els.uploadToken?.value || '').trim();
+  const file = els.uploadFile?.files?.[0] || null;
   const imageType = String(targetType || 'main');
   const pubSlug = getUploadSlug(row);
 
@@ -1072,9 +1081,9 @@ async function uploadCurrentImage(targetType = 'main') {
   }
 
   persistUploadSettings();
-  els.btnUploadMain.disabled = true;
-  els.btnUploadSpotA.disabled = true;
-  els.btnUploadSpotB.disabled = true;
+  if (els.btnUploadMain) els.btnUploadMain.disabled = true;
+  if (els.btnUploadSpotA) els.btnUploadSpotA.disabled = true;
+  if (els.btnUploadSpotB) els.btnUploadSpotB.disabled = true;
   updateUploadUi('Uploading image to Cloudflare…');
 
   try {
@@ -1086,9 +1095,7 @@ async function uploadCurrentImage(targetType = 'main') {
 
     const res = await fetch(UPLOAD_ENDPOINT, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
+      headers: { Authorization: `Bearer ${token}` },
       body: form
     });
 
@@ -1101,10 +1108,10 @@ async function uploadCurrentImage(targetType = 'main') {
     const targetKey = getUploadTargetFieldKey(imageType);
     row[targetKey] = data.url;
     if (fieldIds[targetKey]) fieldIds[targetKey].value = data.url;
-    els.uploadReturnedUrl.value = data.url;
+    if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = data.url;
     clearUploadLocalPreview();
     setUploadPreview(data.url);
-    els.uploadFile.value = '';
+    if (els.uploadFile) els.uploadFile.value = '';
     if (els.uploadFileName) {
       els.uploadFileName.value = '';
       els.uploadFileName.placeholder = 'No image selected';
