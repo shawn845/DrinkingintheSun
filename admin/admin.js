@@ -25,7 +25,8 @@ const state = {
   isSavingGitHub: false,
   routeDrafts: {},
   routesData: {},
-  routesSha: ''
+  routesSha: '',
+  uploadLocalPreviewUrl: ''
 };
 
 const els = {
@@ -199,6 +200,9 @@ function wireUi() {
   els.uploadRememberToken.addEventListener('change', () => {
     persistUploadSettings();
     updateUploadUi();
+  });
+  els.uploadFile.addEventListener('click', () => {
+    try { els.uploadFile.value = ''; } catch {}
   });
   els.uploadFile.addEventListener('change', onUploadFileChosen);
   els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
@@ -654,6 +658,13 @@ function clearEditor(message) {
   els.spotBStatus.className = 'pill muted';
   els.spotBStatus.textContent = 'Optional';
   clearRouteEditor();
+  clearUploadLocalPreview();
+  if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
+  if (els.uploadFileName) {
+    els.uploadFileName.value = '';
+    els.uploadFileName.placeholder = 'No image selected';
+  }
+  setUploadPreview('');
   updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
@@ -991,15 +1002,28 @@ function updateUploadUi(message = '', isError = false) {
     : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
   els.uploadStatus.textContent = message || defaultText;
   els.uploadStatus.classList.toggle('errorText', !!isError);
-  const previewUrl = String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
+  const previewUrl =
+    String(state.uploadLocalPreviewUrl || '').trim() ||
+    String(els.uploadReturnedUrl.value || '').trim() ||
+    mainValue || spotAValue || spotBValue || '';
   if (previewUrl) {
     setUploadPreview(previewUrl);
+  } else {
+    setUploadPreview('');
   }
   if (!row && els.uploadReturnedUrl) {
     els.uploadReturnedUrl.value = '';
+    clearUploadLocalPreview();
     setUploadPreview('');
   }
   updateDirtyUi();
+}
+
+function clearUploadLocalPreview() {
+  if (state.uploadLocalPreviewUrl) {
+    try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
+    state.uploadLocalPreviewUrl = '';
+  }
 }
 
 function setUploadPreview(url) {
@@ -1018,6 +1042,13 @@ function onUploadFileChosen() {
   if (els.uploadFileName) {
     els.uploadFileName.value = file ? file.name : '';
     els.uploadFileName.placeholder = file ? '' : 'No image selected';
+  }
+  clearUploadLocalPreview();
+  if (file) {
+    state.uploadLocalPreviewUrl = URL.createObjectURL(file);
+    setUploadPreview(state.uploadLocalPreviewUrl);
+  } else {
+    setUploadPreview('');
   }
   updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
@@ -1058,7 +1089,7 @@ async function uploadCurrentImage(targetType = 'main') {
     form.append('file', file);
     form.append('pubSlug', pubSlug);
     form.append('imageType', imageType);
-    form.append('replace', 'false');
+    form.append('replace', 'true');
 
     const res = await fetch(UPLOAD_ENDPOINT, {
       method: 'POST',
@@ -1078,13 +1109,14 @@ async function uploadCurrentImage(targetType = 'main') {
     row[targetKey] = data.url;
     if (fieldIds[targetKey]) fieldIds[targetKey].value = data.url;
     els.uploadReturnedUrl.value = data.url;
+    clearUploadLocalPreview();
     setUploadPreview(data.url);
     els.uploadFile.value = '';
     if (els.uploadFileName) {
       els.uploadFileName.value = '';
       els.uploadFileName.placeholder = 'No image selected';
     }
-    updateUploadUi(`Upload complete. ${targetKey} filled with a new Cloudflare URL.`);
+    updateUploadUi(`Upload complete. ${targetKey} filled automatically with the Cloudflare URL.`);
     updatePreview();
     saveDraftToLocal();
   } catch (err) {
