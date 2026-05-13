@@ -1,33 +1,4 @@
 {
-  "velo_verde": {
-    "id": "velo_verde",
-    "pubName": "Caffe Velo Verde",
-    "start": {
-      "label": "`Blend Nottingham",
-      "lat": 52.954286,
-      "lng": -1.13807
-    },
-    "end": {
-      "label": "Caffe Velo Verde",
-      "lat": 52.986879,
-      "lng": -0.910441
-    },
-    "stats": {
-      "routePoints": 593,
-      "distanceKm": 20.98,
-      "minutesAt15kph": 84,
-      "minutesAt18kph": 70
-    },
-    "map": {
-      "bbox": [
-        -1.138737,
-        52.938024,
-        -0.910148,
-        52.986609
-      ],
-      "encodedPolyline5": "usebIvi}EHNFLN[Vg@DIf@aAn@qAVv@p@fBPXp@j@p@f@z@@xAQDAvAW\\IJ[AI?GCoA?GLAPCtAMLAfDSTAF?BAAUAICcCP}CH_DZ{DBoAHa@r@a@H@NEHEJIFKAKGa@CQLGb@SJEtBcAt@w@\\i@b@q@L]x@}CNHNLDOJ[p@Ob@WLJLFFIZbA|@hAv@bAd@d@RZ\\b@n@r@TXb@l@JTZ]lBsA`IsGr@s@l@a@vAw@lDuAz@m@v@{@n@cApAwCF_@JWCi@G]@[COGQAe@CIKa@M[Oo@EYGUCOMu@?CCSAKC]AIGm@CYAOCSQiBAMCWCQAGKaACSGm@Gc@ESES?EG]ESESCQKi@CMCQAOG]E[?CE_@CUCc@C[CUEy@Ca@A[A[?IGkACq@?KC[A_@AOAOQiBAMC]?I?E?g@?WB}@J_AFe@AcA?ACe@?GEe@KyAUmBCMAI_@{CEaAD[LMlL{@t@MdA]HCAq@Ei@c@qBIYI_@IWAGSmA?GAGGkD?yB@kF?[?qG?mAGcBDg@?C@C@CBI@G_AsAc@_AM_@a@aBMo@Ia@UaBs@}H[iByAqFMi@Kc@QkAG}@As@HkBNeAxAuGFa@^mCVyDAqDKkCa@gDa@mB}@{CeA{BeBkDaD_Hi@kAa@wAaBgJi@sBIWq@_BcEiHc@eAEOYy@y@aDMu@UmCEi@AQCUAc@A{@B_GJwAzAoKLyAJeA@WD_AC_AQeE_@kFc@eIEw@AC?KkBoXAK?EGq@C_@OiCE[w@cJSoBCIa@iC[wAs@mBOaAy@qZMiSAe@GqPAwCA_BAQFcAR}@pAkCj@uAAc@D_ABW@KHmAAiAEc@U}BAmANyCA_@Kq@Kc@AEWiAAm@d@}C@YIgBMmAEc@E[I?GK@QDGB?WaCIm@OcBAGEi@Gi@Cw@FqBNkD?}CGs@Os@[cBa@_CUeBYoDMiCCa@O{CGeAK}BGwAWoEAM[sDQyBAMWqCAWMEOcBCMEk@QkAWiCuAeREiBKS?WAUFYQsJOmT_@cJHAOaCAKIBWcDOUC[E]De@S{A_@aBkDyMo@eDWeBu@gIKcDGu@FmFTuDJBJyAIGh@oJXcHb@gMJiF@eFn@u]BwA?[LwG@_BGiBIaD?y@AmADkATaD?I@GBcAAGuC_H_FmNO?KMi@eAYK_BWUWOa@AGM[`@yB?UK[aDsEY}@]u@Oe@]k@uAcBWKS[{DqGcBgC_CaDwBmC?EKGyEiFSAGNqAsACCYWaCkBcFuC}CoA_Cs@_Dq@_C[aCOiB@{AP{A`@_Bp@GB@LK@GJ?\\IFKDoChAu@Fm@I_@Ou@{@g@oAA_@DSDWCMOmAWi@SO[Iu@@y@^CQEWM{@p@y@LYFY?UIUY_@gAqBuAkD[o@mAaBeAeC{EuJ}@aCOkAgIaQ{AeC]cAiBcDw@iBUgA_AoBSS}AbGe@nF@^DPLLBMJ?DMNcBZuBfAwEv@{CrDgMBi@K[USw@iAgBwBoBqBDSDWgDqDq@aAOu@@o@ECCEEIT_@Lg@Hm@BY@wC]qI?_D`@iF\\iCnAkGf@}E^qC~@sEb@kC?kAEkBWgHMs@Ws@a@s@e@iACIWSMO_@UqC}AUGg@]s@u@yBwCCE_@_@wBuAo@s@KScCoGUcACc@@W|@aCLs@K_EAYAi@k@kEQmAOqAE_@DmDAs@Eq@gD{I_@k@cAaAi@iAi@}@{BoDe@eAMk@k@kE[kC[uBo@eDSsA?COkAQc@_@g@mBkBo@mAc@xA"
-    }
-  },
   "bearded_theory": {
     "id": "bearded_theory",
     "pubName": "Cycle to Bearded Theory with Zig Zag Thursday 21 May 2026",
@@ -55,6 +26,35 @@
         52.948744
       ],
       "encodedPolyline5": "cpdbIrb_FC`ABPMBA?@X@ZBb@Df@JxBDn@Ah@KdCEl@@n@B^?L?p@?T?XLdDBhALfC@LVhCFz@L~A^bE`@hEDf@Dd@DHJtAN|BNxAHbA?HJtAPvDDhAh@tQbA|RHjA?JB^B`@@R@XAhAB|@Cx@ErBChF@~BFRRh@j@xAjCpGV`AfBlKJj@?LCBEDC@@JH^DHVpATlARlAVjBFXBP@JNv@HZ?PGR@BBFBFCDBLDJZHl@|@NJ`@TxA`@|@Zn@TRDZJLB?PZNF?HKp@Zj@`@HBjBjA^h@Pn@Dv@?v@Ep@@?FDFB\\h@BBHFHL`CnGrEfMNKz@iAJGr@lBZbA?HCX@PJVHTPFv@lBt@jBBHrKpZBFHTd@jB`Lbj@Jb@Jb@HGDCF^HEPKTrB@ZAvCH?P?F@l@dAfAOVUjCc@FAxAMl@Ef@?tB[x@k@BCFAh@`@rATXFREFCj@YzAa@x@On@S@R@Hb@ItBs@NB^pAXe@H[Bs@@g@Ts@R]ZKPDzAvCjAxBR\\HBr@tAJ^_@~@v@rAM\\FLj@~@h@~@PXPXNj@NV@VABITP\\N\\@JDz@BH`@v@JX@FNf@ZN`@Lp@jAx@`BP_@Xn@i@~@Oh@Y^j@z@HPz@nAnApBeAnDc@hAEHUp@?h@Zn@@N\\v@bB|FFBBPFTCLb@zCHdAz@zPDbAF~@HzANxAZtBd@lCb@pBTp@tBzEv@tBf@jB^jBLt@L^vC}CzBoFp@gA~AaBtAcAfAo@pAm@LGl@YNKj@QNCPAh@BXNRTdAvArAxBrBlEvBzDdAlBbBlDn@fAjBjD~BjF`BjDxB`Fh@rArAbElApD|@xAb@f@K`@fCbH`@~@n@|ADl@Gd@e@lBi@rC@PCX^x@ZlATlAZHHr@QJOF}At@]d@GTAv@\\xC`@vDHz@FhAJhBTrBPhALt@Lr@@@BPHl@DXDVRBHLBRG`@APB??^TnBNzBEvBQtAm@bB[h@MV}BpA?DXvBn@WVlCXlAo@|@]h@SPAFh@vA@b@LPPHXC`BoB~@zD`@`@Pd@Nn@RS@HBH@ANMv@]L?Rb@t@h@n@|AFLLZf@`A`BbBdA`An@dADMHLzA|BbA~A\\p@HPVzABT@V?ZG|CAvAApA?f@CzCArCC`C?HE`HAbD?n@?NAzABjBPtBb@nCDXHf@X`CDd@d@|EHrBBzAL|ADNAZGHR`DPx@FHH\\Ef@QRa@v@i@|CGn@MjCGdBIvB?JCd@CBKbAANE`@Q`AQ~@S`AUjAQ~@WzAKj@G^Kr@EV_@`DEXCRKv@Mz@WnBGd@Y|BUzBFB@rAzAhKV`BxAbKJdAd@tIl@pITxIRxATt@f@l@VNr@T?NANc@BMn@@VPx@TfCNjAGJF`@\\|BbAdIj@rE`@tAT~BITKNRtCDd@DjADjALnDL|HDbDcFnALnCYNoFzA{BpAkHvEf@pB\\xCv@nKn@tJDpC@`AB|@^tIaAVPrAJrDt@x@\\bHGhA@bCBdAHXFTFPDNNt@Dx@IfVQvBmAjF]lCKxBClA?|AFlD?VTpF?pA?~@k@bJMlEMzBMrAg@vN@l@v@~L`@bLF~AVdClE~\\fInb@Ax@Gn@yA|HLRs@pDCHa@pBQz@qB`KKh@uBhKsFnXk@pC[vAgAnFc@vB[xA]lBKl@]jBKr@Ul@FF`ChCj@dAF\\NvBPx@g@n@WFKj@E^AHbCcAl@s@TMHDVf@Jv@FhIAvBGvBOzBSlBo@xDiAvD_AhCu@pCKGAJAHDJ@@PJHCjA\\^N^N`@Pl@VjA~@|A`BZ\\bChCNN`AfAHl@ELCJQp@yA`IM`DEbDEt@_@`Aw@x@KTEXa@hKCjAD~E~@`[?`AHb@|ApEHb@HzAh@dCh@nE|@~I?zFE~@?jBGxDD|CIvAb@rEHzAC~AK`BY`A[p@Y^oAv@i@Tu@Le@@gBe@QUi@Us@Cc@ZSZINg@pBOhACh@@fEt@nTBxCAxAObCoA`HKt@GfABZJf@xAvJLvA@bBEh@Wt@STcAnAy@fA]|AsAhD[fKDp@UnAOtAK`BEd@y@pEOxFGz@k@dDe@`A_@f@}@t@mCnAyBz@mB`Ac@XcBfBQ\\eCrH[dA_AhBc@hAj@`Ah@r@PnANPzFjCF@b@Ub@EjAn@nBlAtEfCFJDTCj@]xBCz@@\\X|CVvARLx@AnAs@r@I~B~@pKhFzAd@~@Bf@A^KdCgAl@KbBGf@Mn@KrAS`DW`CSjD]dFg@jAKz@Pp@E~@k@bAEr@J@@~@RHBb@@`@WJAFAH?AYHAFATEVLh@`@LAl@Ed@Cr@QjCOTKr@MnBIf@Bp@@vDh@f@@lDB|AQjBk@rDsADKvBcCnD_FpBiBxB}AvCyA|By@pB_@^E`@BXJ`An@n@l@bA~AtDdJ`AzBl@tAj@pBNhAlAhHLv@BLzBlMr@~B|@~Bj@fAb@f@h@b@nE|Bx@VpCNvBOjA[rYeMHWJHDHNe@DDNPAHFHTE^q@VUhViKtBmBVK`@Jv@PvA`@xAz@`Bf@bAr@v@bAd@pAb@zAVBv@QRINSLAT?DAjDe@zAUrAYvB}A^E|Cb@TOn@vL^nKBt@Bn@Rl@b@Rx@G`BO`@?\\?^AhCSd@ED?Bf@Rl@x@fB|A~BdBtAxA|B^tA~CvGn@dBf@`Ct@xEv@bHv@`BhLrRl@v@pA~@h@p@x@rCZfB`@dAfJvIxBv@~Cn@t@T`Ar@~C|DdCzDz@XrV|CnEn@RBhCVj@b@`BfDh@xBLVhAfC|@hCzAxFr@~BfAr@zBz@dB~@r@l@|DbIFLj@zAx@xBr@|BrClKP|@d@?f@t@b@xAnAnG\\nBFAhAxIzBbO|FlQFJxApF|BlKb@zAGbA?XBfJMxFAnDJrBhAvGrAjAH@z@Be@hFiAtKWrDOnEEbC?vEF|Cv@nNHvD@dGE|A]pCQp@Ud@gF|Eq@j@aAhA_K|NKNcBn@wDZaA?Gd@h@xFv@dERfBT|CRnG`@hGXnBd@dBj@~@rEjDzAnAFNn@nA~@dDRpCDxAA\\Y~DAz@OrApCfAb@lATbDLbAHl@hAtFjAxFnFzV~@lEVlCP|@Vr@`BhDlEfLxAhDzGfNZf@zA~CxH|Ux@nB`BpChGxJrClF|AfB~BvEbCfFh@dAf@nAtBzDfBvBhCnD@Bp@lAlB|CN`@j@lBPz@PbBCrAgApJi@xIKrCBnAJvB`@dEdA`JX~AtBdL`@|Az@nBfBdElAjC~BxETf@nAdDb@|ApAhKPfARFLRF`@?PEVIPSJSCS`A{@~Bg@vAu@vAn@nBN|@Fp@Bz@K`BnAr@zBzACTFrAFRRXt@p@n@JRC^Oh@UZGt@H^TLL^h@VfALrAA~@CPKt@Kj@WdBa@~BGd@EhA@j@PhAX|@LRDHTTl@X`AJd@Np@p@d@~@FJv@nBL?HL@PAVJb@ThANh@POn@_@ZMt@G\\BXNh@\\ZZt@vAd@pANn@P|@RdBTzC@`A?nBAd@ATCx@ItB?`A@?Z?G^GFCLABI~ABh@VrCLlAV`IR|DFtBIhAAnAF`@LVPL~@FbA?JHDNGzDIrGMxD?P?rAB^MPKVK\\Kl@UbEFbB@RBFj@r@PHjAf@NF|@Zn@DpAG~@C`@@lABz@J|AZn@N`@Cl@QlAy@z@c@h@GJ?jAX~@b@n@Xr@`@hA~@`Ax@t@n@PN\\VtCtBtCfBLHrBxAVRrBlBPNnChCvAtAh@P|@LlB?fCJ|@Rd@NF@xAf@fBh@^NRRd@n@Zp@fB`KBPJrDB|A"
+    }
+  },
+  "velo_verde": {
+    "id": "velo_verde",
+    "pubName": "Caffe Velo Verde",
+    "start": {
+      "label": "`Blend Nottingham",
+      "lat": 52.954286,
+      "lng": -1.13807
+    },
+    "end": {
+      "label": "Caffe Velo Verde",
+      "lat": 52.986879,
+      "lng": -0.910441
+    },
+    "stats": {
+      "routePoints": 593,
+      "distanceKm": 20.98,
+      "minutesAt15kph": 84,
+      "minutesAt18kph": 70
+    },
+    "map": {
+      "bbox": [
+        -1.138737,
+        52.938024,
+        -0.910148,
+        52.986609
+      ],
+      "encodedPolyline5": "usebIvi}EHNFLN[Vg@DIf@aAn@qAVv@p@fBPXp@j@p@f@z@@xAQDAvAW\\IJ[AI?GCoA?GLAPCtAMLAfDSTAF?BAAUAICcCP}CH_DZ{DBoAHa@r@a@H@NEHEJIFKAKGa@CQLGb@SJEtBcAt@w@\\i@b@q@L]x@}CNHNLDOJ[p@Ob@WLJLFFIZbA|@hAv@bAd@d@RZ\\b@n@r@TXb@l@JTZ]lBsA`IsGr@s@l@a@vAw@lDuAz@m@v@{@n@cApAwCF_@JWCi@G]@[COGQAe@CIKa@M[Oo@EYGUCOMu@?CCSAKC]AIGm@CYAOCSQiBAMCWCQAGKaACSGm@Gc@ESES?EG]ESESCQKi@CMCQAOG]E[?CE_@CUCc@C[CUEy@Ca@A[A[?IGkACq@?KC[A_@AOAOQiBAMC]?I?E?g@?WB}@J_AFe@AcA?ACe@?GEe@KyAUmBCMAI_@{CEaAD[LMlL{@t@MdA]HCAq@Ei@c@qBIYI_@IWAGSmA?GAGGkD?yB@kF?[?qG?mAGcBDg@?C@C@CBI@G_AsAc@_AM_@a@aBMo@Ia@UaBs@}H[iByAqFMi@Kc@QkAG}@As@HkBNeAxAuGFa@^mCVyDAqDKkCa@gDa@mB}@{CeA{BeBkDaD_Hi@kAa@wAaBgJi@sBIWq@_BcEiHc@eAEOYy@y@aDMu@UmCEi@AQCUAc@A{@B_GJwAzAoKLyAJeA@WD_AC_AQeE_@kFc@eIEw@AC?KkBoXAK?EGq@C_@OiCE[w@cJSoBCIa@iC[wAs@mBOaAy@qZMiSAe@GqPAwCA_BAQFcAR}@pAkCj@uAAc@D_ABW@KHmAAiAEc@U}BAmANyCA_@Kq@Kc@AEWiAAm@d@}C@YIgBMmAEc@E[I?GK@QDGB?WaCIm@OcBAGEi@Gi@Cw@FqBNkD?}CGs@Os@[cBa@_CUeBYoDMiCCa@O{CGeAK}BGwAWoEAM[sDQyBAMWqCAWMEOcBCMEk@QkAWiCuAeREiBKS?WAUFYQsJOmT_@cJHAOaCAKIBWcDOUC[E]De@S{A_@aBkDyMo@eDWeBu@gIKcDGu@FmFTuDJBJyAIGh@oJXcHb@gMJiF@eFn@u]BwA?[LwG@_BGiBIaD?y@AmADkATaD?I@GBcAAGuC_H_FmNO?KMi@eAYK_BWUWOa@AGM[`@yB?UK[aDsEY}@]u@Oe@]k@uAcBWKS[{DqGcBgC_CaDwBmC?EKGyEiFSAGNqAsACCYWaCkBcFuC}CoA_Cs@_Dq@_C[aCOiB@{AP{A`@_Bp@GB@LK@GJ?\\IFKDoChAu@Fm@I_@Ou@{@g@oAA_@DSDWCMOmAWi@SO[Iu@@y@^CQEWM{@p@y@LYFY?UIUY_@gAqBuAkD[o@mAaBeAeC{EuJ}@aCOkAgIaQ{AeC]cAiBcDw@iBUgA_AoBSS}AbGe@nF@^DPLLBMJ?DMNcBZuBfAwEv@{CrDgMBi@K[USw@iAgBwBoBqBDSDWgDqDq@aAOu@@o@ECCEEIT_@Lg@Hm@BY@wC]qI?_D`@iF\\iCnAkGf@}E^qC~@sEb@kC?kAEkBWgHMs@Ws@a@s@e@iACIWSMO_@UqC}AUGg@]s@u@yBwCCE_@_@wBuAo@s@KScCoGUcACc@@W|@aCLs@K_EAYAi@k@kEQmAOqAE_@DmDAs@Eq@gD{I_@k@cAaAi@iAi@}@{BoDe@eAMk@k@kE[kC[uBo@eDSsA?COkAQc@_@g@mBkBo@mAc@xA"
     }
   },
   "the_martin": {
