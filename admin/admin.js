@@ -1,10 +1,11 @@
-
 const DEFAULT_FETCH_PATHS = ['./public/data/pubs.csv', './pubs.csv'];
 const DEFAULT_ROUTES_FETCH_PATHS = ['./public/data/routes.json', './routes.json'];
-const STORAGE_KEY = 'drinking_admin_local_draft_v6';
-const SETTINGS_KEY = 'drinking_admin_github_settings_v6';
-const UPLOAD_SETTINGS_KEY = 'drinking_admin_upload_settings_v2';
+const STORAGE_KEY = 'drinking_admin_local_draft_v5';
+const SETTINGS_KEY = 'drinking_admin_github_settings_v5';
+const UPLOAD_SETTINGS_KEY = 'drinking_admin_upload_settings_v1';
 const UPLOAD_ENDPOINT = 'https://api.drinkinginthesun.com/upload-image';
+const UPLOAD_MAX_DIMENSION = 1200;
+const UPLOAD_JPEG_QUALITY = 0.82;
 const MAX_SEARCH_RESULTS = 14;
 const APP_TIME_ZONE = 'Europe/London';
 const KNOWN_HEADERS = [
@@ -26,9 +27,7 @@ const state = {
   isSavingGitHub: false,
   routeDrafts: {},
   routesData: {},
-  routesSha: '',
-  uploadLocalPreviewUrl: '',
-  startupSource: ''
+  routesSha: ''
 };
 
 const els = {
@@ -107,56 +106,29 @@ async function init() {
   wireUi();
   restoreSettings();
   restoreUploadSettings();
-
   const today = formatDate(new Date());
   els.previewDateA.value = today;
   els.previewDateB.value = today;
-
-  const loaded = await loadStartupData();
-  if (!loaded) {
-    clearEditor('Could not load startup data.');
+  if (!restoreDraftFromLocal()) {
+    await loadDefaultCsv();
   }
-
   updateDraftStatus();
   updateGitStatus();
   updateUploadUi();
 }
 
-async function loadStartupData() {
-  const settings = getGitHubSettings();
-  if (settings.owner && settings.repo && settings.path) {
-    try {
-      await loadCsvFromGitHub(true);
-      state.startupSource = 'github';
-      updateDraftStatus('Loaded fresh from GitHub on startup. Local draft restore is manual only.');
-      return true;
-    } catch (err) {
-      console.warn('GitHub startup load failed:', err);
-      updateGitStatus(err.message || 'GitHub startup load failed.', true);
-    }
-  }
-
-  await loadDefaultCsv();
-  state.startupSource = 'bundled';
-  updateDraftStatus('GitHub settings missing or startup load failed. Loaded bundled CSV instead.');
-  return true;
-}
 
 function wireUi() {
   els.fileInput.addEventListener('change', onFileChosen);
   els.btnReload.addEventListener('click', async () => {
     await loadDefaultCsv();
-    state.startupSource = 'bundled';
     updateDraftStatus('Reloaded bundled CSV from the tool folder.');
   });
   els.btnDownload.addEventListener('click', downloadCsv);
   els.btnSaveDraft.addEventListener('click', () => saveDraftToLocal(true));
   els.btnRestoreDraft.addEventListener('click', () => {
-    if (restoreDraftFromLocal()) {
-      updateDraftStatus('Restored local draft manually from this device.');
-    } else {
-      updateDraftStatus('No local draft found on this device.');
-    }
+    if (restoreDraftFromLocal()) updateDraftStatus('Restored local draft from this device.');
+    else updateDraftStatus('No local draft found on this device.');
   });
   els.btnClearDraft.addEventListener('click', () => {
     clearLocalDraft();
@@ -205,7 +177,7 @@ function wireUi() {
     });
   });
 
-  els.btnGitHubLoad.addEventListener('click', () => loadCsvFromGitHub(false));
+  els.btnGitHubLoad.addEventListener('click', loadCsvFromGitHub);
   els.btnGitHubSave.addEventListener('click', saveCsvToGitHub);
 
   els.routeGpxFile.addEventListener('change', onRouteGpxChosen);
@@ -220,22 +192,22 @@ function wireUi() {
   els.btnRouteCopy.addEventListener('click', copyRouteSnippet);
   els.btnRouteDownload.addEventListener('click', downloadRouteSnippet);
 
-  els.uploadToken.addEventListener('input', () => {
-    persistUploadSettings();
-    updateUploadUi();
+  [els.uploadToken].forEach(el => {
+    el.addEventListener('input', () => {
+      persistUploadSettings();
+      updateUploadUi();
+    });
   });
   els.uploadRememberToken.addEventListener('change', () => {
     persistUploadSettings();
     updateUploadUi();
-  });
-  els.uploadFile.addEventListener('click', () => {
-    try { els.uploadFile.value = ''; } catch {}
   });
   els.uploadFile.addEventListener('change', onUploadFileChosen);
   els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
   els.btnUploadSpotA.addEventListener('click', () => uploadCurrentImage('spot-a'));
   els.btnUploadSpotB.addEventListener('click', () => uploadCurrentImage('spot-b'));
 }
+
 
 async function loadDefaultCsv() {
   state.githubSha = '';
@@ -275,41 +247,38 @@ async function loadBundledRoutes() {
   }
 }
 
-async function loadCsvFromGitHub(isStartup = false) {
+async function loadCsvFromGitHub() {
   const settings = getGitHubSettings();
   if (!settings.owner || !settings.repo || !settings.path) {
-    const msg = 'Enter owner, repository, and CSV path first.';
-    updateGitStatus(msg, true);
-    if (!isStartup) updateDraftStatus(msg);
-    return false;
+    updateGitStatus('Enter owner, repository, and CSV path first.', true);
+    return;
   }
 
   updateGitStatus('Loading CSV and routes from GitHub…');
-  const file = await githubGetFile(settings.owner, settings.repo, settings.path, settings.branch, settings.token);
-  loadCsvText(file.text, file.path.split('/').pop() || 'pubs.csv');
-  state.githubSha = file.sha || '';
-  state.githubLastLoadedAt = new Date().toISOString();
-  state.restoredFromDraft = false;
+  try {
+    const file = await githubGetFile(settings.owner, settings.repo, settings.path, settings.branch, settings.token);
+    loadCsvText(file.text, file.path.split('/').pop() || 'pubs.csv');
+    state.githubSha = file.sha || '';
+    state.githubLastLoadedAt = new Date().toISOString();
 
-  state.routesData = {};
-  state.routesSha = '';
-  if (settings.routesPath) {
-    try {
-      const routesFile = await githubGetFile(settings.owner, settings.repo, settings.routesPath, settings.branch, settings.token);
-      state.routesData = normalizeRoutesData(JSON.parse(routesFile.text || '{}'));
-      state.routesSha = routesFile.sha || '';
-    } catch (err) {
-      if (!/404|Not Found/i.test(String(err.message || ''))) throw err;
+    state.routesData = {};
+    state.routesSha = '';
+    if (settings.routesPath) {
+      try {
+        const routesFile = await githubGetFile(settings.owner, settings.repo, settings.routesPath, settings.branch, settings.token);
+        state.routesData = normalizeRoutesData(JSON.parse(routesFile.text || '{}'));
+        state.routesSha = routesFile.sha || '';
+      } catch (err) {
+        if (!/404|Not Found/i.test(String(err.message || ''))) throw err;
+      }
     }
-  }
 
-  if (hasSelection()) populateEditor();
-  updateGitStatus(`Loaded ${file.path}${settings.routesPath ? ` and ${settings.routesPath}` : ''} from ${settings.owner}/${settings.repo}${settings.branch ? ` (${settings.branch})` : ''}.`);
-  if (!isStartup) {
-    updateDraftStatus('Loaded fresh from GitHub.');
+    if (hasSelection()) populateEditor();
+    updateGitStatus(`Loaded ${file.path}${settings.routesPath ? ` and ${settings.routesPath}` : ''} from ${settings.owner}/${settings.repo}${settings.branch ? ` (${settings.branch})` : ''}.`);
+    updateDirtyUi();
+  } catch (err) {
+    updateGitStatus(err.message || 'Could not load from GitHub.', true);
   }
-  updateDirtyUi();
-  return true;
 }
 
 async function saveCsvToGitHub() {
@@ -372,7 +341,6 @@ async function saveCsvToGitHub() {
     state.githubLastLoadedAt = new Date().toISOString();
     state.loadedFilename = settings.path.split('/').pop() || 'pubs.csv';
     updateGitStatus(`Saved ${settings.path}${settings.routesPath ? ` and ${settings.routesPath}` : ''} to ${settings.owner}/${settings.repo}.`);
-    updateDraftStatus('Saved to GitHub.');
   } catch (err) {
     updateGitStatus(err.message || 'Could not save to GitHub.', true);
   } finally {
@@ -482,7 +450,7 @@ function updateGitStatus(message = '', isError = false) {
     const settings = getGitHubSettings();
     text = settings.owner && settings.repo
       ? `Target repo: ${settings.owner}/${settings.repo} · branch: ${settings.branch} · CSV: ${settings.path} · Routes: ${settings.routesPath}`
-      : 'Set owner/repo/path if you want GitHub-first startup and GitHub save.';
+      : 'Load is optional for public repos. Save writes pubs.csv and routes.json with a token that has repository Contents write permission.';
   }
   els.gitStatus.textContent = text;
   els.gitStatus.classList.toggle('errorText', !!isError);
@@ -496,7 +464,6 @@ function onFileChosen(event) {
     state.githubSha = '';
     state.githubLastLoadedAt = '';
     loadCsvText(String(reader.result || ''), file.name);
-    updateDraftStatus('Loaded CSV from local file.');
   };
   reader.readAsText(file);
 }
@@ -655,8 +622,7 @@ function renderPubList() {
   const selected = hasSelection() ? state.rows[state.selectedIndex] : null;
   const selectedText = selected ? ` · selected: ${selected.name || selected.id || '(untitled pub)'}` : '';
   const draftText = state.restoredFromDraft ? ' · local draft active' : '';
-  const sourceText = state.startupSource ? ` · source: ${state.startupSource}` : '';
-  els.pubCount.textContent = `${state.rows.length} row${state.rows.length === 1 ? '' : 's'} · ${state.loadedFilename}${selectedText}${draftText}${sourceText}`;
+  els.pubCount.textContent = `${state.rows.length} row${state.rows.length === 1 ? '' : 's'} · ${state.loadedFilename}${selectedText}${draftText}`;
 }
 
 function hasSelection() { return state.selectedIndex >= 0 && state.selectedIndex < state.rows.length; }
@@ -676,6 +642,7 @@ function populateEditor() {
   updateDirtyUi();
 }
 
+
 function clearEditor(message) {
   Object.values(fieldIds).forEach(el => { el.value = ''; });
   pointLists.a.innerHTML = '';
@@ -689,16 +656,10 @@ function clearEditor(message) {
   els.spotBStatus.className = 'pill muted';
   els.spotBStatus.textContent = 'Optional';
   clearRouteEditor();
-  clearUploadLocalPreview();
-  if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
-  if (els.uploadFileName) {
-    els.uploadFileName.value = '';
-    els.uploadFileName.placeholder = 'No image selected';
-  }
-  setUploadPreview('');
-  updateUploadUi(message || 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.');
+  updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
+
 
 function normalizeFieldValue(key, value) {
   if (key === 'worth_the_trip' || key === 'cycle_friendly') return String(value || '').trim().toLowerCase();
@@ -952,7 +913,7 @@ function downloadCsv() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  updateDraftStatus('Downloaded pubs.csv.');
+  updateDraftStatus('Downloaded pubs.csv. Upload that file to GitHub when ready.');
 }
 
 function updateDirtyUi() {
@@ -974,6 +935,9 @@ function updateDirtyUi() {
   els.btnUploadSpotA.disabled = !hasUploadReady;
   els.btnUploadSpotB.disabled = !hasUploadReady;
 }
+
+
+
 
 function persistUploadSettings() {
   const payload = {
@@ -1026,31 +990,18 @@ function updateUploadUi(message = '', isError = false) {
   const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
   const defaultText = row
     ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
-    : 'Choose a pub and image, then use Main image, Spot A, or Spot B.';
+    : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
   els.uploadStatus.textContent = message || defaultText;
   els.uploadStatus.classList.toggle('errorText', !!isError);
-
-  const previewUrl =
-    String(state.uploadLocalPreviewUrl || '').trim() ||
-    String(els.uploadReturnedUrl.value || '').trim() ||
-    mainValue || spotAValue || spotBValue || '';
-
-  if (previewUrl) setUploadPreview(previewUrl);
-  else setUploadPreview('');
-
+  const previewUrl = String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
+  if (previewUrl) {
+    setUploadPreview(previewUrl);
+  }
   if (!row && els.uploadReturnedUrl) {
     els.uploadReturnedUrl.value = '';
-    clearUploadLocalPreview();
     setUploadPreview('');
   }
   updateDirtyUi();
-}
-
-function clearUploadLocalPreview() {
-  if (state.uploadLocalPreviewUrl) {
-    try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
-    state.uploadLocalPreviewUrl = '';
-  }
 }
 
 function setUploadPreview(url) {
@@ -1069,13 +1020,6 @@ function onUploadFileChosen() {
   if (els.uploadFileName) {
     els.uploadFileName.value = file ? file.name : '';
     els.uploadFileName.placeholder = file ? '' : 'No image selected';
-  }
-  clearUploadLocalPreview();
-  if (file) {
-    state.uploadLocalPreviewUrl = URL.createObjectURL(file);
-    setUploadPreview(state.uploadLocalPreviewUrl);
-  } else {
-    setUploadPreview('');
   }
   updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
@@ -1109,11 +1053,14 @@ async function uploadCurrentImage(targetType = 'main') {
   els.btnUploadMain.disabled = true;
   els.btnUploadSpotA.disabled = true;
   els.btnUploadSpotB.disabled = true;
-  updateUploadUi('Uploading image to Cloudflare…');
+  updateUploadUi('Resizing image for upload…');
 
   try {
+    const uploadFile = await buildOptimizedUploadFile(file);
+    updateUploadUi('Uploading resized image to Cloudflare…');
+
     const form = new FormData();
-    form.append('file', file);
+    form.append('file', uploadFile);
     form.append('pubSlug', pubSlug);
     form.append('imageType', imageType);
     form.append('replace', 'true');
@@ -1136,7 +1083,6 @@ async function uploadCurrentImage(targetType = 'main') {
     row[targetKey] = data.url;
     if (fieldIds[targetKey]) fieldIds[targetKey].value = data.url;
     els.uploadReturnedUrl.value = data.url;
-    clearUploadLocalPreview();
     setUploadPreview(data.url);
     els.uploadFile.value = '';
     if (els.uploadFileName) {
@@ -1152,6 +1098,63 @@ async function uploadCurrentImage(targetType = 'main') {
     updateDirtyUi();
   }
 }
+
+
+async function buildOptimizedUploadFile(file) {
+  const fileType = String(file.type || '').toLowerCase();
+  if (!fileType.startsWith('image/')) return file;
+
+  const image = await loadImageFromFile(file);
+  const originalWidth = image.naturalWidth || image.width || 0;
+  const originalHeight = image.naturalHeight || image.height || 0;
+
+  if (!originalWidth || !originalHeight) return file;
+
+  const scale = Math.min(1, UPLOAD_MAX_DIMENSION / Math.max(originalWidth, originalHeight));
+  const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+  const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) return file;
+
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+  const blob = await new Promise(resolve => {
+    canvas.toBlob(resolve, 'image/jpeg', UPLOAD_JPEG_QUALITY);
+  });
+  if (!blob) return file;
+
+  const outputName = replaceFileExtension(file.name || 'image.jpg', '.jpg');
+  return new File([blob], outputName, {
+    type: 'image/jpeg',
+    lastModified: Date.now()
+  });
+}
+
+async function loadImageFromFile(file) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Could not read image.'));
+      img.src = objectUrl;
+    });
+    return image;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function replaceFileExtension(name, ext) {
+  const base = String(name || 'image').replace(/\.[^.]+$/, '');
+  return `${base}${ext}`;
+}
+
 
 function saveDraftToLocal(manual = false) {
   if (!state.headers.length) return;
@@ -1179,24 +1182,27 @@ function saveDraftToLocal(manual = false) {
 }
 
 function hasLocalDraft() {
-  try { return !!localStorage.getItem(STORAGE_KEY); }
-  catch { return false; }
+  try {
+    return !!localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return false;
+  }
 }
 
 function restoreDraftFromLocal() {
   let raw = '';
-  try { raw = localStorage.getItem(STORAGE_KEY) || ''; }
-  catch { return false; }
+  try {
+    raw = localStorage.getItem(STORAGE_KEY) || '';
+  } catch {
+    return false;
+  }
   if (!raw) return false;
-
   try {
     const payload = JSON.parse(raw);
     if (!Array.isArray(payload.headers) || !Array.isArray(payload.rows)) return false;
     state.headers = mergeHeaders(payload.headers);
     state.rows = payload.rows.map(row => materializeRow(row, state.headers));
-    state.selectedIndex = Number.isInteger(payload.selectedIndex)
-      ? Math.max(0, Math.min(payload.selectedIndex, Math.max(0, state.rows.length - 1)))
-      : (state.rows.length ? 0 : -1);
+    state.selectedIndex = Number.isInteger(payload.selectedIndex) ? Math.max(0, Math.min(payload.selectedIndex, Math.max(0, state.rows.length - 1))) : (state.rows.length ? 0 : -1);
     state.loadedFilename = payload.loadedFilename || 'pubs.csv';
     state.draftSavedAt = payload.savedAt || '';
     state.githubSha = payload.githubSha || '';
@@ -1216,7 +1222,9 @@ function restoreDraftFromLocal() {
 }
 
 function clearLocalDraft() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
   state.draftSavedAt = '';
   state.restoredFromDraft = false;
   updateDirtyUi();
@@ -1225,14 +1233,12 @@ function clearLocalDraft() {
 function updateDraftStatus(message = '') {
   let text = message;
   if (!text) {
-    if (state.startupSource === 'github') {
-      text = 'Loaded fresh from GitHub on startup. Local draft restore is manual only.';
-    } else if (state.restoredFromDraft && state.draftSavedAt) {
+    if (state.restoredFromDraft && state.draftSavedAt) {
       text = `Local draft active on this device · last saved ${formatDraftStamp(state.draftSavedAt)}.`;
     } else if (hasLocalDraft()) {
-      text = 'Local draft available on this device. Restore is manual only.';
+      text = 'Local draft available on this device.';
     } else {
-      text = 'GitHub-first startup enabled. Local draft restore is manual only.';
+      text = 'Latest CSV will load by default. Local draft restore is available on this device.';
     }
   }
   els.draftStatus.textContent = text;
@@ -1591,7 +1597,7 @@ function formatJsNumber(value) {
 }
 
 function jsQuote(value) {
-  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\'");
 }
 
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -1671,43 +1677,19 @@ function getSunPositionLocal(lat, lng, dateObj) {
   const dayDate = createUtcAnchorDate(parts.year, parts.month, parts.day);
   const n = dayOfYear(dayDate);
   const gamma = (2 * Math.PI / 365) * (n - 1 + ((localMinutes - 12) / 24));
-  const eqTime =
-    229.18 *
-    (0.000075 +
-      0.001868 * Math.cos(gamma) -
-      0.032077 * Math.sin(gamma) -
-      0.014615 * Math.cos(2 * gamma) -
-      0.040849 * Math.sin(2 * gamma));
-
-  const decl =
-    0.006918 -
-    0.399912 * Math.cos(gamma) +
-    0.070257 * Math.sin(gamma) -
-    0.006758 * Math.cos(2 * gamma) +
-    0.000907 * Math.sin(2 * gamma) -
-    0.002697 * Math.cos(3 * gamma) +
-    0.00148 * Math.sin(3 * gamma);
-
+  const eqTime = 229.18 * (0.000075 + 0.001868 * Math.cos(gamma) - 0.032077 * Math.sin(gamma) - 0.014615 * Math.cos(2 * gamma) - 0.040849 * Math.sin(2 * gamma));
+  const decl = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma) - 0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma) - 0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma);
   const tzOffsetMin = getLondonOffsetMinutesForDateParts(parts.year, parts.month, parts.day);
   const minutesNow = (parts.hour * 60) + parts.minute + (parts.second / 60);
   const trueSolarTime = (minutesNow + eqTime + (4 * lng) - tzOffsetMin + 1440) % 1440;
   const hourAngleDeg = (trueSolarTime / 4) - 180;
   const hourAngle = deg2rad(hourAngleDeg);
   const latRad = deg2rad(lat);
-
-  const cosZenith =
-    (Math.sin(latRad) * Math.sin(decl)) +
-    (Math.cos(latRad) * Math.cos(decl) * Math.cos(hourAngle));
-
+  const cosZenith = (Math.sin(latRad) * Math.sin(decl)) + (Math.cos(latRad) * Math.cos(decl) * Math.cos(hourAngle));
   const zenith = Math.acos(clamp(cosZenith, -1, 1));
   const elevation = 90 - rad2deg(zenith);
-
-  const azimuthRad = Math.atan2(
-    Math.sin(hourAngle),
-    (Math.cos(hourAngle) * Math.sin(latRad)) - (Math.tan(decl) * Math.cos(latRad))
-  );
+  const azimuthRad = Math.atan2(Math.sin(hourAngle), (Math.cos(hourAngle) * Math.sin(latRad)) - (Math.tan(decl) * Math.cos(latRad)));
   const azimuth = (rad2deg(azimuthRad) + 180 + 360) % 360;
-
   return { azimuth, elevation };
 }
 
@@ -1715,88 +1697,57 @@ function parseISODate(str) {
   const [y, m, d] = String(str || '').split('-').map(Number);
   return createUtcAnchorDate(y || 1970, (m || 1), d || 1);
 }
-
 function formatDate(d) {
   const parts = getLondonDateParts(d);
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
 }
-
 function fmtTime(d) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: APP_TIME_ZONE,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(d);
+  return new Intl.DateTimeFormat('en-GB', { timeZone: APP_TIME_ZONE, hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
 }
-
 function deg2rad(d) { return d * Math.PI / 180; }
 function rad2deg(r) { return r * 180 / Math.PI; }
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
-
 function dayOfYear(dateObj) {
   const year = dateObj.getUTCFullYear();
   const current = Date.UTC(year, dateObj.getUTCMonth(), dateObj.getUTCDate(), 12, 0, 0, 0);
   const start = Date.UTC(year, 0, 0, 12, 0, 0, 0);
   return Math.floor((current - start) / 86400000);
 }
-
 function lastSundayOfMonthUtc(year, monthIndex) {
   const d = new Date(Date.UTC(year, monthIndex + 1, 0, 0, 0, 0, 0));
   d.setUTCDate(d.getUTCDate() - d.getUTCDay());
   return d;
 }
-
 function getLondonDstStartUtc(year) {
   const lastSunday = lastSundayOfMonthUtc(year, 2);
   return Date.UTC(year, 2, lastSunday.getUTCDate(), 1, 0, 0, 0);
 }
-
 function getLondonDstEndUtc(year) {
   const lastSunday = lastSundayOfMonthUtc(year, 9);
   return Date.UTC(year, 9, lastSunday.getUTCDate(), 1, 0, 0, 0);
 }
-
 function isLondonDstAtUtc(utcMs) {
   const probe = new Date(utcMs);
   const year = probe.getUTCFullYear();
   return utcMs >= getLondonDstStartUtc(year) && utcMs < getLondonDstEndUtc(year);
 }
-
 function getLondonOffsetMinutesForDateParts(year, month, day) {
   const noonUtc = Date.UTC(year, month - 1, day, 12, 0, 0, 0);
   return isLondonDstAtUtc(noonUtc) ? 60 : 0;
 }
-
 function getLondonDateParts(dateObj) {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: APP_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
   }).formatToParts(dateObj instanceof Date ? dateObj : new Date(dateObj));
-
   const out = {};
   for (const part of parts) if (part.type !== 'literal') out[part.type] = Number(part.value);
-
-  return {
-    year: out.year,
-    month: out.month,
-    day: out.day,
-    hour: out.hour,
-    minute: out.minute,
-    second: out.second
-  };
+  return { year: out.year, month: out.month, day: out.day, hour: out.hour, minute: out.minute, second: out.second };
 }
-
 function createUtcAnchorDate(year, month, day) {
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
 }
-
 function minutesToLocalDate(dateObj, minutes) {
   const year = dateObj.getUTCFullYear();
   const month = dateObj.getUTCMonth() + 1;
