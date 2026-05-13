@@ -11,8 +11,8 @@
   <header class="topbar">
     <div>
       <h1>Drinking in the Sun Admin</h1>
-      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, upload GPX routes, then save pubs.csv and routes.json straight to GitHub or export locally.</p>
-      <div id="draftStatus" class="draftStatus">Latest CSV will load by default. Local draft restore is available on this device.</div>
+      <p class="sub">GitHub-first admin for pubs.csv and routes.json. Edit pubs, upload main / Spot A / Spot B images to Cloudflare, keep GPX route editing, then save back to GitHub.</p>
+      <div id="draftStatus" class="draftStatus">Starting up…</div>
     </div>
     <div class="topActions">
       <label class="btn secondary fileBtn">
@@ -33,13 +33,13 @@
         <input id="searchInput" class="textInput" type="search" placeholder="Search or pick a pub…" autocomplete="off" />
         <button id="btnNewPub" class="btn secondary small" type="button">New pub</button>
       </div>
-      <div class="listHint">Type a few letters to show matching pubs. With no search, only the current pub is shown.</div>
+      <div class="listHint">GitHub is the startup source. Local draft restore is manual only.</div>
       <div id="pubCount" class="metaLine">No CSV loaded</div>
       <div id="pubList" class="pubList"></div>
     </aside>
 
     <section class="editor">
-      <div class="card section gitSection">
+      <section class="card section gitSection">
         <div class="sectionHead">
           <h2>GitHub sync</h2>
           <div class="rowActions">
@@ -57,10 +57,10 @@
           <label class="full checkboxRow"><input id="github-remember-token" type="checkbox">Remember token on this device</label>
           <label class="full">Commit message<input id="github-message" class="textInput" type="text" value="Update pubs/routes via admin tool"></label>
         </div>
-        <div id="gitStatus" class="metaLine topGap">Load is optional for public repos. Save writes both pubs.csv and routes.json with a token that has repository Contents write permission.</div>
-      </div>
+        <div id="gitStatus" class="metaLine topGap">On startup this admin tries GitHub first. If GitHub details are missing, it falls back to the bundled CSV.</div>
+      </section>
 
-      <div class="card section">
+      <section class="card section">
         <div class="sectionHead">
           <h2>Pub details</h2>
           <div class="rowActions">
@@ -86,10 +86,9 @@
             <select id="field-cycle_friendly" class="textInput"><option value="">—</option><option value="yes">yes</option><option value="no">no</option></select>
           </label>
         </div>
+      </section>
 
-      </div>
-
-      <div class="card section uploadSection">
+      <section class="card section uploadSection">
         <div class="sectionHead">
           <h2>Cloudflare image upload</h2>
           <div class="rowActions">
@@ -100,7 +99,7 @@
           </div>
         </div>
         <div class="grid2">
-          <label class="full">Upload token<input id="upload-token" class="textInput mono" type="password" placeholder="Paste your Cloudflare upload token"></label>
+          <label class="full">Cloudflare upload token<input id="upload-token" class="textInput mono" type="password" placeholder="Paste UPLOAD_TOKEN"></label>
           <label class="full checkboxRow"><input id="upload-remember-token" type="checkbox">Remember upload token on this device</label>
           <div class="full uploadTargetsWrap">
             <div class="uploadTargetsLabel">Upload target</div>
@@ -118,10 +117,9 @@
         <div id="uploadPreviewWrap" class="uploadPreview isHidden">
           <img id="uploadPreviewImg" class="uploadPreviewImg" alt="Selected upload preview">
         </div>
-      </div>
+      </section>
 
-      <div class="card section routeSection">
-
+      <section class="card section routeSection">
         <div class="sectionHead">
           <h2>Curated route / GPX</h2>
           <div class="rowActions">
@@ -143,7 +141,7 @@
           <label class="full">Generated route preview / snippet<textarea id="route-snippet" class="textArea mono" rows="12" readonly></textarea></label>
         </div>
         <div class="metaLine topGap">This stores <code>curated_route_id</code> in the CSV and keeps the matching route object ready for <code>routes.json</code>. Saving to GitHub writes both <code>pubs.csv</code> and <code>routes.json</code>.</div>
-      </div>
+      </section>
 
       <div class="gridPreview">
         <section class="card section spotSection" data-spot="a">
