@@ -25,7 +25,8 @@ const state = {
   isSavingGitHub: false,
   routeDrafts: {},
   routesData: {},
-  routesSha: ''
+  routesSha: '',
+  uploadLocalPreviewUrl: ''
 };
 
 const els = {
@@ -199,6 +200,9 @@ function wireUi() {
   els.uploadRememberToken.addEventListener('change', () => {
     persistUploadSettings();
     updateUploadUi();
+  });
+  els.uploadFile.addEventListener('click', () => {
+    try { els.uploadFile.value = ''; } catch {}
   });
   els.uploadFile.addEventListener('change', onUploadFileChosen);
   els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
@@ -654,6 +658,12 @@ function clearEditor(message) {
   els.spotBStatus.className = 'pill muted';
   els.spotBStatus.textContent = 'Optional';
   clearRouteEditor();
+  clearUploadLocalPreview();
+  if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
+  if (els.uploadFileName) {
+    els.uploadFileName.value = '';
+    els.uploadFileName.placeholder = 'No image selected';
+  }
   updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
@@ -983,23 +993,33 @@ function updateUploadUi(message = '', isError = false) {
     els.uploadFileName.value = '';
     els.uploadFileName.placeholder = 'No image selected';
   }
-  const mainValue = row ? String(row.image_url || '').trim() : '';
-  const spotAValue = row ? String(row.spot_a_photo_url || '').trim() : '';
-  const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
   const defaultText = row
     ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
     : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
   els.uploadStatus.textContent = message || defaultText;
   els.uploadStatus.classList.toggle('errorText', !!isError);
-  const previewUrl = String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
-  if (previewUrl) {
-    setUploadPreview(previewUrl);
-  }
+
+  const rowPreviewUrl = row
+    ? String(row.image_url || row.spot_a_photo_url || row.spot_b_photo_url || '').trim()
+    : '';
+  const previewUrl = String(state.uploadLocalPreviewUrl || '').trim()
+    || String(els.uploadReturnedUrl.value || '').trim()
+    || rowPreviewUrl;
+
+  setUploadPreview(previewUrl);
+
   if (!row && els.uploadReturnedUrl) {
     els.uploadReturnedUrl.value = '';
     setUploadPreview('');
   }
   updateDirtyUi();
+}
+
+function clearUploadLocalPreview() {
+  if (state.uploadLocalPreviewUrl) {
+    try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
+    state.uploadLocalPreviewUrl = '';
+  }
 }
 
 function setUploadPreview(url) {
@@ -1018,6 +1038,10 @@ function onUploadFileChosen() {
   if (els.uploadFileName) {
     els.uploadFileName.value = file ? file.name : '';
     els.uploadFileName.placeholder = file ? '' : 'No image selected';
+  }
+  clearUploadLocalPreview();
+  if (file) {
+    state.uploadLocalPreviewUrl = URL.createObjectURL(file);
   }
   updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
@@ -1048,7 +1072,9 @@ async function uploadCurrentImage(targetType = 'main') {
   }
 
   persistUploadSettings();
-  els.btnUploadImage.disabled = true;
+  els.btnUploadMain.disabled = true;
+  els.btnUploadSpotA.disabled = true;
+  els.btnUploadSpotB.disabled = true;
   updateUploadUi('Uploading image to Cloudflare…');
 
   try {
@@ -1076,6 +1102,7 @@ async function uploadCurrentImage(targetType = 'main') {
     row[targetKey] = data.url;
     if (fieldIds[targetKey]) fieldIds[targetKey].value = data.url;
     els.uploadReturnedUrl.value = data.url;
+    clearUploadLocalPreview();
     setUploadPreview(data.url);
     els.uploadFile.value = '';
     if (els.uploadFileName) {
