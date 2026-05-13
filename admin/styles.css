@@ -82,44 +82,22 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
 .fileBtn input { display:none; }
 
 
-.uploadSection .grid2 {
-  align-items: end;
-}
-
-.uploadTargetsWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.uploadTargetsLabel {
-  font-size: .9rem;
-}
-
-.uploadTargets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.uploadPreview {
-  margin-top: 14px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-
-.isHidden {
-  display: none;
-}
-
+.uploadSection .grid2 { align-items: start; }
+.uploadTargetsWrap { display: flex; flex-direction: column; gap: 6px; }
+.uploadTargetsLabel { font-size: .9rem; }
+.uploadTargets { display: flex; flex-wrap: wrap; gap: 8px; }
+.uploadPreview { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.uploadPreview.isHidden { display: none; }
 .uploadPreviewImg {
   display: block;
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   height: auto;
   object-fit: contain;
-  border-radius: 14px;
   border: 1px solid var(--line);
+  border-radius: 14px;
   background: #fff;
   box-shadow: 0 4px 18px rgba(0,0,0,.05);
 }
+.statusGood { color: #1f6a20; }
+.statusWarn { color: #8a6500; }
