@@ -74,12 +74,13 @@ const els = {
   uploadFile: document.getElementById('upload-file'),
   uploadToken: document.getElementById('upload-token'),
   uploadRememberToken: document.getElementById('upload-remember-token'),
-  uploadImageType: document.getElementById('upload-image-type'),
   uploadSlug: document.getElementById('upload-slug'),
   uploadFileName: document.getElementById('upload-file-name'),
   uploadReturnedUrl: document.getElementById('upload-returned-url'),
   uploadStatus: document.getElementById('uploadStatus'),
-  btnUploadImage: document.getElementById('btnUploadImage'),
+  btnUploadMain: document.getElementById('btnUploadMain'),
+  btnUploadSpotA: document.getElementById('btnUploadSpotA'),
+  btnUploadSpotB: document.getElementById('btnUploadSpotB'),
   uploadPreviewWrap: document.getElementById('uploadPreviewWrap'),
   uploadPreviewImg: document.getElementById('uploadPreviewImg')
 };
@@ -189,7 +190,7 @@ function wireUi() {
   els.btnRouteCopy.addEventListener('click', copyRouteSnippet);
   els.btnRouteDownload.addEventListener('click', downloadRouteSnippet);
 
-  [els.uploadToken, els.uploadImageType].forEach(el => {
+  [els.uploadToken].forEach(el => {
     el.addEventListener('input', () => {
       persistUploadSettings();
       updateUploadUi();
@@ -200,7 +201,9 @@ function wireUi() {
     updateUploadUi();
   });
   els.uploadFile.addEventListener('change', onUploadFileChosen);
-  els.btnUploadImage.addEventListener('click', uploadCurrentImage);
+  els.btnUploadMain.addEventListener('click', () => uploadCurrentImage('main'));
+  els.btnUploadSpotA.addEventListener('click', () => uploadCurrentImage('spot-a'));
+  els.btnUploadSpotB.addEventListener('click', () => uploadCurrentImage('spot-b'));
 }
 
 
@@ -926,7 +929,9 @@ function updateDirtyUi() {
   els.btnRouteDownload.disabled = !hasSnippet;
   els.btnRouteClear.disabled = !hasSelection() && !hasSnippet;
   const hasUploadReady = hasSelection() && !!String(els.uploadToken.value || '').trim() && !!els.uploadFile.files?.[0];
-  els.btnUploadImage.disabled = !hasUploadReady;
+  els.btnUploadMain.disabled = !hasUploadReady;
+  els.btnUploadSpotA.disabled = !hasUploadReady;
+  els.btnUploadSpotB.disabled = !hasUploadReady;
 }
 
 
@@ -978,17 +983,17 @@ function updateUploadUi(message = '', isError = false) {
     els.uploadFileName.value = '';
     els.uploadFileName.placeholder = 'No image selected';
   }
-  const selectedType = String(els.uploadImageType.value || 'main');
-  const targetKey = getUploadTargetFieldKey(selectedType);
-  const targetValue = row ? String(row[targetKey] || '').trim() : '';
+  const mainValue = row ? String(row.image_url || '').trim() : '';
+  const spotAValue = row ? String(row.spot_a_photo_url || '').trim() : '';
+  const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
   const defaultText = row
-    ? `Upload ${selectedType} image for this pub. On success the ${targetKey} field will fill automatically.`
-    : 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.';
-  els.uploadStatus.textContent = message || (targetValue ? `Current ${targetKey}: ${targetValue}` : defaultText);
+    ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
+    : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
+  els.uploadStatus.textContent = message || defaultText;
   els.uploadStatus.classList.toggle('errorText', !!isError);
-  if (targetValue && !els.uploadReturnedUrl.value) {
-    els.uploadReturnedUrl.value = targetValue;
-    setUploadPreview(targetValue);
+  const previewUrl = String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
+  if (previewUrl) {
+    setUploadPreview(previewUrl);
   }
   if (!row && els.uploadReturnedUrl) {
     els.uploadReturnedUrl.value = '';
@@ -1014,10 +1019,10 @@ function onUploadFileChosen() {
     els.uploadFileName.value = file ? file.name : '';
     els.uploadFileName.placeholder = file ? '' : 'No image selected';
   }
-  updateUploadUi(file ? `Ready to upload ${file.name}.` : '');
+  updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
 
-async function uploadCurrentImage() {
+async function uploadCurrentImage(targetType = 'main') {
   const row = getSelectedRow();
   if (!row) {
     updateUploadUi('Choose a pub first.', true);
@@ -1026,7 +1031,7 @@ async function uploadCurrentImage() {
 
   const token = String(els.uploadToken.value || '').trim();
   const file = els.uploadFile.files?.[0] || null;
-  const imageType = String(els.uploadImageType.value || 'main');
+  const imageType = String(targetType || 'main');
   const pubSlug = getUploadSlug(row);
 
   if (!token) {
@@ -1077,7 +1082,7 @@ async function uploadCurrentImage() {
       els.uploadFileName.value = '';
       els.uploadFileName.placeholder = 'No image selected';
     }
-    updateUploadUi(`Upload complete. ${targetKey} filled automatically.`);
+    updateUploadUi(`Upload complete. ${targetKey} filled automatically with the Cloudflare URL.`);
     updatePreview();
     saveDraftToLocal();
   } catch (err) {
