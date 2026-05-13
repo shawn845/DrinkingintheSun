@@ -4,8 +4,6 @@ const STORAGE_KEY = 'drinking_admin_local_draft_v5';
 const SETTINGS_KEY = 'drinking_admin_github_settings_v5';
 const UPLOAD_SETTINGS_KEY = 'drinking_admin_upload_settings_v1';
 const UPLOAD_ENDPOINT = 'https://api.drinkinginthesun.com/upload-image';
-const UPLOAD_MAX_DIMENSION = 1200;
-const UPLOAD_JPEG_QUALITY = 0.82;
 const MAX_SEARCH_RESULTS = 14;
 const APP_TIME_ZONE = 'Europe/London';
 const KNOWN_HEADERS = [
@@ -1053,17 +1051,14 @@ async function uploadCurrentImage(targetType = 'main') {
   els.btnUploadMain.disabled = true;
   els.btnUploadSpotA.disabled = true;
   els.btnUploadSpotB.disabled = true;
-  updateUploadUi('Resizing image for upload…');
+  updateUploadUi('Uploading image to Cloudflare…');
 
   try {
-    const uploadFile = await buildOptimizedUploadFile(file);
-    updateUploadUi('Uploading resized image to Cloudflare…');
-
     const form = new FormData();
-    form.append('file', uploadFile);
+    form.append('file', file);
     form.append('pubSlug', pubSlug);
     form.append('imageType', imageType);
-    form.append('replace', 'true');
+    form.append('replace', 'false');
 
     const res = await fetch(UPLOAD_ENDPOINT, {
       method: 'POST',
@@ -1089,7 +1084,7 @@ async function uploadCurrentImage(targetType = 'main') {
       els.uploadFileName.value = '';
       els.uploadFileName.placeholder = 'No image selected';
     }
-    updateUploadUi(`Upload complete. ${targetKey} filled automatically with the Cloudflare URL.`);
+    updateUploadUi(`Upload complete. ${targetKey} filled with a new Cloudflare URL.`);
     updatePreview();
     saveDraftToLocal();
   } catch (err) {
@@ -1098,63 +1093,6 @@ async function uploadCurrentImage(targetType = 'main') {
     updateDirtyUi();
   }
 }
-
-
-async function buildOptimizedUploadFile(file) {
-  const fileType = String(file.type || '').toLowerCase();
-  if (!fileType.startsWith('image/')) return file;
-
-  const image = await loadImageFromFile(file);
-  const originalWidth = image.naturalWidth || image.width || 0;
-  const originalHeight = image.naturalHeight || image.height || 0;
-
-  if (!originalWidth || !originalHeight) return file;
-
-  const scale = Math.min(1, UPLOAD_MAX_DIMENSION / Math.max(originalWidth, originalHeight));
-  const targetWidth = Math.max(1, Math.round(originalWidth * scale));
-  const targetHeight = Math.max(1, Math.round(originalHeight * scale));
-
-  const canvas = document.createElement('canvas');
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-
-  const ctx = canvas.getContext('2d', { alpha: false });
-  if (!ctx) return file;
-
-  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
-
-  const blob = await new Promise(resolve => {
-    canvas.toBlob(resolve, 'image/jpeg', UPLOAD_JPEG_QUALITY);
-  });
-  if (!blob) return file;
-
-  const outputName = replaceFileExtension(file.name || 'image.jpg', '.jpg');
-  return new File([blob], outputName, {
-    type: 'image/jpeg',
-    lastModified: Date.now()
-  });
-}
-
-async function loadImageFromFile(file) {
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Could not read image.'));
-      img.src = objectUrl;
-    });
-    return image;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-function replaceFileExtension(name, ext) {
-  const base = String(name || 'image').replace(/\.[^.]+$/, '');
-  return `${base}${ext}`;
-}
-
 
 function saveDraftToLocal(manual = false) {
   if (!state.headers.length) return;
