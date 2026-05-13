@@ -1,6 +1,6 @@
 const CSV_URL = './public/data/pubs.csv';
 const FALLBACK_LOCATION = { name: 'Nottingham City Centre', lat: 52.9548, lng: -1.1581 };
-const WEATHER_REFRESH_MS = 5 * 60 * 1000;
+const WEATHER_REFRESH_MS = 5 * 60 * 1000; 
 const METOFFICE_WORKER_URL = 'https://dits-weather.shawn-4d5.workers.dev/weather';
 const APP_TIME_ZONE = 'Europe/London';
 
