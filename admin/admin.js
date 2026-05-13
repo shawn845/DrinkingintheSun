@@ -660,10 +660,8 @@ function clearEditor(message) {
   clearRouteEditor();
   clearUploadLocalPreview();
   if (els.uploadReturnedUrl) els.uploadReturnedUrl.value = '';
-  if (els.uploadFileName) {
-    els.uploadFileName.value = '';
-    els.uploadFileName.placeholder = 'No image selected';
-  }
+  if (els.uploadFileName) { els.uploadFileName.value = ''; els.uploadFileName.placeholder = 'No image selected'; }
+  setUploadPreview('');
   updateUploadUi(message || 'Choose a pub, choose an image, then upload. The matching URL field will fill automatically.');
   updateDirtyUi();
 }
@@ -985,6 +983,13 @@ function getUploadTargetFieldKey(imageType) {
   return 'image_url';
 }
 
+function clearUploadLocalPreview() {
+  if (state.uploadLocalPreviewUrl) {
+    try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
+    state.uploadLocalPreviewUrl = '';
+  }
+}
+
 function updateUploadUi(message = '', isError = false) {
   const row = getSelectedRow();
   const slug = getUploadSlug(row);
@@ -993,33 +998,25 @@ function updateUploadUi(message = '', isError = false) {
     els.uploadFileName.value = '';
     els.uploadFileName.placeholder = 'No image selected';
   }
+  const mainValue = row ? String(row.image_url || '').trim() : '';
+  const spotAValue = row ? String(row.spot_a_photo_url || '').trim() : '';
+  const spotBValue = row ? String(row.spot_b_photo_url || '').trim() : '';
   const defaultText = row
     ? 'Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.'
     : 'Choose a pub, choose an image, then use Main image, Spot A, or Spot B.';
   els.uploadStatus.textContent = message || defaultText;
   els.uploadStatus.classList.toggle('errorText', !!isError);
-
-  const rowPreviewUrl = row
-    ? String(row.image_url || row.spot_a_photo_url || row.spot_b_photo_url || '').trim()
-    : '';
-  const previewUrl = String(state.uploadLocalPreviewUrl || '').trim()
-    || String(els.uploadReturnedUrl.value || '').trim()
-    || rowPreviewUrl;
-
-  setUploadPreview(previewUrl);
-
+  const previewUrl = String(state.uploadLocalPreviewUrl || '').trim() || String(els.uploadReturnedUrl.value || '').trim() || mainValue || spotAValue || spotBValue;
+  if (previewUrl) {
+    setUploadPreview(previewUrl);
+  } else {
+    setUploadPreview('');
+  }
   if (!row && els.uploadReturnedUrl) {
     els.uploadReturnedUrl.value = '';
     setUploadPreview('');
   }
   updateDirtyUi();
-}
-
-function clearUploadLocalPreview() {
-  if (state.uploadLocalPreviewUrl) {
-    try { URL.revokeObjectURL(state.uploadLocalPreviewUrl); } catch {}
-    state.uploadLocalPreviewUrl = '';
-  }
 }
 
 function setUploadPreview(url) {
@@ -1042,6 +1039,9 @@ function onUploadFileChosen() {
   clearUploadLocalPreview();
   if (file) {
     state.uploadLocalPreviewUrl = URL.createObjectURL(file);
+    setUploadPreview(state.uploadLocalPreviewUrl);
+  } else {
+    setUploadPreview('');
   }
   updateUploadUi(file ? `Ready to upload ${file.name}. Choose Main image, Spot A, or Spot B.` : '');
 }
