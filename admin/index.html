@@ -11,7 +11,7 @@
   <header class="topbar">
     <div>
       <h1>Drinking in the Sun Admin</h1>
-      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, upload Cloudflare-hosted images, upload GPX routes, then save pubs.csv and routes.json straight to GitHub or export locally.</p>
+      <p class="sub">Edit pub rows, enter Solar Surveyor points, preview skyline and sun window, upload GPX routes, then save pubs.csv and routes.json straight to GitHub or export locally.</p>
       <div id="draftStatus" class="draftStatus">Latest CSV will load by default. Local draft restore is available on this device.</div>
     </div>
     <div class="topActions">
@@ -86,6 +86,7 @@
             <select id="field-cycle_friendly" class="textInput"><option value="">—</option><option value="yes">yes</option><option value="no">no</option></select>
           </label>
         </div>
+
       </div>
 
       <div class="card section uploadSection">
@@ -99,8 +100,8 @@
           </div>
         </div>
         <div class="grid2">
-          <label>Upload token<input id="upload-token" class="textInput mono" type="password" placeholder="Paste your Cloudflare upload token"></label>
-          <label class="checkboxRow"><input id="upload-remember-token" type="checkbox">Remember upload token on this device</label>
+          <label class="full">Upload token<input id="upload-token" class="textInput mono" type="password" placeholder="Paste your Cloudflare upload token"></label>
+          <label class="full checkboxRow"><input id="upload-remember-token" type="checkbox">Remember upload token on this device</label>
           <div class="full uploadTargetsWrap">
             <div class="uploadTargetsLabel">Upload target</div>
             <div class="uploadTargets">
@@ -115,11 +116,12 @@
         </div>
         <div id="uploadStatus" class="metaLine topGap">Choose a pub and image, then use the exact target button you want: Main image, Spot A, or Spot B.</div>
         <div id="uploadPreviewWrap" class="uploadPreview isHidden">
-          <img id="uploadPreviewImg" class="uploadPreviewImg" alt="Uploaded image preview" />
+          <img id="uploadPreviewImg" class="uploadPreviewImg" alt="Selected upload preview">
         </div>
       </div>
 
       <div class="card section routeSection">
+
         <div class="sectionHead">
           <h2>Curated route / GPX</h2>
           <div class="rowActions">
