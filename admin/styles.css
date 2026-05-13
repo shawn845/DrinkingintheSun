@@ -85,3 +85,11 @@ label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
 .uploadPreview { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
 .uploadPreview.isHidden { display: none; }
 .uploadPreviewImg { display: block; width: 100%; max-width: 360px; border-radius: 14px; border: 1px solid var(--line); background: #fff; box-shadow: 0 4px 18px rgba(0,0,0,.05); }
+
+
+.uploadTargetsWrap { display:flex; flex-direction:column; gap:6px; }
+.uploadTargetsLabel { font-size:.9rem; }
+.uploadTargets { display:flex; flex-wrap:wrap; gap:8px; }
+.uploadPreview { margin-top:10px; }
+.uploadPreviewImg { display:block; max-width:100%; max-height:260px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+.isHidden { display:none; }
