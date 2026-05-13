@@ -4,7 +4,7 @@ const WEATHER_REFRESH_MS = 5 * 60 * 1000;
 const METOFFICE_WORKER_URL = 'https://dits-weather.shawn-4d5.workers.dev/weather';
 const APP_TIME_ZONE = 'Europe/London';
 
-const ROUTES_URL = './public/data/routes.json';
+const ROUTES_URL = './public/data/routes.json'; 
 let CURATED_ROUTES = {};
 
 
