@@ -1088,13 +1088,13 @@ async function uploadCurrentImage(targetType = 'main') {
 
   try {
     const uploadFile = await buildOptimizedUploadFile(file);
-    updateUploadUi('Uploading resized image to Cloudflare…');
+    updateUploadUi('Uploading resized image to Cloudflare with a new unique URL…');
 
     const form = new FormData();
     form.append('file', uploadFile);
     form.append('pubSlug', pubSlug);
     form.append('imageType', imageType);
-    form.append('replace', 'true');
+    form.append('replace', 'false');
 
     const res = await fetch(UPLOAD_ENDPOINT, {
       method: 'POST',
