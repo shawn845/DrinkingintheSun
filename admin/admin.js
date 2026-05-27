@@ -1087,8 +1087,12 @@ async function uploadCurrentImage(targetType = 'main') {
   updateUploadUi('Resizing image for upload…');
 
   try {
-    const uploadFile = await buildOptimizedUploadFile(file);
-    updateUploadUi('Uploading resized image to Cloudflare with a new unique URL…');
+    const optimized = await buildOptimizedUploadFile(file);
+    const uploadFile = optimized.file;
+    updateUploadUi(
+      `Uploading resized image to Cloudflare with a new unique URL… ` +
+      `(${optimized.originalWidth}×${optimized.originalHeight} → ${optimized.targetWidth}×${optimized.targetHeight}, ${formatBytes(optimized.resizedBytes)})`
+    );
 
     const form = new FormData();
     form.append('file', uploadFile);
@@ -1121,7 +1125,7 @@ async function uploadCurrentImage(targetType = 'main') {
       els.uploadFileName.value = '';
       els.uploadFileName.placeholder = 'No image selected';
     }
-    updateUploadUi(`Upload complete. ${targetKey} filled automatically with the Cloudflare URL.`);
+    updateUploadUi(`Upload complete. ${targetKey} filled automatically with a new Cloudflare URL. Final upload: ${optimized.targetWidth}×${optimized.targetHeight}, ${formatBytes(optimized.resizedBytes)}.`);
     updatePreview();
     saveDraftToLocal();
   } catch (err) {
