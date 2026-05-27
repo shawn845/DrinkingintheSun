@@ -1133,41 +1133,63 @@ async function uploadCurrentImage(targetType = 'main') {
 
 
 
+
 async function buildOptimizedUploadFile(file) {
   const type = String(file.type || '').toLowerCase();
-  if (!type.startsWith('image/')) return file;
+  if (!type.startsWith('image/')) {
+    throw new Error('Selected file is not an image.');
+  }
 
   const image = await loadImageFromFile(file);
   const originalWidth = image.naturalWidth || image.width || 0;
   const originalHeight = image.naturalHeight || image.height || 0;
-  if (!originalWidth || !originalHeight) return file;
+  if (!originalWidth || !originalHeight) {
+    throw new Error('Could not read image dimensions.');
+  }
 
   const scale = Math.min(1, UPLOAD_MAX_DIMENSION / Math.max(originalWidth, originalHeight));
   const targetWidth = Math.max(1, Math.round(originalWidth * scale));
   const targetHeight = Math.max(1, Math.round(originalHeight * scale));
-
-  if (scale === 1 && type === 'image/jpeg' && file.size <= 900000) {
-    return file;
-  }
 
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth;
   canvas.height = targetHeight;
 
   const ctx = canvas.getContext('2d', { alpha: false });
-  if (!ctx) return file;
+  if (!ctx) {
+    throw new Error('Canvas resize is not available in this browser.');
+  }
+
   ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
 
-  const blob = await new Promise(resolve => {
-    canvas.toBlob(resolve, 'image/jpeg', UPLOAD_JPEG_QUALITY);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      result => result ? resolve(result) : reject(new Error('Canvas export failed.')),
+      'image/jpeg',
+      UPLOAD_JPEG_QUALITY
+    );
   });
-  if (!blob) return file;
 
-  const name = replaceFileExtension(file.name || 'image.jpg', '.jpg');
-  return new File([blob], name, {
-    type: 'image/jpeg',
-    lastModified: Date.now()
-  });
+  const resizedBytes = Number(blob.size || 0);
+  if (!resizedBytes) {
+    throw new Error('Resized image is empty.');
+  }
+
+  const resizedFile = new File(
+    [blob],
+    replaceFileExtension(file.name || 'image.jpg', '.jpg'),
+    { type: 'image/jpeg', lastModified: Date.now() }
+  );
+
+  return {
+    file: resizedFile,
+    originalWidth,
+    originalHeight,
+    targetWidth,
+    targetHeight,
+    originalBytes: Number(file.size || 0),
+    resizedBytes
+  };
 }
 
 async function loadImageFromFile(file) {
@@ -1189,6 +1211,14 @@ function replaceFileExtension(name, ext) {
   const base = String(name || 'image').replace(/\.[^.]+$/, '');
   return `${base}${ext}`;
 }
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${value} B`;
+}
+
 
 function saveDraftToLocal(manual = false) {
   if (!state.headers.length) return;
