@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
   wireUi();
+  ensureFootballFriendlyStyles();
   ensureSunRoutesRow();
   ensureWorthTripRow();
   await loadRoutes();
@@ -378,6 +379,7 @@ function normalizeRow(row) {
     notes: pick('notes'),
     worthTheTrip: pick('worth_the_trip'),
     cycleFriendly: pick('cycle_friendly'),
+    footballFriendly: pick('football_friendly'),
     curatedRouteId: pick('curated_route_id')
   };
 }
@@ -1043,6 +1045,26 @@ function yesFlag(value) {
   return String(value || '').trim().toLowerCase() === 'yes';
 }
 
+function ensureFootballFriendlyStyles() {
+  if (document.getElementById('footballFriendlyStyles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'footballFriendlyStyles';
+  style.textContent = `
+    .footballFriendlyBadge {
+      background: #2f2f2f;
+      color: #fff;
+    }
+
+    .footballFriendlyDetailBadge {
+      background: #2f2f2f;
+      color: #fff;
+      border-color: rgba(47, 47, 47, 0.22);
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function getCuratedRouteForPub(pub) {
   if (!pub) return null;
   return CURATED_ROUTES[pub.curatedRouteId] || CURATED_ROUTES[pub.id] || null;
@@ -1145,6 +1167,11 @@ function getWorthTripArrivalSummary(pub, now = new Date()) {
 function renderCycleBadge(pub) {
   if (!yesFlag(pub.cycleFriendly)) return '';
   return '<span class="miniBadge">🚲 Cycle</span>';
+}
+
+function renderFootballBadge(pub) {
+  if (!yesFlag(pub.footballFriendly)) return '';
+  return '<span class="miniBadge footballFriendlyBadge">⚽ Good for the football</span>';
 }
 
 
@@ -2218,13 +2245,15 @@ function createCard(pub, small = false, options = {}) {
     : '';
 
   const extraBadgesHtml = options.extraBadgesHtml || '';
+  const standardBadgesHtml = renderFootballBadge(pub);
+  const badgesHtml = `${standardBadgesHtml}${extraBadgesHtml}`;
   const extraMetaHtml = options.extraMetaHtml || '';
 
   wrap.innerHTML = `
     <button class="cardButton" type="button" aria-label="Open ${escapeHtml(pub.name)} details">
       <img class="cardImg" loading="lazy" src="${escapeAttr(pub.imageUrl || '')}" alt="${escapeAttr(pub.name)}" onerror="this.style.display='none';" />
       <div class="cardBody">
-        ${extraBadgesHtml ? `<div class="cardBadges">${extraBadgesHtml}</div>` : ''}
+        ${badgesHtml ? `<div class="cardBadges">${badgesHtml}</div>` : ''}
         <h3 class="cardTitle">${escapeHtml(pub.name)}</h3>
         <div class="cardMeta">
           <div class="statusBlock">
@@ -2315,6 +2344,7 @@ function openDetail(pubId, sourceView = 'list', push = true) {
   const detailBadges = [];
   if (yesFlag(pub.worthTheTrip)) detailBadges.push('<span class="detailBadge">Worth the trip</span>');
   if (yesFlag(pub.cycleFriendly)) detailBadges.push('<span class="detailBadge">🚲 Cycle-friendly</span>');
+  if (yesFlag(pub.footballFriendly)) detailBadges.push('<span class="detailBadge footballFriendlyDetailBadge">⚽ Good for the football</span>');
   const worthTripInfo = yesFlag(pub.worthTheTrip) ? getWorthTripArrivalSummary(pub, now) : null;
 
   els.modalContent.innerHTML = `
