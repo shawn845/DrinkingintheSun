@@ -11,7 +11,7 @@ const APP_TIME_ZONE = 'Europe/London';
 const KNOWN_HEADERS = [
   'id','name','address','lat','lng','spot_a','base_date','spot_a_sun_start','spot_a_horizon','spot_a_sun_end',
   'spot_b','spot_b_sun_start','spot_b_sun_end','spot_b_horizon','image_url','spot_a_photo_url','spot_b_photo_url',
-  'notes','worth_the_trip','cycle_friendly','curated_route_id'
+  'notes','worth_the_trip','cycle_friendly','football_friendly','curated_route_id'
 ];
 
 const state = {
@@ -88,6 +88,8 @@ const els = {
   uploadPreviewImg: document.getElementById('uploadPreviewImg')
 };
 
+ensureFootballFriendlyAdminField();
+
 const fieldIds = KNOWN_HEADERS.reduce((acc, header) => {
   const el = document.getElementById(`field-${header}`);
   if (el) acc[header] = el;
@@ -100,6 +102,31 @@ const pointLists = {
 };
 
 const pointRowTemplate = document.getElementById('pointRowTemplate');
+
+function ensureFootballFriendlyAdminField() {
+  if (document.getElementById('field-football_friendly')) return;
+
+  const anchor = document.getElementById('field-cycle_friendly') || document.getElementById('field-worth_the_trip');
+  const row = document.createElement('label');
+  row.className = 'checkboxRow footballFriendlyAdminRow';
+  row.style.display = 'flex';
+  row.style.alignItems = 'center';
+  row.style.gap = '0.5rem';
+  row.style.margin = '0.75rem 0';
+  row.innerHTML = `
+    <input id="field-football_friendly" type="checkbox" value="yes" />
+    <span>⚽ Good for the football</span>
+  `;
+
+  const anchorWrap = anchor ? anchor.closest('.field, .formRow, .inputRow, label, div') : null;
+  if (anchorWrap && anchorWrap.parentNode) {
+    anchorWrap.insertAdjacentElement('afterend', row);
+    return;
+  }
+
+  const fallback = document.querySelector('form') || document.querySelector('main') || document.body;
+  fallback.appendChild(row);
+}
 
 document.addEventListener('DOMContentLoaded', init);
 
@@ -141,9 +168,11 @@ function wireUi() {
   els.searchInput.addEventListener('input', renderPubList);
 
   Object.entries(fieldIds).forEach(([key, el]) => {
-    el.addEventListener('input', () => {
+    const eventName = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(eventName, () => {
       if (!hasSelection()) return;
-      state.rows[state.selectedIndex][key] = normalizeFieldValue(key, el.value);
+      const value = el.type === 'checkbox' ? (el.checked ? 'yes' : '') : el.value;
+      state.rows[state.selectedIndex][key] = normalizeFieldValue(key, value);
       if (key === 'id' || key === 'name' || key === 'spot_a' || key === 'spot_b') renderPubList();
       if (key === 'id' || key === 'name') updateUploadUi();
       if (key === 'spot_a_horizon') rebuildPointRowsFromString('a', true);
@@ -636,7 +665,11 @@ function populateEditor() {
   const row = getSelectedRow();
   if (!row) return clearEditor('No pub selected.');
   Object.entries(fieldIds).forEach(([key, el]) => {
-    el.value = row[key] ?? '';
+    if (el.type === 'checkbox') {
+      el.checked = normalizeFieldValue(key, row[key] ?? '') === 'yes';
+    } else {
+      el.value = row[key] ?? '';
+    }
   });
   rebuildPointRowsFromString('a', false);
   rebuildPointRowsFromString('b', false);
@@ -648,7 +681,10 @@ function populateEditor() {
 
 
 function clearEditor(message) {
-  Object.values(fieldIds).forEach(el => { el.value = ''; });
+  Object.values(fieldIds).forEach(el => {
+    if (el.type === 'checkbox') el.checked = false;
+    else el.value = '';
+  });
   pointLists.a.innerHTML = '';
   pointLists.b.innerHTML = '';
   els.previewSummaryA.textContent = message || 'No preview yet';
@@ -673,6 +709,10 @@ function clearEditor(message) {
 
 
 function normalizeFieldValue(key, value) {
+  if (key === 'football_friendly') {
+    return String(value || '').trim().toLowerCase() === 'yes' ? 'yes' : '';
+  }
+
   if (key === 'worth_the_trip' || key === 'cycle_friendly') return String(value || '').trim().toLowerCase();
   return String(value ?? '').trim();
 }
